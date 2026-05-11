@@ -28,7 +28,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 ## Current Features
 
 - First-person movement and collision.
-- Worker-generated chunks.
+- Worker-pool generated chunks.
 - Greedy meshing.
 - Repeating texture atlas shader.
 - Biomes: plains, forest, hills, beach, snow, dry.
@@ -38,6 +38,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Persistent inventory and hotbar via IndexedDB.
 - Inventory overlay with tabs, item counts, and hotbar assignment.
 - Held item/tool visuals and mining swing animation.
+- Far terrain heightfield ring merged into a single mesh to keep draw calls low.
 - F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, memory estimates, and GPU timing when supported.
 
 ## Important Implementation Notes
@@ -46,6 +47,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Chunk data is `Uint16Array`.
 - World edits must call `scheduleChunkSave(key)` and then `remesh(...)`.
 - Main thread should not generate terrain meshes directly.
+- Chunk generation and remeshing jobs are distributed across a small worker pool.
+- Far terrain is generated on the main thread today, but it should stay merged into a small number of meshes; avoid reintroducing one mesh per far patch.
 - Terrain shader expects:
   - `uv`: repeated local face UVs.
   - `atlasRect`: vec4 of atlas tile rect.
@@ -69,3 +72,4 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Add furnace/smelting UI.
 - Add water as static surfaces first.
 - Add settings/debug panel for render distance and clearing saved world.
+- Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.

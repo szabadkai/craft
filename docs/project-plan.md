@@ -11,11 +11,11 @@ The project should stay browser-first: efficient chunk meshes, worker-side gener
 The prototype currently supports:
 
 - First-person movement, jumping, and block collision.
-- Worker-generated chunks.
+- Worker-pool generated chunks.
 - Greedy voxel meshing.
 - Repeating texture atlas shader for merged faces.
 - Chunk fade-in for streamed terrain.
-- Far terrain heightfield ring.
+- Far terrain heightfield ring merged into a single mesh for low draw-call overhead.
 - Biome-driven terrain generation.
 - Snow, forest, plains, hills, beach, and dry areas.
 - Trees, flowers, tall grass, ores, and surface variation.
@@ -30,7 +30,7 @@ The prototype currently supports:
 ## Guiding Constraints
 
 - Keep terrain data separate from render meshes.
-- Keep chunk generation and meshing off the main thread.
+- Keep chunk generation and meshing off the main thread in the worker pool.
 - Append block IDs only; do not reorder existing enum values.
 - Prefer simple, robust systems before rich simulation.
 - Keep visual features cheap enough for WebGL/browser use.
@@ -168,6 +168,7 @@ Tasks:
 - Restore ambient occlusion compatible with greedy meshing.
 - Add transparent-material separation for decorations/glass/water.
 - Improve far terrain LOD blending.
+- Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
 - Add chunk mesh memory accounting.
 - Add worker prioritization by camera direction.
 - Add optional lower render-distance profile.

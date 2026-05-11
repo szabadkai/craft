@@ -15,6 +15,7 @@ import {
   FAR_RADIUS,
   mod,
   PRELOAD_RADIUS,
+  WorkerIn,
   WorkerOut,
   WORLD_HEIGHT,
 } from './types';
@@ -187,9 +188,14 @@ const wildlife = new Map<ChunkKey, Wildlife[]>();
 const requested = new Set<ChunkKey>();
 const dirty = new Set<ChunkKey>();
 const chunkSaveTimers = new Map<ChunkKey, number>();
-const worker = new Worker(new URL('./chunkWorker.ts', import.meta.url), { type: 'module' });
+const workerCount = Math.max(1, Math.min(4, (navigator.hardwareConcurrency ?? 4) - 1));
+const workers = Array.from(
+  { length: workerCount },
+  () => new Worker(new URL('./chunkWorker.ts', import.meta.url), { type: 'module' }),
+);
 const pendingQueue: Array<{ cx: number; cz: number; blocks?: Uint16Array }> = [];
-const maxRequestsPerFrame = 3;
+const maxRequestsPerFrame = workerCount;
+let nextWorkerIndex = 0;
 let worldDbPromise: Promise<IDBDatabase> | null = null;
 
 const frameBudgetMs = 1000 / 60;
@@ -327,6 +333,7 @@ const placePreviewMaterial = new THREE.MeshBasicMaterial({
 const placePreview = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), placePreviewMaterial);
 placePreview.visible = false;
 scene.add(placePreview);
+const rayDirection = new THREE.Vector3();
 
 const crackOverlay = new THREE.Mesh(new THREE.BoxGeometry(1.018, 1.018, 1.018), crackMaterial);
 crackOverlay.visible = false;
@@ -978,6 +985,7 @@ function updateDiagnosticsOverlay(now: number): void {
     </div>
     <div class="diagnostics-group">
       <b>Worker</b>
+      <div><span>Workers</span><strong>${workerCount}</strong></div>
       <div><span>Pending / requested</span><strong>${pendingQueue.length} / ${requested.size}</strong></div>
       <div><span>Dirty remeshes</span><strong>${dirty.size}</strong></div>
       <div><span>Chunk messages/sec</span><strong>${chunkMessagesPerSecond}</strong></div>
@@ -1027,14 +1035,24 @@ function countSolidVoxels(blocks: Uint16Array): number {
   return count;
 }
 
-worker.onmessage = (event: MessageEvent<WorkerOut>) => {
+for (const chunkWorker of workers) {
+  chunkWorker.onmessage = handleWorkerMessage;
+}
+
+function handleWorkerMessage(event: MessageEvent<WorkerOut>): void {
   if (event.data.type === 'error') {
     console.error(event.data.message);
     return;
   }
   chunkMessagesThisSecond++;
   receiveChunk(event.data.payload);
-};
+}
+
+function postChunkJob(message: WorkerIn, transfer: Transferable[] = []): void {
+  const chunkWorker = workers[nextWorkerIndex];
+  nextWorkerIndex = (nextWorkerIndex + 1) % workers.length;
+  chunkWorker.postMessage(message, transfer);
+}
 
 function seedFromString(value: string): number {
   const trimmed = value.trim();
@@ -1618,12 +1636,12 @@ function flushRequests(): void {
   for (let i = 0; i < maxRequestsPerFrame && pendingQueue.length > 0; i++) {
     const request = pendingQueue.shift()!;
     if (request.blocks) {
-      worker.postMessage(
+      postChunkJob(
         { type: 'remesh', cx: request.cx, cz: request.cz, seed, blocks: request.blocks },
         [request.blocks.buffer],
       );
     } else {
-      worker.postMessage({ type: 'generate', cx: request.cx, cz: request.cz, seed });
+      postChunkJob({ type: 'generate', cx: request.cx, cz: request.cz, seed });
     }
   }
 }
@@ -1716,26 +1734,39 @@ function rebuildFarTerrain(pcx: number, pcz: number): void {
   const step = 4;
   const patchChunkSpan = 2;
   const ringMin = DETAIL_RADIUS - 1;
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
   for (let cz = pcz - FAR_RADIUS; cz <= pcz + FAR_RADIUS; cz += patchChunkSpan) {
     for (let cx = pcx - FAR_RADIUS; cx <= pcx + FAR_RADIUS; cx += patchChunkSpan) {
       const d = Math.hypot(cx + patchChunkSpan * 0.5 - pcx, cz + patchChunkSpan * 0.5 - pcz);
       if (d < ringMin || d > FAR_RADIUS) continue;
-      const geo = makeFarPatch(cx, cz, step, patchChunkSpan);
-      const mesh = new THREE.Mesh(geo, farMaterial);
-      farTerrain.add(mesh);
+      appendFarPatch(cx, cz, step, patchChunkSpan, positions, colors, indices);
     }
   }
+
+  if (positions.length === 0) return;
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  farTerrain.add(new THREE.Mesh(geo, farMaterial));
 }
 
-function makeFarPatch(
+function appendFarPatch(
   cx: number,
   cz: number,
   step: number,
   chunkSpan: number,
-): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
+  positions: number[],
+  colors: number[],
+  indices: number[],
+): void {
+  const baseVertex = positions.length / 3;
   const patchSize = CHUNK_SIZE * chunkSpan;
   const verts = patchSize / step + 1;
   for (let z = 0; z <= patchSize; z += step) {
@@ -1756,17 +1787,10 @@ function makeFarPatch(
   }
   for (let z = 0; z < verts - 1; z++) {
     for (let x = 0; x < verts - 1; x++) {
-      const a = x + verts * z;
+      const a = baseVertex + x + verts * z;
       indices.push(a, a + 1, a + verts, a + 1, a + verts + 1, a + verts);
     }
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  geo.computeBoundingSphere();
-  return geo;
 }
 
 function terrainColorNoise(x: number, z: number): number {
@@ -2084,24 +2108,67 @@ function remesh(cx: number, cz: number): void {
   if (!chunk || dirty.has(key)) return;
   dirty.add(key);
   const copy = new Uint16Array(chunk.blocks);
-  worker.postMessage({ type: 'remesh', cx, cz, seed, blocks: copy }, [copy.buffer]);
+  postChunkJob({ type: 'remesh', cx, cz, seed, blocks: copy }, [copy.buffer]);
 }
 
 function raycastBlock(maxDistance = 6): { block: THREE.Vector3; normal: THREE.Vector3 } | null {
-  const direction = new THREE.Vector3();
-  camera.getWorldDirection(direction);
-  const origin = camera.position.clone();
-  const step = 0.05;
-  const last = new THREE.Vector3(Math.floor(origin.x), Math.floor(origin.y), Math.floor(origin.z));
-  for (let t = 0; t < maxDistance; t += step) {
-    const p = origin.clone().addScaledVector(direction, t);
-    const b = new THREE.Vector3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
-    if (isSolid(getBlock(b.x, b.y, b.z))) {
-      return { block: b, normal: last.sub(b) };
+  camera.getWorldDirection(rayDirection);
+  const origin = camera.position;
+  let x = Math.floor(origin.x);
+  let y = Math.floor(origin.y);
+  let z = Math.floor(origin.z);
+  const stepX = Math.sign(rayDirection.x);
+  const stepY = Math.sign(rayDirection.y);
+  const stepZ = Math.sign(rayDirection.z);
+  const tDeltaX = stepX === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / rayDirection.x);
+  const tDeltaY = stepY === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / rayDirection.y);
+  const tDeltaZ = stepZ === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / rayDirection.z);
+  let tMaxX = rayIntBound(origin.x, rayDirection.x);
+  let tMaxY = rayIntBound(origin.y, rayDirection.y);
+  let tMaxZ = rayIntBound(origin.z, rayDirection.z);
+  let distance = 0;
+  let normalX = 0;
+  let normalY = 0;
+  let normalZ = 0;
+
+  while (distance <= maxDistance) {
+    if (isSolid(getBlock(x, y, z))) {
+      return {
+        block: new THREE.Vector3(x, y, z),
+        normal: new THREE.Vector3(normalX, normalY, normalZ),
+      };
     }
-    last.copy(b);
+
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      x += stepX;
+      distance = tMaxX;
+      tMaxX += tDeltaX;
+      normalX = -stepX;
+      normalY = 0;
+      normalZ = 0;
+    } else if (tMaxY < tMaxZ) {
+      y += stepY;
+      distance = tMaxY;
+      tMaxY += tDeltaY;
+      normalX = 0;
+      normalY = -stepY;
+      normalZ = 0;
+    } else {
+      z += stepZ;
+      distance = tMaxZ;
+      tMaxZ += tDeltaZ;
+      normalX = 0;
+      normalY = 0;
+      normalZ = -stepZ;
+    }
   }
   return null;
+}
+
+function rayIntBound(origin: number, direction: number): number {
+  if (direction > 0) return (Math.floor(origin + 1) - origin) / direction;
+  if (direction < 0) return (origin - Math.floor(origin)) / -direction;
+  return Number.POSITIVE_INFINITY;
 }
 
 function collides(position: THREE.Vector3): boolean {
