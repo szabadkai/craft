@@ -14,6 +14,14 @@ export default tseslint.config(
       sourceType: 'module',
     },
     rules: {
+      'max-lines': [
+        'error',
+        {
+          max: 650,
+          skipBlankLines: true,
+          skipComments: true,
+        },
+      ],
       'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',

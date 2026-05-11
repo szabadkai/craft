@@ -14,26 +14,34 @@ The prototype currently supports:
 - Worker-pool generated chunks.
 - Greedy voxel meshing.
 - Repeating texture atlas shader for merged faces.
+- Warm original-style sky, fog, water shading, terrain atlas colors, and pixel hotbar styling.
 - Chunk fade-in for streamed terrain.
 - Far terrain heightfield ring merged into a single mesh for low draw-call overhead.
 - Biome-driven terrain generation.
 - Snow, forest, plains, hills, beach, and dry areas.
+- Static water fills terrain basins up to the shared water level, with spawn selection avoiding submerged starts.
 - Trees, flowers, tall grass, ores, and surface variation.
 - Block breaking with crack animation.
 - Block placement with placement preview.
 - Held item/tool visuals.
+- Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Persistent modified chunks through IndexedDB.
+- Modified chunk storage keys include a chunk storage version so generator-level visual changes do not reuse stale chunk meshes near spawn.
 - Persistent inventory and hotbar bindings.
 - Inventory overlay with item categories and hotbar assignment.
+- Sky, terrain atlas generation, terrain shader materials, far terrain, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
 - F3 diagnostic overlay with frame, render, world, worker, memory, and supported GPU timing counters.
 
 ## Guiding Constraints
 
 - Keep terrain data separate from render meshes.
 - Keep chunk generation and meshing off the main thread in the worker pool.
+- Use loaded chunk block data, not generated terrain height alone, for gameplay collision and interactions.
 - Append block IDs only; do not reorder existing enum values.
 - Prefer simple, robust systems before rich simulation.
 - Keep visual features cheap enough for WebGL/browser use.
+- Keep TypeScript files under the ESLint 650 effective-line cap; split by owned systems before files approach that size.
+- Prefer hierarchical modules with durable ownership over broad lateral helper-file splits.
 - Verify with `npm run build` after meaningful changes.
 
 ## Roadmap
@@ -45,12 +53,8 @@ Goal: make the current prototype easier to extend without regressions.
 Tasks:
 
 - Split `src/main.ts` into focused modules:
-  - renderer/scene setup
-  - input/player
-  - inventory/crafting
-  - persistence
-  - interaction/building
-  - UI/HUD
+  - renderer/scene setup, continuing from `src/rendering/*`
+  - chunk streaming/world lifecycle
 - Add a debug/settings panel.
 - Add a clear-world button for IndexedDB saves.
 - Add render distance controls.
@@ -64,7 +68,7 @@ Tasks:
 
 Exit criteria:
 
-- Main app file is no longer the central dumping ground.
+- Main app file keeps shrinking behind owned systems and stays under the ESLint line cap.
 - World reset/debug controls exist.
 - Build passes.
 - Existing movement, mining, placing, persistence, and inventory still work.
@@ -140,7 +144,7 @@ Goal: make exploration more rewarding.
 
 Tasks:
 
-- Add static water surfaces.
+- Improve water rendering with a separated transparent/reflection pass if the current shader-only water becomes limiting.
 - Add lakes and shoreline improvements.
 - Add caves using 3D noise.
 - Add richer tree variants.
@@ -182,7 +186,7 @@ Exit criteria:
 
 ## Near-Term Recommended Order
 
-1. Refactor `src/main.ts` into modules.
+1. Continue refactoring `src/main.ts` into owned modules, next targeting chunk streaming/world lifecycle.
 2. Add clear-world/debug panel.
 3. Convert inventory to slot-based storage.
 4. Add item pickup entities.
@@ -192,7 +196,7 @@ Exit criteria:
 
 ## Known Risks
 
-- `src/main.ts` is too large and will slow future work if not split soon.
+- `src/main.ts` is smaller but still owns too many systems; continue splitting with care.
 - IndexedDB saves can obscure terrain-generation changes during testing.
 - Block enum numeric IDs are persistence-sensitive.
 - Greedy meshing plus transparent blocks needs careful material separation.
@@ -200,4 +204,4 @@ Exit criteria:
 
 ## Current Priority
 
-The next best engineering task is refactoring before adding more gameplay. The prototype now has enough systems that continued feature work in `src/main.ts` will become error-prone.
+The next best engineering task is continuing the careful `src/main.ts` refactor before adding more gameplay. The prototype now has enough systems that new feature work should land in owned modules instead of expanding the app entrypoint.

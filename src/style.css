@@ -8,12 +8,9 @@ body,
   background: #82b7df;
   color: #f5f7f8;
   font-family:
-    Inter,
+    'Trebuchet MS',
+    Verdana,
     ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
     sans-serif;
 }
 
@@ -256,20 +253,32 @@ canvas {
   position: absolute;
   left: 16px;
   top: 16px;
-  max-width: min(380px, calc(100vw - 32px));
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
-  background: rgba(16, 23, 29, 0.62);
-  backdrop-filter: blur(8px);
-  font-size: 13px;
-  line-height: 1.5;
+  max-width: min(260px, calc(100vw - 32px));
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(28, 34, 40, 0.54);
+  font-size: 12px;
+  line-height: 1.35;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.panel.minimized {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .panel b {
   display: block;
-  margin-bottom: 4px;
-  font-size: 14px;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.panel span,
+#stats {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .diagnostics {
@@ -348,9 +357,16 @@ canvas {
   white-space: nowrap;
 }
 
-.crafting {
+.inventory-crafting {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   pointer-events: auto;
-  margin-top: 10px;
+}
+
+.inventory-crafting b {
+  display: block;
+  margin-bottom: 8px;
 }
 
 .inventory {
@@ -425,11 +441,16 @@ canvas {
 .hotbar {
   position: absolute;
   left: 50%;
-  bottom: 18px;
+  bottom: 14px;
   display: grid;
   grid-template-columns: repeat(12, 42px);
-  gap: 6px;
+  gap: 0;
   transform: translateX(-50%);
+  border: 2px solid rgba(18, 18, 18, 0.9);
+  background: rgba(20, 20, 20, 0.34);
+  box-shadow:
+    inset 0 0 0 2px rgba(210, 210, 210, 0.48),
+    0 2px 0 rgba(0, 0, 0, 0.62);
 }
 
 .inventory-overlay {
@@ -567,10 +588,12 @@ canvas {
 .slot {
   position: relative;
   height: 42px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 6px;
-  background: rgba(13, 17, 21, 0.66);
-  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(40, 40, 40, 0.92);
+  border-radius: 0;
+  background: rgba(78, 78, 78, 0.58);
+  box-shadow:
+    inset 2px 2px 0 rgba(198, 198, 198, 0.55),
+    inset -2px -2px 0 rgba(16, 16, 16, 0.6);
 }
 
 .hotbar-key {
@@ -584,11 +607,16 @@ canvas {
 
 .slot.active {
   border-color: #ffffff;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.9),
+    inset -2px -2px 0 rgba(56, 56, 56, 0.82),
+    0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 .swatch {
   width: 24px;
   height: 24px;
   margin: 8px auto;
-  border-radius: 3px;
+  border-radius: 0;
+  image-rendering: pixelated;
 }

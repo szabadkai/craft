@@ -34,7 +34,7 @@ const faces: FaceDef[] = [
     dAxis: 0,
     uAxis: 2,
     vAxis: 1,
-    shade: 0.78,
+    shade: 0.98,
     corners: (p, u0, v0, u1, v1) => [
       [p, v0, u0],
       [p, v1, u0],
@@ -47,7 +47,7 @@ const faces: FaceDef[] = [
     dAxis: 0,
     uAxis: 2,
     vAxis: 1,
-    shade: 0.7,
+    shade: 0.92,
     corners: (p, u0, v0, u1, v1) => [
       [p, v0, u1],
       [p, v1, u1],
@@ -73,7 +73,7 @@ const faces: FaceDef[] = [
     dAxis: 1,
     uAxis: 0,
     vAxis: 2,
-    shade: 0.48,
+    shade: 0.72,
     corners: (p, u0, v0, u1, v1) => [
       [u0, p, v0],
       [u1, p, v0],
@@ -86,7 +86,7 @@ const faces: FaceDef[] = [
     dAxis: 2,
     uAxis: 0,
     vAxis: 1,
-    shade: 0.86,
+    shade: 1,
     corners: (p, u0, v0, u1, v1) => [
       [u1, v0, p],
       [u1, v1, p],
@@ -99,7 +99,7 @@ const faces: FaceDef[] = [
     dAxis: 2,
     uAxis: 0,
     vAxis: 1,
-    shade: 0.62,
+    shade: 0.88,
     corners: (p, u0, v0, u1, v1) => [
       [u0, v0, p],
       [u0, v1, p],
@@ -178,7 +178,7 @@ export function buildChunkMesh(
           const neighbor = getBlock(p[0] + face.n[0], p[1] + face.n[1], p[2] + face.n[2]);
           const index = u + v * uSize;
           mask[index] =
-            block !== Block.Air && !isDecoration(block) && !isSolid(neighbor)
+            block !== Block.Air && !isDecoration(block) && !occludesFace(block, neighbor)
               ? { block, tile: tileForBlockFace(block, face.n), shade: face.shade }
               : null;
         }
@@ -257,6 +257,11 @@ function isDecoration(block: Block): boolean {
   );
 }
 
+function occludesFace(block: Block, neighbor: Block): boolean {
+  if (block === Block.Water) return neighbor === Block.Water || isSolid(neighbor);
+  return isSolid(neighbor);
+}
+
 function sameCell(a: MaskCell, b: MaskCell | null): boolean {
   return Boolean(b && a.block === b.block && a.tile === b.tile && a.shade === b.shade);
 }
@@ -299,17 +304,21 @@ function emitQuad(input: {
   const plane = face.n[face.dAxis] > 0 ? d + 1 : d;
   const corners = face.corners(plane, u, v, u + width, v + height);
   const rect = tileRect(cell.tile);
-  const faceColor: [number, number, number] = [cell.shade, cell.shade, cell.shade];
 
   for (let i = 0; i < corners.length; i++) {
     const corner = corners[i];
     const wx = cx * CHUNK_SIZE + corner[0];
     const wz = cz * CHUNK_SIZE + corner[2];
+    const variation = colorVariation(cell.block, wx, corner[1], wz, face.n[1]);
     positions.push(wx, corner[1], wz);
     normals.push(...face.n);
     uvs.push(corner[face.uAxis] - u, corner[face.vAxis] - v);
     atlas.push(rect[0], rect[1], rect[2], rect[3]);
-    colors.push(...faceColor);
+    colors.push(
+      cell.shade * variation[0],
+      cell.shade * variation[1],
+      cell.shade * variation[2],
+    );
   }
 
   indices.push(base, base + 1, base + 2, base, base + 2, base + 3);

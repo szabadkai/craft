@@ -50,17 +50,17 @@ export function isSolid(block: Block): boolean {
 export function blockColor(block: Block): [number, number, number] {
   switch (block) {
     case Block.Grass:
-      return [0.33, 0.62, 0.24];
+      return [0.42, 0.46, 0.25];
     case Block.Dirt:
-      return [0.43, 0.27, 0.14];
+      return [0.49, 0.33, 0.22];
     case Block.Stone:
       return [0.45, 0.46, 0.45];
     case Block.Log:
       return [0.47, 0.29, 0.13];
     case Block.Leaves:
-      return [0.2, 0.48, 0.18];
+      return [0.34, 0.4, 0.24];
     case Block.Sand:
-      return [0.78, 0.68, 0.41];
+      return [0.74, 0.66, 0.45];
     case Block.Gravel:
       return [0.42, 0.42, 0.4];
     case Block.Clay:
@@ -84,7 +84,7 @@ export function blockColor(block: Block): [number, number, number] {
     case Block.BirchLog:
       return [0.78, 0.72, 0.58];
     case Block.BirchLeaves:
-      return [0.46, 0.66, 0.27];
+      return [0.49, 0.53, 0.28];
     case Block.MossyCobblestone:
       return [0.32, 0.43, 0.28];
     case Block.Brick:
@@ -106,7 +106,9 @@ export function blockColor(block: Block): [number, number, number] {
     case Block.BerryBush:
       return [0.25, 0.48, 0.2];
     case Block.TallGrass:
-      return [0.28, 0.56, 0.2];
+      return [0.48, 0.51, 0.28];
+    case Block.Water:
+      return [0.25, 0.48, 0.82];
     case Block.CraftingTable:
       return [0.58, 0.36, 0.18];
     case Block.Furnace:

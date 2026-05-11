@@ -2,6 +2,8 @@ import { Block, CHUNK_SIZE, WORLD_HEIGHT } from './types';
 
 type Biome = 'plains' | 'forest' | 'hills' | 'beach' | 'snow' | 'dry';
 
+export const WATER_LEVEL = 42;
+
 function hash2(x: number, z: number, seed: number): number {
   let h = Math.imul(x, 374761393) ^ Math.imul(z, 668265263) ^ Math.imul(seed, 1442695041);
   h = (h ^ (h >>> 13)) >>> 0;
@@ -41,7 +43,7 @@ export function terrainHeight(x: number, z: number, seed: number): number {
 export function generatedBlockAt(x: number, y: number, z: number, seed: number): Block {
   if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
   const h = terrainHeight(x, z, seed);
-  if (y > h) return Block.Air;
+  if (y > h) return y <= WATER_LEVEL ? Block.Water : Block.Air;
   if (y === h) {
     return surfaceBlockAt(x, z, h, seed);
   }
@@ -80,6 +82,7 @@ function terrainHeightBase(x: number, z: number, seed: number): number {
 
 function surfaceBlockAt(x: number, z: number, h: number, seed: number): Block {
   const biome = biomeAt(x, z, seed);
+  if (h <= WATER_LEVEL + 1) return valueNoise(x, z, 11, seed + 17) > 0.78 ? Block.Clay : Block.Sand;
   if (biome === 'snow') return Block.Snow;
   if (biome === 'beach') return valueNoise(x, z, 11, seed + 17) > 0.72 ? Block.Clay : Block.Sand;
   if (biome === 'dry') return valueNoise(x, z, 14, seed + 19) > 0.58 ? Block.Sand : Block.Grass;

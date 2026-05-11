@@ -40,6 +40,7 @@ export const enum Tile {
   BlueFlower = 32,
   Mushroom = 33,
   BerryBush = 34,
+  Water = 35,
 }
 
 export function tileForBlockFace(block: Block, normal: [number, number, number]): Tile {
@@ -104,6 +105,8 @@ export function tileForBlockFace(block: Block, normal: [number, number, number])
       return Tile.Mushroom;
     case Block.BerryBush:
       return Tile.BerryBush;
+    case Block.Water:
+      return Tile.Water;
     case Block.CraftingTable:
       return Tile.CraftingTable;
     case Block.Furnace:
