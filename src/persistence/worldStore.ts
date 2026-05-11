@@ -1,4 +1,5 @@
 import { Item } from '../inventory/items';
+import type { InventorySnapshot } from '../inventory/inventorySystem';
 import { ChunkKey } from '../types';
 
 const CHUNK_STORAGE_VERSION = 2;
@@ -32,8 +33,9 @@ export class WorldStore {
     });
   }
 
-  async loadInventory(): Promise<Partial<Record<Item, number>> | null> {
-    const value = await this.loadState<Partial<Record<Item, number>>>('inventory');
+  async loadInventory(): Promise<InventorySnapshot | Partial<Record<Item, number>> | null> {
+    const value =
+      await this.loadState<InventorySnapshot | Partial<Record<Item, number>>>('inventory');
     return value ?? null;
   }
 
@@ -42,7 +44,7 @@ export class WorldStore {
     return Array.isArray(value) ? value : null;
   }
 
-  async saveInventory(inventory: Record<Item, number>): Promise<void> {
+  async saveInventory(inventory: InventorySnapshot): Promise<void> {
     await this.saveState('inventory', inventory);
   }
 

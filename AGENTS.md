@@ -54,6 +54,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 ## Current Features
 
 - First-person movement and collision.
+- Persistent mouse sensitivity control for pointer-lock camera movement.
 - Worker-pool generated chunks.
 - Greedy meshing.
 - Repeating texture atlas shader.
@@ -64,7 +65,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Ores: coal, iron, copper, gold, diamond.
 - Persistent modified chunks via IndexedDB.
 - Persistent inventory and hotbar via IndexedDB.
-- Inventory overlay with tabs, item counts, and hotbar assignment.
+- Slot-based inventory with stack limits, count-map save migration, tabs, crafting, item counts, and hotbar assignment.
+- Item pickup entities for mined block drops.
 - Held item/tool visuals and mining swing animation.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Far terrain heightfield ring merged into a single mesh to keep draw calls low.
@@ -97,10 +99,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Good Next Tasks
 
-- Continue splitting `src/main.ts` into owned systems, prioritizing chunk streaming/world lifecycle.
-- Replace count-map inventory with slot-based inventory.
-- Add item pickup entities.
 - Add tool durability and mining drop rules.
+- Continue splitting `src/main.ts` into owned systems, prioritizing chunk streaming/world lifecycle.
 - Add furnace/smelting UI.
 - Separate transparent render paths for glass/water if richer translucency becomes necessary.
 - Add settings/debug panel for render distance and clearing saved world.

@@ -16,9 +16,11 @@ export type HudElements = {
   startFormEl: HTMLFormElement;
   randomSeedEl: HTMLButtonElement;
   seedPreviewEl: HTMLElement;
+  sensitivityInputEl: HTMLInputElement;
+  sensitivityValueEl: HTMLElement;
 };
 
-export function createHud(defaultSeedText: string): HudElements {
+export function createHud(defaultSeedText: string, defaultSensitivityLabel: string): HudElements {
   const root = document.createElement('div');
   root.className = 'hud';
   root.innerHTML = `
@@ -36,6 +38,18 @@ export function createHud(defaultSeedText: string): HudElements {
           <span>World key</span>
           <b id="seed-preview"></b>
         </div>
+        <label class="sensitivity-field" for="sensitivity-input">
+          <span>Mouse sensitivity</span>
+          <output id="sensitivity-value" for="sensitivity-input">${defaultSensitivityLabel}</output>
+          <input
+            id="sensitivity-input"
+            type="range"
+            min="0.25"
+            max="6"
+            step="0.05"
+            value="1"
+          />
+        </label>
         <div class="seed-presets" aria-label="Seed presets">
           <button type="button" data-seed-preset="4">Spawn</button>
           <button type="button" data-seed-preset="30">Forest</button>
@@ -81,6 +95,7 @@ export function createHud(defaultSeedText: string): HudElements {
   document.body.appendChild(root);
   const seedInputEl = root.querySelector<HTMLInputElement>('#seed-input')!;
   seedInputEl.value = defaultSeedText;
+  const sensitivityInputEl = root.querySelector<HTMLInputElement>('#sensitivity-input')!;
 
   return {
     root,
@@ -100,5 +115,7 @@ export function createHud(defaultSeedText: string): HudElements {
     startFormEl: root.querySelector<HTMLFormElement>('.start-window')!,
     randomSeedEl: root.querySelector<HTMLButtonElement>('#random-seed')!,
     seedPreviewEl: root.querySelector<HTMLElement>('#seed-preview')!,
+    sensitivityInputEl,
+    sensitivityValueEl: root.querySelector<HTMLElement>('#sensitivity-value')!,
   };
 }

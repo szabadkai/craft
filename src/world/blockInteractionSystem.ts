@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { blockColor } from '../blocks';
 import { InventorySystem } from '../inventory/inventorySystem';
-import { blockToItem } from '../inventory/items';
+import { blockToItem, Item } from '../inventory/items';
 import { PlayerState } from '../player/playerController';
 import { Block } from '../types';
 import { BlockHit, BlockRaycaster } from './blockRaycaster';
@@ -37,6 +37,7 @@ export class BlockInteractionSystem {
     private readonly getBlock: (wx: number, y: number, wz: number) => Block,
     private readonly setBlock: (wx: number, y: number, wz: number, block: Block) => void,
     private readonly triggerSwing: (kind: 'mine' | 'place') => void,
+    private readonly spawnItemDrop: (item: Item | null, count: number, position: THREE.Vector3) => void,
   ) {
     const highlightMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -162,7 +163,15 @@ export class BlockInteractionSystem {
     this.drawCracks(this.mining.progress);
     if (this.mining.progress >= 1) {
       const block = this.getBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z);
-      this.inventory.addItem(blockToItem(block), 1);
+      this.spawnItemDrop(
+        blockToItem(block),
+        1,
+        new THREE.Vector3(
+          this.mining.block.x + 0.5,
+          this.mining.block.y + 0.65,
+          this.mining.block.z + 0.5,
+        ),
+      );
       this.setBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z, Block.Air);
       this.stopMining();
     }

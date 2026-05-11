@@ -3,6 +3,13 @@ import * as THREE from 'three';
 import { isSolid } from './blocks';
 import { InventorySystem } from './inventory/inventorySystem';
 import { PlayerController } from './player/playerController';
+import {
+  BASE_MOUSE_RADIANS_PER_PIXEL,
+  clampMouseSensitivity,
+  formatMouseSensitivity,
+  loadMouseSensitivity,
+  saveMouseSensitivity,
+} from './player/mouseSensitivity';
 import { WorldStore } from './persistence/worldStore';
 import { terrainHeight, WATER_LEVEL } from './terrain';
 import { DiagnosticsSystem, DiagnosticsSummary } from './rendering/diagnostics';
@@ -27,6 +34,7 @@ import {
 } from './types';
 import { BlockInteractionSystem } from './world/blockInteractionSystem';
 import { BlockRaycaster } from './world/blockRaycaster';
+import { ItemPickupSystem } from './world/itemPickups';
 import { randomSeedText, seedFromString } from './world/seed';
 import { WildlifeSystem } from './world/wildlife';
 import { createHud } from './ui/hud';
@@ -120,6 +128,7 @@ const player = {
 
 const keys = new Set<string>();
 const mouse = { locked: false };
+let mouseSensitivity = loadMouseSensitivity();
 const playerController = new PlayerController(
   player,
   camera,
@@ -128,7 +137,7 @@ const playerController = new PlayerController(
   () => inventorySystem.isOpen,
 );
 const heldItemView = new HeldItemView(camera);
-const hud = createHud(defaultSeedText);
+const hud = createHud(defaultSeedText, formatMouseSensitivity(mouseSensitivity));
 const {
   root: hudRoot,
   panelEl,
@@ -147,7 +156,10 @@ const {
   startFormEl,
   randomSeedEl,
   seedPreviewEl,
+  sensitivityInputEl,
+  sensitivityValueEl,
 } = hud;
+sensitivityInputEl.value = String(mouseSensitivity);
 const diagnostics = new DiagnosticsSystem(renderer, diagnosticsEl, summarizeWorldDiagnostics);
 const inventorySystem = new InventorySystem(
   {
@@ -164,6 +176,7 @@ const inventorySystem = new InventorySystem(
     rebuildHeldItem: () => rebuildHeldItem(),
   },
 );
+const itemPickups = new ItemPickupSystem(scene, (item, amount) => inventorySystem.addItem(item, amount));
 const interactionSystem = new BlockInteractionSystem(
   scene,
   blockRaycaster,
@@ -172,6 +185,7 @@ const interactionSystem = new BlockInteractionSystem(
   getBlock,
   setBlock,
   triggerHandSwing,
+  (item, count, position) => itemPickups.spawn(item, count, position),
 );
 inventorySystem.init();
 rebuildHeldItem();
@@ -278,6 +292,7 @@ function startWorld(seedText: string): void {
   requested.clear();
   dirty.clear();
   interactionSystem.stopMining();
+  itemPickups.clear();
 
   const spawnX = 8;
   const spawnZ = 8;
@@ -555,6 +570,7 @@ function tick(now: number): void {
   updateLoadingState();
   if (worldReady) {
     playerController.update(dt);
+    itemPickups.update(dt, now, player.position);
   }
   sky.position.copy(camera.position);
   updateTerrainMaterialTime(now);
@@ -626,8 +642,9 @@ document.addEventListener('pointerlockchange', () => {
 
 document.addEventListener('mousemove', (event) => {
   if (!worldReady || !mouse.locked) return;
-  player.yaw -= event.movementX * 0.0024;
-  player.pitch -= event.movementY * 0.0024;
+  const sensitivity = BASE_MOUSE_RADIANS_PER_PIXEL * mouseSensitivity;
+  player.yaw -= event.movementX * sensitivity;
+  player.pitch -= event.movementY * sensitivity;
   player.pitch = Math.max(-Math.PI / 2 + 0.02, Math.min(Math.PI / 2 - 0.02, player.pitch));
 });
 
@@ -662,6 +679,12 @@ startFormEl.addEventListener('submit', (event) => {
 });
 
 seedInputEl.addEventListener('input', updateSeedPreview);
+
+sensitivityInputEl.addEventListener('input', () => {
+  mouseSensitivity = clampMouseSensitivity(Number(sensitivityInputEl.value));
+  sensitivityValueEl.textContent = formatMouseSensitivity(mouseSensitivity);
+  saveMouseSensitivity(mouseSensitivity);
+});
 
 randomSeedEl.addEventListener('click', () => {
   seedInputEl.value = randomSeedText();

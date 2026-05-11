@@ -11,6 +11,7 @@ The project should stay browser-first: efficient chunk meshes, worker-side gener
 The prototype currently supports:
 
 - First-person movement, jumping, and block collision.
+- Persistent mouse sensitivity control for pointer-lock camera movement.
 - Worker-pool generated chunks.
 - Greedy voxel meshing.
 - Repeating texture atlas shader for merged faces.
@@ -28,7 +29,8 @@ The prototype currently supports:
 - Persistent modified chunks through IndexedDB.
 - Modified chunk storage keys include a chunk storage version so generator-level visual changes do not reuse stale chunk meshes near spawn.
 - Persistent inventory and hotbar bindings.
-- Inventory overlay with item categories and hotbar assignment.
+- Slot-based inventory with stack limits, migration from older count-map saves, item categories, crafting, and hotbar assignment.
+- Item pickup entities for mined block drops, with collection into available inventory slots.
 - Sky, terrain atlas generation, terrain shader materials, far terrain, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
 - F3 diagnostic overlay with frame, render, world, worker, memory, and supported GPU timing counters.
 
@@ -79,11 +81,12 @@ Goal: turn the current count-map inventory into a more game-like item system.
 
 Tasks:
 
-- Replace count-map inventory with slot-based storage.
-- Add stack limits.
-- Add item definitions as data rather than scattered switch statements.
-- Add item pickup entities.
-- Add dropped block/item pickups after mining.
+- [x] Replace count-map inventory with slot-based storage.
+- [x] Add stack limits.
+- [x] Add item definitions as data rather than scattered switch statements.
+- [x] Preserve old count-map inventory saves with migration into slot snapshots.
+- [x] Add item pickup entities.
+- [x] Add dropped block/item pickups after mining.
 - Add tool durability.
 - Add mining drop rules:
   - stone drops cobblestone
@@ -93,8 +96,8 @@ Tasks:
 
 Exit criteria:
 
-- Inventory has real slots.
-- Items can be picked up from the world.
+- Inventory has real slots. Done.
+- Items can be picked up from the world. Done for mined block drops.
 - Tool use has durability and meaningful mining rules.
 
 ### Milestone 3: Building Improvements
@@ -186,13 +189,11 @@ Exit criteria:
 
 ## Near-Term Recommended Order
 
-1. Continue refactoring `src/main.ts` into owned modules, next targeting chunk streaming/world lifecycle.
-2. Add clear-world/debug panel.
-3. Convert inventory to slot-based storage.
-4. Add item pickup entities.
-5. Add mining drop rules and durability.
-6. Add furnace/smelting.
-7. Add static water and caves.
+1. Add mining drop rules and tool durability.
+2. Continue refactoring `src/main.ts` into owned modules, next targeting chunk streaming/world lifecycle.
+3. Add clear-world/debug panel.
+4. Add furnace/smelting.
+5. Add static water and caves.
 
 ## Known Risks
 
@@ -200,8 +201,8 @@ Exit criteria:
 - IndexedDB saves can obscure terrain-generation changes during testing.
 - Block enum numeric IDs are persistence-sensitive.
 - Greedy meshing plus transparent blocks needs careful material separation.
-- Inventory and hotbar are currently hybrid count-based systems, not real item containers.
+- Hotbar bindings still point at item types rather than concrete inventory slots.
 
 ## Current Priority
 
-The next best engineering task is continuing the careful `src/main.ts` refactor before adding more gameplay. The prototype now has enough systems that new feature work should land in owned modules instead of expanding the app entrypoint.
+Milestone 2 is active. The next best gameplay task is adding mining drop rules and tool durability so mined blocks no longer all produce one direct block/item drop. New feature work should stay in owned modules instead of expanding `src/main.ts`.

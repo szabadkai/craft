@@ -87,7 +87,8 @@ canvas {
 }
 
 .seed-field span,
-.seed-meta span {
+.seed-meta span,
+.sensitivity-field span {
   color: rgba(255, 255, 255, 0.66);
   font-size: 12px;
   font-weight: 700;
@@ -128,6 +129,26 @@ canvas {
 .seed-meta b {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 13px;
+}
+
+.sensitivity-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.sensitivity-field output {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sensitivity-field input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: #9fdb8c;
 }
 
 .seed-presets {

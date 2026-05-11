@@ -48,9 +48,10 @@ export type ItemDef = {
   category: 'Blocks' | 'Materials' | 'Tools';
   block?: Block;
   tool?: 'stick' | 'wood_pickaxe' | 'stone_pickaxe';
+  stackLimit?: number;
 };
 
-export const defaultInventory: Record<Item, number> = {
+export const defaultInventoryCounts: Record<Item, number> = {
   wood: 0,
   planks: 8,
   sticks: 0,
@@ -203,6 +204,12 @@ export function labelItem(item: Item): string {
     .split('_')
     .map((part) => part[0].toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+export function stackLimitFor(item: Item): number {
+  const def = itemDefs.find((entry) => entry.id === item);
+  if (def?.stackLimit !== undefined) return def.stackLimit;
+  return def?.tool ? 1 : 64;
 }
 
 export function itemSwatch(item: Item): string {

@@ -1,7 +1,7 @@
 import { blockColor } from '../blocks';
 import { Block } from '../types';
 import {
-  defaultInventory,
+  defaultInventoryCounts,
   HeldItem,
   heldItemFor,
   Item,
@@ -10,7 +10,17 @@ import {
   labelItem,
   Recipe,
   recipes,
+  stackLimitFor,
 } from './items';
+
+const INVENTORY_SLOT_COUNT = 36;
+
+export type InventorySlot = { item: Item; count: number } | null;
+
+export type InventorySnapshot = {
+  version: 2;
+  slots: InventorySlot[];
+};
 
 type InventoryElements = {
   hotbarEl: HTMLDivElement;
@@ -28,7 +38,7 @@ type InventoryCallbacks = {
 };
 
 export class InventorySystem {
-  private readonly inventory: Record<Item, number> = { ...defaultInventory };
+  private inventorySlots: InventorySlot[] = createInventorySlotsFromCounts(defaultInventoryCounts);
   private readonly hotbarEntries: HeldItem[] = [
     heldItemFor('dirt')!,
     heldItemFor('wood')!,
@@ -96,15 +106,21 @@ export class InventorySystem {
   }
 
   itemCount(item: Item): number {
-    return this.inventory[item];
+    return this.inventorySlots.reduce(
+      (total, slot) => total + (slot?.item === item ? slot.count : 0),
+      0,
+    );
   }
 
-  addItem(item: Item | null, amount: number): void {
-    if (!item) return;
-    this.inventory[item] += amount;
+  addItem(item: Item | null, amount: number): number {
+    if (!item || amount === 0) return 0;
+    const result = applyItemDelta(this.inventorySlots, item, amount);
+    if (result.applied === 0) return 0;
+    this.inventorySlots = result.slots;
     this.paintInventory();
     this.paintOverlay();
     this.callbacks.saveInventory();
+    return result.applied;
   }
 
   selectHotbarSlot(index: number): void {
@@ -114,16 +130,17 @@ export class InventorySystem {
     this.callbacks.rebuildHeldItem();
   }
 
-  applyInventory(saved: Partial<Record<Item, number>>): void {
-    for (const item of Object.keys(this.inventory) as Item[]) {
-      this.inventory[item] = Math.max(0, Math.floor(saved[item] ?? this.inventory[item]));
-    }
+  applyInventory(saved: InventorySnapshot | Partial<Record<Item, number>>): void {
+    this.inventorySlots = normalizeInventorySnapshot(saved, this.inventorySlots);
     this.paintInventory();
     this.paintOverlay();
   }
 
-  snapshotInventory(): Record<Item, number> {
-    return { ...this.inventory };
+  snapshotInventory(): InventorySnapshot {
+    return {
+      version: 2,
+      slots: this.inventorySlots.map((slot) => (slot ? { ...slot } : null)),
+    };
   }
 
   applyHotbar(saved: Item[]): void {
@@ -170,9 +187,11 @@ export class InventorySystem {
 
   private paintInventory(): void {
     const { inventoryEl, recipesEl } = this.elements;
-    const visibleItems = (Object.entries(this.inventory) as Array<[Item, number]>).filter(
-      ([, count]) => count > 0,
-    );
+    const visibleItems = this.inventorySlots
+      .map((slot, index) => ({ slot, index }))
+      .filter((entry): entry is { slot: Exclude<InventorySlot, null>; index: number } =>
+        Boolean(entry.slot),
+      );
     inventoryEl.innerHTML = '';
     if (visibleItems.length === 0) {
       const empty = document.createElement('div');
@@ -180,20 +199,20 @@ export class InventorySystem {
       empty.textContent = 'Empty';
       inventoryEl.appendChild(empty);
     }
-    for (const [item, count] of visibleItems) {
+    for (const { slot: inventorySlot, index } of visibleItems) {
       const slot = document.createElement('button');
       slot.className = 'inventory-slot';
       slot.type = 'button';
-      slot.title = labelItem(item);
-      slot.disabled = heldItemFor(item) === null;
-      slot.addEventListener('click', () => this.assignItemToSelectedSlot(item));
+      slot.title = `${labelItem(inventorySlot.item)} (${index + 1})`;
+      slot.disabled = heldItemFor(inventorySlot.item) === null;
+      slot.addEventListener('click', () => this.assignItemToSelectedSlot(inventorySlot.item));
 
       const swatch = document.createElement('span');
       swatch.className = 'inventory-swatch';
-      swatch.style.background = itemSwatch(item);
+      swatch.style.background = itemSwatch(inventorySlot.item);
       const countEl = document.createElement('span');
       countEl.className = 'inventory-count';
-      countEl.textContent = String(count);
+      countEl.textContent = String(inventorySlot.count);
       slot.append(swatch, countEl);
       inventoryEl.appendChild(slot);
     }
@@ -226,7 +245,7 @@ export class InventorySystem {
 
     inventoryGridLargeEl.innerHTML = '';
     for (const def of itemDefs.filter((entry) => entry.category === this.category)) {
-      const count = this.inventory[def.id];
+      const count = this.itemCount(def.id);
       const slot = document.createElement('button');
       slot.className = `inventory-large-slot${count > 0 ? '' : ' empty'}`;
       slot.type = 'button';
@@ -259,19 +278,143 @@ export class InventorySystem {
   }
 
   private canCraft(recipe: Recipe): boolean {
-    return Object.entries(recipe.inputs).every(
-      ([item, count]) => this.inventory[item as Item] >= (count ?? 0),
-    );
+    if (
+      !Object.entries(recipe.inputs).every(
+        ([item, count]) => this.itemCount(item as Item) >= (count ?? 0),
+      )
+    )
+      return false;
+
+    let simulated = this.inventorySlots.map((slot) => (slot ? { ...slot } : null));
+    for (const [item, count] of Object.entries(recipe.inputs)) {
+      simulated = applyItemDelta(simulated, item as Item, -(count ?? 0)).slots;
+    }
+    for (const [item, count] of Object.entries(recipe.outputs)) {
+      if (!canFitItem(simulated, item as Item, count ?? 0)) return false;
+      simulated = applyItemDelta(simulated, item as Item, count ?? 0).slots;
+    }
+    return true;
   }
 
   private craft(recipe: Recipe): void {
     if (!this.canCraft(recipe)) return;
     for (const [item, count] of Object.entries(recipe.inputs))
-      this.inventory[item as Item] -= count ?? 0;
+      this.inventorySlots = applyItemDelta(this.inventorySlots, item as Item, -(count ?? 0)).slots;
     for (const [item, count] of Object.entries(recipe.outputs))
-      this.inventory[item as Item] += count ?? 0;
+      this.inventorySlots = applyItemDelta(this.inventorySlots, item as Item, count ?? 0).slots;
     this.paintInventory();
     this.paintOverlay();
     this.callbacks.saveInventory();
   }
+}
+
+function normalizeInventorySnapshot(
+  saved: InventorySnapshot | Partial<Record<Item, number>>,
+  fallback: InventorySlot[],
+): InventorySlot[] {
+  if (isInventorySnapshot(saved)) return normalizeSlots(saved.slots);
+  return createInventorySlotsFromCounts({ ...countsFromSlots(fallback), ...saved });
+}
+
+function isInventorySnapshot(value: unknown): value is InventorySnapshot {
+  if (!value || typeof value !== 'object') return false;
+  return (
+    (value as { version?: unknown }).version === 2 &&
+    Array.isArray((value as { slots?: unknown }).slots)
+  );
+}
+
+function normalizeSlots(slots: InventorySlot[]): InventorySlot[] {
+  const counts: Partial<Record<Item, number>> = {};
+  for (const slot of slots) {
+    if (!slot || !isItem(slot.item)) continue;
+    counts[slot.item] = (counts[slot.item] ?? 0) + sanitizeCount(slot.count);
+  }
+  return createInventorySlotsFromCounts(counts);
+}
+
+function createInventorySlotsFromCounts(counts: Partial<Record<Item, number>>): InventorySlot[] {
+  let slots = emptyInventorySlots();
+  for (const def of itemDefs) {
+    const count = sanitizeCount(counts[def.id] ?? 0);
+    if (count > 0) slots = applyItemDelta(slots, def.id, count).slots;
+  }
+  return slots;
+}
+
+function emptyInventorySlots(): InventorySlot[] {
+  return Array.from({ length: INVENTORY_SLOT_COUNT }, () => null);
+}
+
+function countsFromSlots(slots: InventorySlot[]): Partial<Record<Item, number>> {
+  const counts: Partial<Record<Item, number>> = {};
+  for (const slot of slots) {
+    if (!slot) continue;
+    counts[slot.item] = (counts[slot.item] ?? 0) + slot.count;
+  }
+  return counts;
+}
+
+function applyItemDelta(
+  slots: InventorySlot[],
+  item: Item,
+  amount: number,
+): { slots: InventorySlot[]; applied: number } {
+  const next = slots.map((slot) => (slot ? { ...slot } : null));
+  let applied = 0;
+  if (amount > 0) applied = addToSlots(next, item, amount);
+  if (amount < 0) applied = removeFromSlots(next, item, -amount);
+  return { slots: next, applied };
+}
+
+function canFitItem(slots: InventorySlot[], item: Item, amount: number): boolean {
+  if (amount <= 0) return true;
+  const limit = stackLimitFor(item);
+  let remaining = amount;
+  for (const slot of slots) {
+    if (slot?.item === item) remaining -= Math.max(0, limit - slot.count);
+    if (!slot) remaining -= limit;
+    if (remaining <= 0) return true;
+  }
+  return false;
+}
+
+function addToSlots(slots: InventorySlot[], item: Item, amount: number): number {
+  const limit = stackLimitFor(item);
+  let remaining = amount;
+  for (const slot of slots) {
+    if (remaining <= 0) return amount;
+    if (slot?.item !== item || slot.count >= limit) continue;
+    const added = Math.min(remaining, limit - slot.count);
+    slot.count += added;
+    remaining -= added;
+  }
+  for (let index = 0; index < slots.length && remaining > 0; index++) {
+    if (slots[index]) continue;
+    const added = Math.min(remaining, limit);
+    slots[index] = { item, count: added };
+    remaining -= added;
+  }
+  return amount - remaining;
+}
+
+function removeFromSlots(slots: InventorySlot[], item: Item, amount: number): number {
+  let remaining = amount;
+  for (let index = slots.length - 1; index >= 0 && remaining > 0; index--) {
+    const slot = slots[index];
+    if (slot?.item !== item) continue;
+    const removed = Math.min(remaining, slot.count);
+    slot.count -= removed;
+    remaining -= removed;
+    if (slot.count <= 0) slots[index] = null;
+  }
+  return amount - remaining;
+}
+
+function sanitizeCount(count: number): number {
+  return Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
+}
+
+function isItem(value: unknown): value is Item {
+  return typeof value === 'string' && itemDefs.some((def) => def.id === value);
 }
