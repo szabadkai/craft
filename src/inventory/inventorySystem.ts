@@ -8,14 +8,16 @@ import {
   itemDefs,
   itemSwatch,
   labelItem,
+  maxDurabilityFor,
   Recipe,
   recipes,
   stackLimitFor,
 } from './items';
 
 const INVENTORY_SLOT_COUNT = 36;
+const HOTBAR_SLOT_COUNT = 9;
 
-export type InventorySlot = { item: Item; count: number } | null;
+export type InventorySlot = { item: Item; count: number; durability?: number } | null;
 
 export type InventorySnapshot = {
   version: 2;
@@ -39,20 +41,6 @@ type InventoryCallbacks = {
 
 export class InventorySystem {
   private inventorySlots: InventorySlot[] = createInventorySlotsFromCounts(defaultInventoryCounts);
-  private readonly hotbarEntries: HeldItem[] = [
-    heldItemFor('dirt')!,
-    heldItemFor('wood')!,
-    heldItemFor('stone')!,
-    heldItemFor('planks')!,
-    heldItemFor('crafting_table')!,
-    heldItemFor('cobblestone')!,
-    heldItemFor('gravel')!,
-    heldItemFor('clay')!,
-    heldItemFor('snow')!,
-    heldItemFor('sticks')!,
-    heldItemFor('wood_pickaxe')!,
-    heldItemFor('stone_pickaxe')!,
-  ];
   private selectedHotbarIndex = 0;
   private category: (typeof itemDefs)[number]['category'] = 'Blocks';
   private open = false;
@@ -73,7 +61,7 @@ export class InventorySystem {
   }
 
   get hotbarSize(): number {
-    return this.hotbarEntries.length;
+    return HOTBAR_SLOT_COUNT;
   }
 
   setOpen(open: boolean): void {
@@ -86,23 +74,24 @@ export class InventorySystem {
     return this.open;
   }
 
-  selectedEntry(): HeldItem {
-    return this.hotbarEntries[this.selectedHotbarIndex];
+  selectedEntry(): HeldItem | null {
+    const slot = this.selectedHotbarSlot();
+    return slot ? heldItemFor(slot.item) : null;
   }
 
   selectedPlaceBlock(): Block | null {
     const entry = this.selectedEntry();
-    return entry.kind === 'block' ? entry.block : null;
+    return entry?.kind === 'block' ? entry.block : null;
   }
 
   selectedPlaceItem(): Item | null {
     const entry = this.selectedEntry();
-    return entry.kind === 'block' ? entry.item : null;
+    return entry?.kind === 'block' ? entry.item : null;
   }
 
   selectedTool(): Extract<HeldItem, { kind: 'tool' }> | null {
     const entry = this.selectedEntry();
-    return entry.kind === 'tool' ? entry : null;
+    return entry?.kind === 'tool' ? entry : null;
   }
 
   itemCount(item: Item): number {
@@ -123,8 +112,40 @@ export class InventorySystem {
     return result.applied;
   }
 
+  consumeSelectedItem(amount: number): number {
+    const slot = this.selectedHotbarSlot();
+    if (!slot || amount <= 0) return 0;
+    const consumed = Math.min(slot.count, amount);
+    const remaining = slot.count - consumed;
+    this.inventorySlots[this.selectedHotbarIndex] =
+      remaining > 0 ? { ...slot, count: remaining } : null;
+    this.paintHotbar();
+    this.paintInventory();
+    this.paintOverlay();
+    this.callbacks.saveInventory();
+    this.callbacks.rebuildHeldItem();
+    return consumed;
+  }
+
+  damageSelectedTool(amount: number): boolean {
+    const tool = this.selectedTool();
+    if (!tool) return false;
+    const slot = this.selectedHotbarSlot();
+    const maxDurability = maxDurabilityFor(tool.item);
+    if (!slot || maxDurability === null) return false;
+    const durability = Math.max(0, (slot.durability ?? maxDurability) - amount);
+    if (durability <= 0) this.inventorySlots[this.selectedHotbarIndex] = null;
+    else this.inventorySlots[this.selectedHotbarIndex] = { ...slot, durability };
+    this.paintHotbar();
+    this.paintInventory();
+    this.paintOverlay();
+    this.callbacks.saveInventory();
+    this.callbacks.rebuildHeldItem();
+    return true;
+  }
+
   selectHotbarSlot(index: number): void {
-    if (index < 0 || index >= this.hotbarEntries.length) return;
+    if (index < 0 || index >= HOTBAR_SLOT_COUNT) return;
     this.selectedHotbarIndex = index;
     this.paintHotbar();
     this.callbacks.rebuildHeldItem();
@@ -132,8 +153,19 @@ export class InventorySystem {
 
   applyInventory(saved: InventorySnapshot | Partial<Record<Item, number>>): void {
     this.inventorySlots = normalizeInventorySnapshot(saved, this.inventorySlots);
+    this.paintHotbar();
     this.paintInventory();
     this.paintOverlay();
+    this.callbacks.rebuildHeldItem();
+  }
+
+  resetInventory(): void {
+    this.inventorySlots = createInventorySlotsFromCounts(defaultInventoryCounts);
+    this.selectedHotbarIndex = 0;
+    this.paintHotbar();
+    this.paintInventory();
+    this.paintOverlay();
+    this.callbacks.rebuildHeldItem();
   }
 
   snapshotInventory(): InventorySnapshot {
@@ -144,86 +176,87 @@ export class InventorySystem {
   }
 
   applyHotbar(saved: Item[]): void {
-    saved.slice(0, this.hotbarEntries.length).forEach((item, index) => {
-      const held = heldItemFor(item);
-      if (held) this.hotbarEntries[index] = held;
+    if (this.inventorySlots.slice(0, HOTBAR_SLOT_COUNT).some((slot) => slot)) return;
+    saved.slice(0, HOTBAR_SLOT_COUNT).forEach((item, index) => {
+      if (!heldItemFor(item) || this.itemCount(item) <= 0) return;
+      const source = this.inventorySlots.findIndex(
+        (slot, slotIndex) => slotIndex >= HOTBAR_SLOT_COUNT && slot?.item === item,
+      );
+      if (source >= 0) this.swapSlots(index, source);
     });
     this.paintHotbar();
+    this.paintInventory();
     this.callbacks.rebuildHeldItem();
   }
 
   snapshotHotbar(): Item[] {
-    return this.hotbarEntries.map((entry) => entry.item).filter((item): item is Item => Boolean(item));
+    return this.inventorySlots
+      .slice(0, HOTBAR_SLOT_COUNT)
+      .map((slot) => slot?.item)
+      .filter((item): item is Item => Boolean(item));
   }
 
   private paintHotbar(): void {
     const { hotbarEl } = this.elements;
     hotbarEl.innerHTML = '';
-    this.hotbarEntries.forEach((entry, index) => {
+    for (let index = 0; index < HOTBAR_SLOT_COUNT; index++) {
+      const inventorySlot = this.inventorySlots[index];
+      const entry = inventorySlot ? heldItemFor(inventorySlot.item) : null;
       const slot = document.createElement('button');
       slot.className = `slot${index === this.selectedHotbarIndex ? ' active' : ''}`;
       slot.type = 'button';
-      slot.title = entry.label;
+      slot.title = inventorySlot ? this.slotLabel(inventorySlot) : 'Empty';
       slot.addEventListener('click', () => this.selectHotbarSlot(index));
       const swatch = document.createElement('div');
       swatch.className = 'swatch';
-      if (entry.kind === 'block') {
+      if (entry?.kind === 'block') {
         const [r, g, b] = blockColor(entry.block);
         swatch.style.background = `rgb(${r * 255}, ${g * 255}, ${b * 255})`;
-      } else {
+      } else if (entry?.kind === 'tool') {
         swatch.style.background =
           entry.tool === 'stick'
             ? 'linear-gradient(135deg, transparent 35%, #8b5a2b 36%, #8b5a2b 64%, transparent 65%)'
             : 'linear-gradient(135deg, #7a4a23 0 35%, #c2c7c4 36% 68%, transparent 69%)';
+      } else {
+        swatch.classList.add('empty');
       }
       const key = document.createElement('span');
       key.className = 'hotbar-key';
-      key.textContent = index < 9 ? String(index + 1) : index === 9 ? '0' : index === 10 ? '-' : '=';
+      key.textContent = String(index + 1);
+      const count = document.createElement('span');
+      count.className = 'hotbar-count';
+      count.textContent = inventorySlot ? this.slotCountText(inventorySlot) : '';
       slot.appendChild(swatch);
       slot.appendChild(key);
+      slot.appendChild(count);
       hotbarEl.appendChild(slot);
-    });
+    }
   }
 
   private paintInventory(): void {
     const { inventoryEl, recipesEl } = this.elements;
-    const visibleItems = this.inventorySlots
-      .map((slot, index) => ({ slot, index }))
-      .filter((entry): entry is { slot: Exclude<InventorySlot, null>; index: number } =>
-        Boolean(entry.slot),
-      );
     inventoryEl.innerHTML = '';
-    if (visibleItems.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'inventory-empty';
-      empty.textContent = 'Empty';
-      inventoryEl.appendChild(empty);
-    }
-    for (const { slot: inventorySlot, index } of visibleItems) {
+    this.inventorySlots.forEach((inventorySlot, index) => {
       const slot = document.createElement('button');
-      slot.className = 'inventory-slot';
+      slot.className = `inventory-slot${index < HOTBAR_SLOT_COUNT ? ' quick' : ''}${
+        index === this.selectedHotbarIndex ? ' selected' : ''
+      }${inventorySlot ? '' : ' empty'}`;
       slot.type = 'button';
-      slot.title = `${labelItem(inventorySlot.item)} (${index + 1})`;
-      slot.disabled = heldItemFor(inventorySlot.item) === null;
-      slot.addEventListener('click', () => this.assignItemToSelectedSlot(inventorySlot.item));
+      slot.title = inventorySlot ? `${this.slotLabel(inventorySlot)} (${index + 1})` : 'Empty';
+      slot.addEventListener('click', () => this.swapWithSelectedHotbar(index));
 
       const swatch = document.createElement('span');
       swatch.className = 'inventory-swatch';
-      swatch.style.background = itemSwatch(inventorySlot.item);
+      if (inventorySlot) swatch.style.background = itemSwatch(inventorySlot.item);
       const countEl = document.createElement('span');
       countEl.className = 'inventory-count';
-      countEl.textContent = String(inventorySlot.count);
+      countEl.textContent = inventorySlot ? this.slotCountText(inventorySlot) : '';
       slot.append(swatch, countEl);
       inventoryEl.appendChild(slot);
-    }
+    });
     recipesEl.innerHTML = '';
     for (const recipe of recipes) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = recipe.name;
-      button.disabled = !this.canCraft(recipe);
-      button.addEventListener('click', () => this.craft(recipe));
-      recipesEl.appendChild(button);
+      recipesEl.appendChild(this.createRecipeButton(recipe));
     }
   }
 
@@ -251,7 +284,7 @@ export class InventorySystem {
       slot.type = 'button';
       slot.disabled = count <= 0 || heldItemFor(def.id) === null;
       slot.title = def.label;
-      slot.addEventListener('click', () => this.assignItemToSelectedSlot(def.id, true));
+      slot.addEventListener('click', () => this.moveItemToSelectedHotbar(def.id, true));
 
       const swatch = document.createElement('span');
       swatch.className = 'inventory-large-swatch';
@@ -267,13 +300,23 @@ export class InventorySystem {
     }
   }
 
-  private assignItemToSelectedSlot(item: Item, repaintOverlay = false): void {
-    const held = heldItemFor(item);
-    if (!held) return;
-    this.hotbarEntries[this.selectedHotbarIndex] = held;
+  private moveItemToSelectedHotbar(item: Item, repaintOverlay = false): void {
+    if (!heldItemFor(item)) return;
+    const source = this.inventorySlots.findIndex(
+      (slot, index) => index !== this.selectedHotbarIndex && slot?.item === item,
+    );
+    if (source < 0) return;
+    this.swapWithSelectedHotbar(source, repaintOverlay);
+  }
+
+  private swapWithSelectedHotbar(index: number, repaintOverlay = false): void {
+    if (index === this.selectedHotbarIndex) return;
+    this.swapSlots(this.selectedHotbarIndex, index);
     this.paintHotbar();
+    this.paintInventory();
     this.callbacks.rebuildHeldItem();
     if (repaintOverlay) this.paintOverlay();
+    this.callbacks.saveInventory();
     this.callbacks.saveHotbar();
   }
 
@@ -303,8 +346,86 @@ export class InventorySystem {
     for (const [item, count] of Object.entries(recipe.outputs))
       this.inventorySlots = applyItemDelta(this.inventorySlots, item as Item, count ?? 0).slots;
     this.paintInventory();
+    this.paintHotbar();
     this.paintOverlay();
     this.callbacks.saveInventory();
+    this.callbacks.rebuildHeldItem();
+  }
+
+  private createRecipeButton(recipe: Recipe): HTMLButtonElement {
+    const button = document.createElement('button');
+    const craftable = this.canCraft(recipe);
+    button.type = 'button';
+    button.className = `recipe-card${craftable ? '' : ' unavailable'}`;
+    button.disabled = !craftable;
+    button.title = craftable ? `Craft ${recipe.name}` : `Missing ingredients for ${recipe.name}`;
+    button.addEventListener('click', () => this.craft(recipe));
+
+    const output = document.createElement('div');
+    output.className = 'recipe-output';
+    for (const [item, count] of Object.entries(recipe.outputs) as Array<[Item, number]>) {
+      output.appendChild(this.createRecipeItem(item, count, true));
+    }
+
+    const body = document.createElement('div');
+    body.className = 'recipe-body';
+    const name = document.createElement('span');
+    name.className = 'recipe-name';
+    name.textContent = recipe.name;
+    const requirements = document.createElement('div');
+    requirements.className = 'recipe-requirements';
+    for (const [item, count] of Object.entries(recipe.inputs) as Array<[Item, number]>) {
+      requirements.appendChild(this.createRecipeRequirement(item, count));
+    }
+    body.append(name, requirements);
+    button.append(output, body);
+    return button;
+  }
+
+  private createRecipeRequirement(item: Item, count: number): HTMLElement {
+    const have = this.itemCount(item);
+    const chip = this.createRecipeItem(item, count, false);
+    chip.classList.toggle('missing', have < count);
+    chip.title = `${labelItem(item)} ${have}/${count}`;
+    const amount = chip.querySelector('.recipe-item-count');
+    if (amount) amount.textContent = `${have}/${count}`;
+    return chip;
+  }
+
+  private createRecipeItem(item: Item, count: number, output: boolean): HTMLElement {
+    const chip = document.createElement('span');
+    chip.className = `recipe-item${output ? ' output' : ''}`;
+    chip.title = `${labelItem(item)} x${count}`;
+    const swatch = document.createElement('span');
+    swatch.className = 'recipe-item-swatch';
+    swatch.style.background = itemSwatch(item);
+    const amount = document.createElement('span');
+    amount.className = 'recipe-item-count';
+    amount.textContent = String(count);
+    chip.append(swatch, amount);
+    return chip;
+  }
+
+  private selectedHotbarSlot(): InventorySlot {
+    return this.inventorySlots[this.selectedHotbarIndex];
+  }
+
+  private swapSlots(a: number, b: number): void {
+    const next = this.inventorySlots.slice();
+    [next[a], next[b]] = [next[b], next[a]];
+    this.inventorySlots = next;
+  }
+
+  private slotLabel(slot: Exclude<InventorySlot, null>): string {
+    const maxDurability = maxDurabilityFor(slot.item);
+    if (maxDurability === null) return labelItem(slot.item);
+    return `${labelItem(slot.item)} ${slot.durability ?? maxDurability}/${maxDurability}`;
+  }
+
+  private slotCountText(slot: Exclude<InventorySlot, null>): string {
+    const maxDurability = maxDurabilityFor(slot.item);
+    if (maxDurability === null) return String(slot.count);
+    return `${slot.durability ?? maxDurability}`;
   }
 }
 
@@ -326,18 +447,31 @@ function isInventorySnapshot(value: unknown): value is InventorySnapshot {
 
 function normalizeSlots(slots: InventorySlot[]): InventorySlot[] {
   const counts: Partial<Record<Item, number>> = {};
+  const slotsFromSnapshot = emptyInventorySlots();
   for (const slot of slots) {
     if (!slot || !isItem(slot.item)) continue;
+    const maxDurability = maxDurabilityFor(slot.item);
+    if (maxDurability !== null) {
+      const durability = sanitizeDurability(slot.durability ?? maxDurability, maxDurability);
+      addToolSlot(slotsFromSnapshot, slot.item, durability);
+      continue;
+    }
     counts[slot.item] = (counts[slot.item] ?? 0) + sanitizeCount(slot.count);
   }
-  return createInventorySlotsFromCounts(counts);
+  return mergeSlots(slotsFromSnapshot, createInventorySlotsFromCounts(counts));
 }
 
 function createInventorySlotsFromCounts(counts: Partial<Record<Item, number>>): InventorySlot[] {
   let slots = emptyInventorySlots();
   for (const def of itemDefs) {
     const count = sanitizeCount(counts[def.id] ?? 0);
-    if (count > 0) slots = applyItemDelta(slots, def.id, count).slots;
+    if (count <= 0) continue;
+    const maxDurability = maxDurabilityFor(def.id);
+    if (maxDurability !== null) {
+      for (let index = 0; index < count; index++) addToolSlot(slots, def.id, maxDurability);
+      continue;
+    }
+    slots = applyItemDelta(slots, def.id, count).slots;
   }
   return slots;
 }
@@ -380,6 +514,9 @@ function canFitItem(slots: InventorySlot[], item: Item, amount: number): boolean
 }
 
 function addToSlots(slots: InventorySlot[], item: Item, amount: number): number {
+  const maxDurability = maxDurabilityFor(item);
+  if (maxDurability !== null) return addToolsToSlots(slots, item, amount, maxDurability);
+
   const limit = stackLimitFor(item);
   let remaining = amount;
   for (const slot of slots) {
@@ -398,6 +535,21 @@ function addToSlots(slots: InventorySlot[], item: Item, amount: number): number 
   return amount - remaining;
 }
 
+function addToolsToSlots(
+  slots: InventorySlot[],
+  item: Item,
+  amount: number,
+  maxDurability: number,
+): number {
+  let added = 0;
+  for (let index = 0; index < slots.length && added < amount; index++) {
+    if (slots[index]) continue;
+    slots[index] = { item, count: 1, durability: maxDurability };
+    added++;
+  }
+  return added;
+}
+
 function removeFromSlots(slots: InventorySlot[], item: Item, amount: number): number {
   let remaining = amount;
   for (let index = slots.length - 1; index >= 0 && remaining > 0; index--) {
@@ -413,6 +565,27 @@ function removeFromSlots(slots: InventorySlot[], item: Item, amount: number): nu
 
 function sanitizeCount(count: number): number {
   return Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
+}
+
+function sanitizeDurability(durability: number, maxDurability: number): number {
+  const sanitized = Math.floor(Number.isFinite(durability) ? durability : maxDurability);
+  return Math.max(1, Math.min(maxDurability, sanitized));
+}
+
+function addToolSlot(slots: InventorySlot[], item: Item, durability: number): void {
+  const index = slots.findIndex((slot) => slot === null);
+  if (index >= 0) slots[index] = { item, count: 1, durability };
+}
+
+function mergeSlots(primary: InventorySlot[], secondary: InventorySlot[]): InventorySlot[] {
+  const merged = primary.map((slot) => (slot ? { ...slot } : null));
+  for (const slot of secondary) {
+    if (!slot) continue;
+    const index = merged.findIndex((candidate) => candidate === null);
+    if (index < 0) break;
+    merged[index] = { ...slot };
+  }
+  return merged;
 }
 
 function isItem(value: unknown): value is Item {

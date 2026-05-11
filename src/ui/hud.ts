@@ -16,6 +16,8 @@ export type HudElements = {
   startFormEl: HTMLFormElement;
   randomSeedEl: HTMLButtonElement;
   seedPreviewEl: HTMLElement;
+  clearWorldEl: HTMLButtonElement;
+  clearWorldStatusEl: HTMLSpanElement;
   sensitivityInputEl: HTMLInputElement;
   sensitivityValueEl: HTMLElement;
 };
@@ -58,6 +60,13 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
         <div class="seed-actions">
           <button class="secondary" type="button" id="random-seed">Randomize</button>
           <button class="primary" type="submit">Generate</button>
+        </div>
+        <div class="world-tools">
+          <div>
+            <b>World tools</b>
+            <span id="clear-world-status">Clear saved chunks and inventory for this seed.</span>
+          </div>
+          <button type="button" id="clear-world">Clear saves</button>
         </div>
       </form>
     </div>
@@ -115,6 +124,8 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
     startFormEl: root.querySelector<HTMLFormElement>('.start-window')!,
     randomSeedEl: root.querySelector<HTMLButtonElement>('#random-seed')!,
     seedPreviewEl: root.querySelector<HTMLElement>('#seed-preview')!,
+    clearWorldEl: root.querySelector<HTMLButtonElement>('#clear-world')!,
+    clearWorldStatusEl: root.querySelector<HTMLSpanElement>('#clear-world-status')!,
     sensitivityInputEl,
     sensitivityValueEl: root.querySelector<HTMLElement>('#sensitivity-value')!,
   };

@@ -28,10 +28,13 @@ The prototype currently supports:
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Persistent modified chunks through IndexedDB.
 - Modified chunk storage keys include a chunk storage version so generator-level visual changes do not reuse stale chunk meshes near spawn.
-- Persistent inventory and hotbar bindings.
-- Slot-based inventory with stack limits, migration from older count-map saves, item categories, crafting, and hotbar assignment.
+- Start-screen world tools can clear saved chunks, inventory, and legacy hotbar state for the selected seed.
+- Persistent inventory and migrated legacy hotbar bindings.
+- Slot-based inventory with stack limits, migration from older count-map saves, item categories, crafting, and a Minecraft-style hotbar backed by real inventory slots.
 - Item pickup entities for mined block drops, with collection into available inventory slots.
-- Sky, terrain atlas generation, terrain shader materials, far terrain, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
+- Mining drop rules and tool durability for pickaxes.
+- Recipe cards show crafting outputs, ingredient requirements, and missing inputs.
+- Sky, terrain atlas generation, terrain shader materials, far terrain, chunk streaming/world lifecycle, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
 - F3 diagnostic overlay with frame, render, world, worker, memory, and supported GPU timing counters.
 
 ## Guiding Constraints
@@ -56,9 +59,9 @@ Tasks:
 
 - Split `src/main.ts` into focused modules:
   - renderer/scene setup, continuing from `src/rendering/*`
-  - chunk streaming/world lifecycle
-- Add a debug/settings panel.
-- Add a clear-world button for IndexedDB saves.
+  - chunk streaming/world lifecycle. Done in `src/world/chunkWorldSystem.ts`.
+- Add a debug/settings panel. Done for start-screen world save tools.
+- Add a clear-world button for IndexedDB saves. Done for saved chunks, inventory, and legacy hotbar state.
 - Add render distance controls.
 - Add basic performance counters:
   - visible chunks
@@ -70,7 +73,7 @@ Tasks:
 
 Exit criteria:
 
-- Main app file keeps shrinking behind owned systems and stays under the ESLint line cap.
+- Main app file keeps shrinking behind owned systems and stays under the ESLint line cap. Done for the current app entrypoint.
 - World reset/debug controls exist.
 - Build passes.
 - Existing movement, mining, placing, persistence, and inventory still work.
@@ -87,18 +90,19 @@ Tasks:
 - [x] Preserve old count-map inventory saves with migration into slot snapshots.
 - [x] Add item pickup entities.
 - [x] Add dropped block/item pickups after mining.
-- Add tool durability.
-- Add mining drop rules:
+- [x] Add tool durability.
+- [x] Add mining drop rules:
   - stone drops cobblestone
   - ores require pickaxes
   - better tools mine faster
-- Add a cleaner crafting UI.
+- [x] Add a cleaner crafting UI.
 
 Exit criteria:
 
 - Inventory has real slots. Done.
 - Items can be picked up from the world. Done for mined block drops.
-- Tool use has durability and meaningful mining rules.
+- Tool use has durability and meaningful mining rules. Done for wood and stone pickaxes.
+- Crafting clearly shows outputs and required inputs. Done.
 
 ### Milestone 3: Building Improvements
 
@@ -189,20 +193,18 @@ Exit criteria:
 
 ## Near-Term Recommended Order
 
-1. Add mining drop rules and tool durability.
-2. Continue refactoring `src/main.ts` into owned modules, next targeting chunk streaming/world lifecycle.
-3. Add clear-world/debug panel.
-4. Add furnace/smelting.
-5. Add static water and caves.
+1. Add furnace/smelting.
+2. Add render distance controls to the debug/settings UI.
+3. Add static water and caves.
 
 ## Known Risks
 
-- `src/main.ts` is smaller but still owns too many systems; continue splitting with care.
+- `src/main.ts` is below the line cap, but still owns top-level app orchestration and scene setup.
 - IndexedDB saves can obscure terrain-generation changes during testing.
 - Block enum numeric IDs are persistence-sensitive.
 - Greedy meshing plus transparent blocks needs careful material separation.
-- Hotbar bindings still point at item types rather than concrete inventory slots.
+- Hotbar migration from older item-type shortcuts is best-effort; current hotbar state lives in inventory slots.
 
 ## Current Priority
 
-Milestone 2 is active. The next best gameplay task is adding mining drop rules and tool durability so mined blocks no longer all produce one direct block/item drop. New feature work should stay in owned modules instead of expanding `src/main.ts`.
+Milestone 2 is functionally complete for the planned first pass, chunk streaming/world lifecycle has been extracted from `src/main.ts`, and clear-save world tools exist. The next best gameplay task is furnace/smelting.

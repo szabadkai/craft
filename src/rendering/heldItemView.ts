@@ -19,7 +19,7 @@ export class HeldItemView {
     camera.add(this.handRoot);
   }
 
-  rebuild(entry: HeldItem): void {
+  rebuild(entry: HeldItem | null): void {
     for (const child of this.heldRoot.children) {
       const mesh = child as THREE.Mesh;
       mesh.geometry?.dispose();
@@ -28,6 +28,8 @@ export class HeldItemView {
       else material?.dispose();
     }
     this.heldRoot.clear();
+
+    if (!entry) return;
 
     if (entry.kind === 'block') {
       this.heldRoot.add(makeHeldBlock(entry.block));

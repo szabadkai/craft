@@ -1,10 +1,16 @@
 import * as THREE from 'three';
 import { blockColor } from '../blocks';
 import { InventorySystem } from '../inventory/inventorySystem';
-import { blockToItem, Item } from '../inventory/items';
+import { Item } from '../inventory/items';
 import { PlayerState } from '../player/playerController';
 import { Block } from '../types';
 import { BlockHit, BlockRaycaster } from './blockRaycaster';
+import {
+  blockHardness,
+  damagesTool,
+  miningDrop,
+  MiningTool,
+} from './miningRules';
 
 export class BlockInteractionSystem {
   private readonly highlight: THREE.Mesh;
@@ -113,7 +119,7 @@ export class BlockInteractionSystem {
       return;
     this.setBlock(place.x, place.y, place.z, block);
     this.triggerSwing('place');
-    if (item) this.inventory.addItem(item, -1);
+    if (item) this.inventory.consumeSelectedItem(1);
   }
 
   startMining(hit: BlockHit): void {
@@ -122,7 +128,10 @@ export class BlockInteractionSystem {
     this.mining.block.copy(hit.block);
     this.mining.startedAt = performance.now();
     this.mining.lastSwingAt = this.mining.startedAt;
-    this.mining.duration = this.blockHardness(this.getBlock(hit.block.x, hit.block.y, hit.block.z));
+    this.mining.duration = blockHardness(
+      this.getBlock(hit.block.x, hit.block.y, hit.block.z),
+      this.currentMiningTool(),
+    );
     this.mining.progress = 0;
     this.mining.damageStage = -2;
     this.crackOverlay.position.set(hit.block.x + 0.5, hit.block.y + 0.5, hit.block.z + 0.5);
@@ -163,15 +172,15 @@ export class BlockInteractionSystem {
     this.drawCracks(this.mining.progress);
     if (this.mining.progress >= 1) {
       const block = this.getBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z);
-      this.spawnItemDrop(
-        blockToItem(block),
-        1,
-        new THREE.Vector3(
-          this.mining.block.x + 0.5,
-          this.mining.block.y + 0.65,
-          this.mining.block.z + 0.5,
-        ),
+      const tool = this.currentMiningTool();
+      const drop = miningDrop(block, tool);
+      const dropPosition = new THREE.Vector3(
+        this.mining.block.x + 0.5,
+        this.mining.block.y + 0.65,
+        this.mining.block.z + 0.5,
       );
+      if (drop) this.spawnItemDrop(drop.item, drop.count, dropPosition);
+      if (damagesTool(block, tool)) this.inventory.damageSelectedTool(1);
       this.setBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z, Block.Air);
       this.stopMining();
     }
@@ -211,44 +220,9 @@ export class BlockInteractionSystem {
     );
   }
 
-  private blockHardness(block: Block): number {
+  private currentMiningTool(): MiningTool {
     const tool = this.inventory.selectedTool();
-    switch (block) {
-      case Block.Grass:
-      case Block.Dirt:
-      case Block.Sand:
-      case Block.Snow:
-        return 260;
-      case Block.Leaves:
-      case Block.BirchLeaves:
-        return 180;
-      case Block.Log:
-      case Block.BirchLog:
-      case Block.Planks:
-      case Block.CraftingTable:
-        return 520;
-      case Block.Cactus:
-      case Block.Pumpkin:
-        return 360;
-      case Block.Glass:
-        return 300;
-      case Block.Stone:
-      case Block.CoalOre:
-      case Block.CopperOre:
-      case Block.Furnace:
-      case Block.Cobblestone:
-      case Block.MossyCobblestone:
-      case Block.Brick:
-        return tool?.tool === 'stone_pickaxe' || tool?.tool === 'wood_pickaxe' ? 650 : 1100;
-      case Block.IronOre:
-        return tool?.tool === 'stone_pickaxe' ? 850 : 1500;
-      case Block.GoldOre:
-        return tool?.tool === 'stone_pickaxe' ? 1000 : 1700;
-      case Block.DiamondOre:
-        return tool?.tool === 'stone_pickaxe' ? 1300 : 2200;
-      default:
-        return 450;
-    }
+    return tool?.tool ?? 'hand';
   }
 
   private drawCracks(progress: number): void {

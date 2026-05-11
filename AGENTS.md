@@ -11,7 +11,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 ## Architecture
 
 - `src/main.ts`
-  Main app loop, Three.js scene composition, player movement, inventory UI, persistence, input, block interaction, held item visuals.
+  Main app loop, Three.js scene composition, player/inventory/input orchestration, block interaction wiring, held item visuals.
 - `src/rendering/terrainMaterials.ts`
   Sky mesh, generated terrain atlas, and terrain shader material factory.
 - `src/rendering/diagnostics.ts`
@@ -23,9 +23,11 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - `src/inventory/items.ts`
   Item, held-item, recipe, and inventory definition data.
 - `src/inventory/inventorySystem.ts`
-  Inventory counts, crafting, hotbar assignment, overlay painting, and inventory persistence snapshots.
+  Slot inventory, crafting, Minecraft-style hotbar slots, overlay painting, and inventory persistence snapshots.
 - `src/world/wildlife.ts`
   Wildlife spawning, mesh construction, lifetime cleanup, entity ray hits, loaded-world collision, and per-frame movement simulation.
+- `src/world/chunkWorldSystem.ts`
+  Loaded chunk ownership, worker-pool requests, remeshing, chunk persistence saves, block access/mutation, spawn readiness, fade-in, and world diagnostics summary.
 - `src/world/blockRaycaster.ts`
   Solid block raycast traversal for camera-targeted interaction.
 - `src/world/blockInteractionSystem.ts`
@@ -64,9 +66,12 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Surface details: flowers, tall grass, trees.
 - Ores: coal, iron, copper, gold, diamond.
 - Persistent modified chunks via IndexedDB.
-- Persistent inventory and hotbar via IndexedDB.
-- Slot-based inventory with stack limits, count-map save migration, tabs, crafting, item counts, and hotbar assignment.
+- Start-screen world tools can clear saved chunks, inventory, and legacy hotbar state for the selected seed.
+- Persistent inventory and legacy hotbar migration via IndexedDB.
+- Slot-based inventory with stack limits, count-map save migration, tabs, crafting, item counts, and Minecraft-style hotbar slots.
 - Item pickup entities for mined block drops.
+- Mining drop rules and pickaxe durability.
+- Recipe-card crafting UI with output and requirement visibility.
 - Held item/tool visuals and mining swing animation.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Far terrain heightfield ring merged into a single mesh to keep draw calls low.
@@ -76,7 +81,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 - Block IDs in the `Block` enum must only be appended, not reordered, because saved chunks store numeric IDs.
 - Chunk data is `Uint16Array`.
-- World edits must call `scheduleChunkSave(key)` and then `remesh(...)`.
+- World edits should go through `ChunkWorldSystem.setBlock(...)` so saves and remeshes stay coordinated.
 - Main thread should not generate terrain meshes directly.
 - Chunk generation and remeshing jobs are distributed across a small worker pool.
 - Far terrain is generated on the main thread today, but it should stay merged into a small number of meshes; avoid reintroducing one mesh per far patch.
@@ -99,9 +104,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Good Next Tasks
 
-- Add tool durability and mining drop rules.
-- Continue splitting `src/main.ts` into owned systems, prioritizing chunk streaming/world lifecycle.
 - Add furnace/smelting UI.
+- Add render distance controls to the debug/settings UI.
 - Separate transparent render paths for glass/water if richer translucency becomes necessary.
-- Add settings/debug panel for render distance and clearing saved world.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.

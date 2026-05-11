@@ -66,7 +66,7 @@ export function blockColor(block: Block): [number, number, number] {
     case Block.Clay:
       return [0.46, 0.55, 0.58];
     case Block.Snow:
-      return [0.86, 0.92, 0.95];
+      return [0.82, 0.87, 0.88];
     case Block.CoalOre:
       return [0.22, 0.22, 0.21];
     case Block.IronOre:

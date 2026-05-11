@@ -49,6 +49,7 @@ export type ItemDef = {
   block?: Block;
   tool?: 'stick' | 'wood_pickaxe' | 'stone_pickaxe';
   stackLimit?: number;
+  durability?: number;
 };
 
 export const defaultInventoryCounts: Record<Item, number> = {
@@ -117,8 +118,20 @@ export const itemDefs: ItemDef[] = [
   { id: 'mushroom', label: 'Mushroom', category: 'Blocks', block: Block.Mushroom },
   { id: 'berries', label: 'Berries', category: 'Blocks', block: Block.BerryBush },
   { id: 'sticks', label: 'Stick', category: 'Tools', tool: 'stick' },
-  { id: 'wood_pickaxe', label: 'Wood Pick', category: 'Tools', tool: 'wood_pickaxe' },
-  { id: 'stone_pickaxe', label: 'Stone Pick', category: 'Tools', tool: 'stone_pickaxe' },
+  {
+    id: 'wood_pickaxe',
+    label: 'Wood Pick',
+    category: 'Tools',
+    tool: 'wood_pickaxe',
+    durability: 32,
+  },
+  {
+    id: 'stone_pickaxe',
+    label: 'Stone Pick',
+    category: 'Tools',
+    tool: 'stone_pickaxe',
+    durability: 80,
+  },
   { id: 'coal', label: 'Coal', category: 'Materials' },
   { id: 'iron_ore', label: 'Iron Ore', category: 'Materials' },
   { id: 'copper_ore', label: 'Copper Ore', category: 'Materials' },
@@ -210,6 +223,10 @@ export function stackLimitFor(item: Item): number {
   const def = itemDefs.find((entry) => entry.id === item);
   if (def?.stackLimit !== undefined) return def.stackLimit;
   return def?.tool ? 1 : 64;
+}
+
+export function maxDurabilityFor(item: Item): number | null {
+  return itemDefs.find((entry) => entry.id === item)?.durability ?? null;
 }
 
 export function itemSwatch(item: Item): string {

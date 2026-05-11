@@ -110,6 +110,9 @@ export function createTerrainMaterial(
         vec4 texel = texture2D(atlasMap, atlasUv);
         if (texel.a < 0.45) discard;
         bool isWater = vAtlasRect.x > 0.74 && vAtlasRect.y < 0.02;
+        bool isSnow =
+          (vAtlasRect.x > 0.74 && vAtlasRect.y > 0.54 && vAtlasRect.y < 0.57) ||
+          (dot(texel.rgb, vec3(0.299, 0.587, 0.114)) > 0.68 && texel.b >= texel.r * 0.92);
         vec3 n = abs(normalize(vNormal));
         vec2 tileCoord = n.y > 0.5
           ? floor(vWorldPosition.xz)
@@ -121,19 +124,30 @@ export function createTerrainMaterial(
         vec3 normal = normalize(vNormal);
         vec3 sunDir = normalize(vec3(0.62, 0.42, 0.2));
         float sunFacing = max(dot(normal, sunDir), 0.0);
-        float warmLight = 1.16 + sunFacing * 0.22 + max(normal.y, 0.0) * 0.08;
+        float warmLight = isSnow
+          ? 0.84 + sunFacing * 0.08 + max(normal.y, 0.0) * 0.03
+          : 1.16 + sunFacing * 0.22 + max(normal.y, 0.0) * 0.08;
         color *= warmLight;
-        color += vec3(0.11, 0.09, 0.055) * (0.55 + max(normal.y, 0.0) * 0.45);
+        if (isSnow) {
+          color += vec3(0.025, 0.03, 0.035);
+        } else {
+          color += vec3(0.11, 0.09, 0.055) * (0.55 + max(normal.y, 0.0) * 0.45);
+        }
         if (isWater) {
           float waveA = sin((vWorldPosition.x + time * 1.7) * 1.7 + vWorldPosition.z * 0.6);
           float waveB = sin((vWorldPosition.z - time * 1.2) * 2.1 + vWorldPosition.x * 0.45);
           float wave = smoothstep(1.12, 1.82, waveA + waveB);
           color = mix(vec3(0.16, 0.34, 0.55), vec3(0.62, 0.78, 0.88), wave * 0.42 + sunFacing * 0.28);
           color += vec3(1.0, 0.86, 0.55) * pow(max(dot(normalize(cameraPosition - vWorldPosition), reflect(-sunDir, normal)), 0.0), 28.0) * 0.7;
+        } else if (isSnow) {
+          color = mix(color, vec3(0.82, 0.88, 0.9), 0.34);
+          color = min(color, vec3(0.9, 0.94, 0.95));
         }
         float fogDepth = length(cameraPosition - vWorldPosition);
         float fogFactor = smoothstep(fogNear, fogFar, fogDepth);
-        gl_FragColor = vec4(mix(color, fogColor, fogFactor), texel.a * opacity);
+        vec3 finalColor = mix(color, fogColor, fogFactor);
+        if (isSnow) finalColor = min(finalColor, vec3(0.9, 0.94, 0.95));
+        gl_FragColor = vec4(finalColor, texel.a * opacity);
       }
     `,
     vertexColors: true,
@@ -166,7 +180,7 @@ export function createTerrainAtlas(): THREE.CanvasTexture {
   drawTile(context, Tile.Furnace, '#666a67', '#343735', 'furnace');
   drawTile(context, Tile.Gravel, '#74736e', '#4d4d49', 'gravel');
   drawTile(context, Tile.Clay, '#7f969c', '#5e777f', 'speckles');
-  drawTile(context, Tile.Snow, '#e8f1f4', '#c9dce4', 'snow');
+  drawTile(context, Tile.Snow, '#dce6e7', '#a9bec5', 'snow');
   drawTile(context, Tile.CopperOre, '#858984', '#b56a3a', 'ore');
   drawTile(context, Tile.GoldOre, '#858984', '#e0b83c', 'ore');
   drawTile(context, Tile.DiamondOre, '#777d7d', '#56d5dd', 'ore');

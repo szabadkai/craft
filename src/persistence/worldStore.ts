@@ -52,8 +52,21 @@ export class WorldStore {
     await this.saveState('hotbar', hotbar);
   }
 
+  async clearCurrentWorld(): Promise<void> {
+    const db = await this.open();
+    await Promise.all([
+      this.clearChunksForCurrentSeed(db),
+      this.deleteState(db, 'inventory'),
+      this.deleteState(db, 'hotbar'),
+    ]);
+  }
+
   private storedChunkKey(key: ChunkKey): string {
     return `${this.getSeed()}:v${CHUNK_STORAGE_VERSION}:${key}`;
+  }
+
+  private storedChunkPrefix(): string {
+    return `${this.getSeed()}:v${CHUNK_STORAGE_VERSION}:`;
   }
 
   private async loadState<T>(key: string): Promise<T | undefined> {
@@ -71,6 +84,32 @@ export class WorldStore {
     return new Promise((resolve) => {
       const tx = db.transaction('state', 'readwrite');
       tx.objectStore('state').put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  }
+
+  private clearChunksForCurrentSeed(db: IDBDatabase): Promise<void> {
+    const prefix = this.storedChunkPrefix();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('chunks', 'readwrite');
+      const store = tx.objectStore('chunks');
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        if (typeof cursor.key === 'string' && cursor.key.startsWith(prefix)) cursor.delete();
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  private deleteState(db: IDBDatabase, key: string): Promise<void> {
+    return new Promise((resolve) => {
+      const tx = db.transaction('state', 'readwrite');
+      tx.objectStore('state').delete(key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     });
