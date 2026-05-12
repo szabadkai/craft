@@ -68,6 +68,8 @@ export function applyUnderwaterEffects(
   submergeFactor: number,
   caveFactor: number,
   waterOverlayEl: HTMLElement,
+  airFogColor: THREE.Color,
+  airBgColor: THREE.Color,
 ): number {
   if (!worldReady) return 0;
   const eyeY = player.position.y + player.eye;
@@ -86,10 +88,8 @@ export function applyUnderwaterEffects(
 
   const airFogNear = getFogNear();
   const airFogFar = getFogFar();
-  const airFogColor = new THREE.Color(0xd8e8f1);
   const waterFogColor = new THREE.Color(0x061a30);
   const caveFogColor = new THREE.Color(0x080810);
-  const airBgColor = new THREE.Color(0xd8e8f1);
   const waterBgColor = new THREE.Color(0x061a30);
   const caveBgColor = new THREE.Color(0x080810);
 
@@ -125,7 +125,7 @@ export function applyUnderwaterEffects(
       scene.fog.near = airFogNear;
       scene.fog.far = airFogFar;
     }
-    scene.background = new THREE.Color(0xd8e8f1);
+    (scene.background as THREE.Color).copy(airBgColor);
     waterOverlayEl.classList.remove('submerged');
   }
   return newSubmerge;

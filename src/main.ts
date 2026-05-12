@@ -30,6 +30,7 @@ import { DiagnosticsSystem, DiagnosticsSummary } from './rendering/diagnostics';
 import { FarTerrainSystem } from './rendering/farTerrain';
 import { HeldItemView } from './rendering/heldItemView';
 import { createSky, createTerrainAtlas, createTerrainMaterial, createWaterMaterial } from './rendering/terrainMaterials';
+import { DayNightCycle } from './rendering/dayNightCycle';
 import {
   applyRenderDistance,
   updateCaveFactor,
@@ -49,7 +50,6 @@ import { WildlifeSystem } from './world/wildlife';
 import { HostileSystem } from './world/hostileMobs';
 import { createHud } from './ui/hud';
 import { findDrySpawn } from './game/helpers';
-
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
@@ -63,7 +63,6 @@ const airFogFar = getFogFar();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xd8e8f1);
 scene.fog = new THREE.Fog(0xd8e8f1, airFogNear, airFogFar);
-
 const camera = new THREE.PerspectiveCamera(
   70,
   window.innerWidth / window.innerHeight,
@@ -81,17 +80,18 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
 app.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xf8fbff, 0x8f9568, 2.05));
+const hemi = new THREE.HemisphereLight(0xf8fbff, 0x8f9568, 2.05);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffdfaa, 1.75);
 sun.position.set(120, 82, 44);
 scene.add(sun);
 const sky = createSky();
 scene.add(sky);
-
 const terrainAtlas = createTerrainAtlas();
 const chunkMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 1);
 const fadeMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.72);
 const waterMaterial = createWaterMaterial(scene.fog, WATER_LEVEL);
+const dayNight = new DayNightCycle();
 
 const hostile: HostileSystem = new HostileSystem(
   scene,
@@ -415,13 +415,14 @@ function tick(now: number): void {
     const cf = updateCaveFactor(dt, worldReady, player, getBlock, seed);
     if (!isNaN(cf)) caveFactor += (cf - caveFactor) * Math.min(1, dt * 4);
     if (caveFactor < 0.002) caveFactor = 0;
-    submergeFactor = applyUnderwaterEffects(dt, worldReady, scene, player, getBlock, submergeFactor, caveFactor, waterOverlayEl);
+    submergeFactor = applyUnderwaterEffects(dt, worldReady, scene, player, getBlock, submergeFactor, caveFactor, waterOverlayEl, dayNight.fogColor(), dayNight.backgroundColor());
     itemPickups.update(dt, now, player.position);
     chestSystem.tick();
     furnaceSystem.tick(dt);
     eatingSystem.tick(now);
   }
   sky.position.copy(camera.position);
+  dayNight.update(dt); dayNight.applyToLights(hemi, sun, sky.material as THREE.ShaderMaterial); dayNight.applyToTerrainMaterials(chunkMaterial, fadeMaterial, waterMaterial); dayNight.applyToScene(scene);
   updateTerrainMaterialTime(now);
   updateHand(now);
   if (worldReady) {
@@ -620,8 +621,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-loadInventory().catch(console.error);
-loadHotbar().catch(console.error);
+loadInventory().catch(console.error); loadHotbar().catch(console.error);
 loadFurnaces().catch(console.error);
 updateSeedPreview();
 requestAnimationFrame(tick);

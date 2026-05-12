@@ -14,6 +14,7 @@ export function createSky(): THREE.Mesh {
       horizonColor: { value: new THREE.Color(0xe5f1f7) },
       groundColor: { value: new THREE.Color(0x8fac68) },
       sunColor: { value: new THREE.Color(0xffe1a1) },
+      sunDirection: { value: new THREE.Vector3(0.62, 0.42, 0.2) },
     },
     vertexShader: `
       varying vec3 vWorldDirection;
@@ -28,12 +29,13 @@ export function createSky(): THREE.Mesh {
       uniform vec3 horizonColor;
       uniform vec3 groundColor;
       uniform vec3 sunColor;
+      uniform vec3 sunDirection;
       varying vec3 vWorldDirection;
       void main() {
         float h = clamp(vWorldDirection.y * 0.5 + 0.5, 0.0, 1.0);
         vec3 sky = mix(horizonColor, topColor, smoothstep(0.36, 1.0, h));
         sky = mix(groundColor, sky, smoothstep(0.02, 0.3, h));
-        vec3 sunDir = normalize(vec3(0.62, 0.42, 0.2));
+        vec3 sunDir = normalize(sunDirection);
         float sun = pow(max(dot(normalize(vWorldDirection), sunDir), 0.0), 520.0);
         float glow = pow(max(dot(normalize(vWorldDirection), sunDir), 0.0), 10.0) * 0.24;
         gl_FragColor = vec4(sky + sunColor * (sun + glow), 1.0);
@@ -54,6 +56,7 @@ export function createTerrainMaterial(
       tileSize: { value: ATLAS_TILE_SIZE },
       opacity: { value: opacity },
       time: { value: 0 },
+      sunDirection: { value: new THREE.Vector3(0.62, 0.42, 0.2) },
       fogColor: {
         value: fog instanceof THREE.Fog ? fog.color : new THREE.Color(0xd8e8f1),
       },
@@ -83,6 +86,7 @@ export function createTerrainMaterial(
       uniform float tileSize;
       uniform float opacity;
       uniform float time;
+      uniform vec3 sunDirection;
       uniform vec3 fogColor;
       uniform float fogNear;
       uniform float fogFar;
@@ -123,7 +127,7 @@ export function createTerrainMaterial(
         float variation = mix(0.98, 1.08, hashTile(tileCoord));
         vec3 color = gradeBlockColor(texel.rgb * vColor * variation);
         vec3 normal = normalize(vNormal);
-        vec3 sunDir = normalize(vec3(0.62, 0.42, 0.2));
+        vec3 sunDir = normalize(sunDirection);
         float sunFacing = max(dot(normal, sunDir), 0.0);
         float warmLight = isSnow
           ? 0.84 + sunFacing * 0.08 + max(normal.y, 0.0) * 0.03
@@ -160,6 +164,7 @@ export function createWaterMaterial(
     uniforms: {
       time: { value: 0 },
       waterLevel: { value: waterLevel },
+      sunDirection: { value: new THREE.Vector3(0.62, 0.42, 0.2) },
       fogColor: {
         value: fog instanceof THREE.Fog ? fog.color : new THREE.Color(0xd8e8f1),
       },
@@ -189,6 +194,7 @@ export function createWaterMaterial(
     fragmentShader: `
       uniform float time;
       uniform float waterLevel;
+      uniform vec3 sunDirection;
       uniform vec3 fogColor;
       uniform float fogNear;
       uniform float fogFar;
@@ -212,7 +218,7 @@ export function createWaterMaterial(
 
         // specular sun reflection
         vec3 normal = normalize(vNormal);
-        vec3 sunDir = normalize(vec3(0.62, 0.42, 0.2));
+        vec3 sunDir = normalize(sunDirection);
         vec3 viewDir = normalize(cameraPosition - vWorldPosition);
         vec3 halfVec = normalize(sunDir + viewDir);
         float spec = pow(max(dot(normal, halfVec), 0.0), 180.0) * 0.5;

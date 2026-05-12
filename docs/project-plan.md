@@ -37,6 +37,7 @@ The prototype currently supports:
 - Recipe cards show crafting outputs, ingredient requirements, and missing inputs.
 - Sky, terrain atlas generation, terrain shader materials, far terrain, chunk streaming/world lifecycle, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
 - F3 diagnostic overlay with frame, render, world, worker, memory, and supported GPU timing counters.
+- Day/night cycle with dynamic sun position, sky colors, terrain/water lighting, fog, and background transitions (~20 min real-time cycle).
 
 ## Guiding Constraints
 
@@ -143,7 +144,7 @@ Tasks:
 - [x] Add continuous mining (hold M1 chains into next block).
 - [x] Add damage flash overlay on hit.
 - [x] Add simple hostile or environmental threat later.
-- [ ] Add day/night cycle only after lighting strategy is clear.
+- [x] Add day/night cycle with dynamic sun position and lighting transitions.
 
 Exit criteria:
 
@@ -214,15 +215,15 @@ Exit criteria:
 10. ✅ Add hostile mobs (cave spiders).
 11. ✅ Add leaf decay on log break.
 12. ✅ Add shoreline improvements and inland lakes.
-13. Add day/night cycle and light propagation.
+13. ✅ Add day/night cycle and light propagation.
 14. Separate transparent render paths for glass/water.
 15. Move far terrain rebuilds off chunk-boundary path.
 
 ## Current Priority
 
-M3 building improvements complete: chests, variant blocks, doors, slabs, and stairs. M4 has hostile mobs (cave spiders) for resource pressure. M5 has caves, rocks, wildlife, shoreline/lake improvements, and biome transitions. M6 (rendering/performance) is next front: transparent material separation, far terrain improvements.
+M3 building improvements complete: chests, variant blocks, doors, slabs, and stairs. M4 has hostile mobs (cave spiders) for resource pressure. M5 has caves, rocks, wildlife, shoreline/lake improvements, and biome transitions. M6 is next: transparent material separation, far terrain improvements.
 
-Remaining M4 goal: day/night cycle (gated on lighting strategy).
+M4 complete. Day/night cycle implemented: dynamic sun position, sky colors, terrain/water lighting, fog, and background transitions over a ~20 min real-time cycle.
 
 ## Known Risks
 

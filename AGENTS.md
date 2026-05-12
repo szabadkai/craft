@@ -14,9 +14,13 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
   Main app loop, Three.js scene composition, player/inventory/input orchestration, block interaction wiring, held item visuals.
 - `src/rendering/terrainMaterials.ts`
   Sky mesh, generated terrain atlas, and terrain shader material factory.
+- `src/rendering/atmosphere.ts`
+  Render-distance fog adjustments, cave factor estimation from overhead blocks, underwater/cave fog and background blending.
 - `src/rendering/diagnostics.ts`
   F3 diagnostics collection, GPU timer handling, summary formatting, and overlay painting.
 - `src/rendering/farTerrain.ts`
+- `src/rendering/dayNightCycle.ts`
+  Day/night cycle: 24k-tick timer, sun position math, per-time-of-day color keyframe interpolation for sky/terrain/water shader uniforms, scene fog, background, and Three.js light colors and intensities.
   Merged far terrain heightfield ring generation and mesh ownership.
 - `src/rendering/heldItemView.ts`
   First-person held block/tool meshes and hand swing animation.
@@ -65,6 +69,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Greedy meshing.
 - Repeating texture atlas shader.
 - Warm original-style sky, fog, water, atlas colors, and pixel hotbar styling.
+- Day/night cycle with dynamic sun position, sky dome colors, terrain and water shader lighting, directional/ambient light colors and intensities, scene fog, and background — all transitioning smoothly over a ~20-minute real-time 24k-tick cycle.
 - Biomes: plains, forest, hills, beach, snow, dry.
 - Static water fills low terrain basins up to the shared terrain water level.
 - Surface details: flowers, tall grass, trees.
@@ -97,6 +102,17 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Cave spiders — hostile mobs spawning in deep caves, pursuing the player, dealing damage on contact, dropping raw meat.
 - Leaf decay — breaking a log causes ~28% of nearby leaves to drop sticks/apples and disappear.
 - Shoreline improvements — variable-width beaches (sand/grass mix at water line), inland lakes in terrain depressions, biome border blending.
+
+## Day/Night Cycle Architecture
+
+- `src/rendering/dayNightCycle.ts` (`DayNightCycle` class) is the single source of truth for time-of-day.
+- Time advances via `update(dt)` with `TICKS_PER_SECOND = 20` (24,000 ticks = 20 real minutes).
+- Sun position: sinusoidal elevation (`sin(sunAngle) * π/2`) and linear azimuth (`sunAngle`). Rises in +X (east), zenith at tick 6000 (noon), sets in -X (west), nadir at tick 18000 (midnight).
+- 12 color keyframe arrays (e.g., `SKY_TOP`, `FOG_COLOR`, `DIRECTIONAL_INTENSITY`) define the visual timeline. Interpolation is linear between stops.
+- `applyToLights(hemi, sun, skyMat)` updates `HemisphereLight` color/intensity, `DirectionalLight` position/color/intensity, and sky shader `topColor`/`horizonColor`/`groundColor`/`sunColor`/`sunDirection` uniforms.
+- `applyToTerrainMaterials(terrain, fade, water)` updates `sunDirection` and `fogColor` on the three shared shader materials. Cloned fade materials lag by one frame (negligible during brief fade-in).
+- `applyToScene(scene)` sets `scene.fog.color` and `scene.background` to the time-of-day colors. These serve as the baseline that `applyUnderwaterEffects` blends toward for underwater/cave overlays.
+- `applyUnderwaterEffects` (`src/rendering/atmosphere.ts`) now accepts `airFogColor` and `airBgColor` parameters — the caller passes `dayNight.fogColor()` and `dayNight.backgroundColor()` so the water/cave blend always uses the current time-of-day colors as the "normal" baseline.
 
 ## Important Implementation Notes
 
@@ -142,6 +158,5 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 - Separate transparent render paths for glass/water if richer translucency becomes necessary.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
-- Add day/night cycle with light propagation model.
 - Add more hostile mob variants (surface zombies, skeletons).
 - Improve stair auto-step (player automatically steps up when walking into stairs from the low side).
