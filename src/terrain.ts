@@ -11,6 +11,13 @@ function hash2(x: number, z: number, seed: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
 
+function hash3(x: number, y: number, z: number, seed: number): number {
+  let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 1442695041) ^ Math.imul(seed, 1274126177);
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h, 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
 function smooth(t: number): number {
   return t * t * (3 - 2 * t);
 }
@@ -40,6 +47,46 @@ export function terrainHeight(x: number, z: number, seed: number): number {
   return Math.max(8, Math.min(WORLD_HEIGHT - 8, Math.floor(base + broad + mid + fine)));
 }
 
+function valueNoise3D(x: number, y: number, z: number, scale: number, seed: number): number {
+  const nx = x / scale;
+  const ny = y / scale;
+  const nz = z / scale;
+  const x0 = Math.floor(nx);
+  const y0 = Math.floor(ny);
+  const z0 = Math.floor(nz);
+  const fx = smooth(nx - x0);
+  const fy = smooth(ny - y0);
+  const fz = smooth(nz - z0);
+  const c000 = hash3(x0, y0, z0, seed);
+  const c100 = hash3(x0 + 1, y0, z0, seed);
+  const c010 = hash3(x0, y0 + 1, z0, seed);
+  const c110 = hash3(x0 + 1, y0 + 1, z0, seed);
+  const c001 = hash3(x0, y0, z0 + 1, seed);
+  const c101 = hash3(x0 + 1, y0, z0 + 1, seed);
+  const c011 = hash3(x0, y0 + 1, z0 + 1, seed);
+  const c111 = hash3(x0 + 1, y0 + 1, z0 + 1, seed);
+  const x00 = c000 + (c100 - c000) * fx;
+  const x10 = c010 + (c110 - c010) * fx;
+  const x01 = c001 + (c101 - c001) * fx;
+  const x11 = c011 + (c111 - c011) * fx;
+  const xy0 = x00 + (x10 - x00) * fy;
+  const xy1 = x01 + (x11 - x01) * fy;
+  return xy0 + (xy1 - xy0) * fz;
+}
+
+function isCaveBlock(wx: number, y: number, wz: number, h: number, seed: number): boolean {
+  if (y >= h - 4 || y < 5) return false;
+  const main = valueNoise3D(wx, y * 0.75, wz, 55, seed + 401);
+  const tunnel = valueNoise3D(wx + 200, y * 0.85, wz - 200, 24, seed + 411);
+  const detail = valueNoise3D(wx - 150, y + 70, wz + 150, 12, seed + 421);
+  const depthFactor = Math.sin((y / WORLD_HEIGHT) * Math.PI) * 1.1;
+  return (
+    main > 0.64 - depthFactor * 0.05 ||
+    (tunnel > 0.56 && main > 0.36) ||
+    (detail > 0.75 && y > 12 && y < 68)
+  );
+}
+
 export function generatedBlockAt(x: number, y: number, z: number, seed: number): Block {
   if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
   const h = terrainHeight(x, z, seed);
@@ -48,6 +95,8 @@ export function generatedBlockAt(x: number, y: number, z: number, seed: number):
     return surfaceBlockAt(x, z, h, seed);
   }
   if (y > h - 4) return subsurfaceBlockAt(x, z, h, seed);
+
+  if (isCaveBlock(x, y, z, h, seed)) return Block.Air;
 
   const ore = valueNoise(x * 1.7 + y * 0.9, z * 1.7 - y * 0.6, 9, seed + 31);
   const deepOre = valueNoise(x * 2.1 - y * 0.7, z * 2.1 + y * 0.8, 7, seed + 37);

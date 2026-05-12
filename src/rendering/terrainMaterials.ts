@@ -109,7 +109,6 @@ export function createTerrainMaterial(
         vec2 atlasUv = vAtlasRect.xy + tileUv * vAtlasRect.zw;
         vec4 texel = texture2D(atlasMap, atlasUv);
         if (texel.a < 0.45) discard;
-        bool isWater = vAtlasRect.x > 0.74 && vAtlasRect.y < 0.02;
         bool isSnow =
           (vAtlasRect.x > 0.74 && vAtlasRect.y > 0.54 && vAtlasRect.y < 0.57) ||
           (dot(texel.rgb, vec3(0.299, 0.587, 0.114)) > 0.68 && texel.b >= texel.r * 0.92);
@@ -133,13 +132,7 @@ export function createTerrainMaterial(
         } else {
           color += vec3(0.11, 0.09, 0.055) * (0.55 + max(normal.y, 0.0) * 0.45);
         }
-        if (isWater) {
-          float waveA = sin((vWorldPosition.x + time * 1.7) * 1.7 + vWorldPosition.z * 0.6);
-          float waveB = sin((vWorldPosition.z - time * 1.2) * 2.1 + vWorldPosition.x * 0.45);
-          float wave = smoothstep(1.12, 1.82, waveA + waveB);
-          color = mix(vec3(0.16, 0.34, 0.55), vec3(0.62, 0.78, 0.88), wave * 0.42 + sunFacing * 0.28);
-          color += vec3(1.0, 0.86, 0.55) * pow(max(dot(normalize(cameraPosition - vWorldPosition), reflect(-sunDir, normal)), 0.0), 28.0) * 0.7;
-        } else if (isSnow) {
+        if (isSnow) {
           color = mix(color, vec3(0.82, 0.88, 0.9), 0.34);
           color = min(color, vec3(0.9, 0.94, 0.95));
         }
@@ -153,6 +146,94 @@ export function createTerrainMaterial(
     vertexColors: true,
     transparent: opacity < 1,
     depthWrite: opacity >= 1,
+    side: THREE.DoubleSide,
+  });
+}
+
+export function createWaterMaterial(
+  fog: THREE.Scene['fog'],
+  waterLevel: number,
+): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      waterLevel: { value: waterLevel },
+      fogColor: {
+        value: fog instanceof THREE.Fog ? fog.color : new THREE.Color(0xd8e8f1),
+      },
+      fogNear: { value: fog instanceof THREE.Fog ? fog.near : 120 },
+      fogFar: { value: fog instanceof THREE.Fog ? fog.far : 220 },
+    },
+    vertexShader: `
+      uniform float time;
+      varying vec3 vWorldPosition;
+      varying vec3 vNormal;
+      varying float vWave;
+      void main() {
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        vNormal = normal;
+        float wave = 0.0;
+        if (normal.y > 0.5) {
+          wave  = sin(worldPos.x * 2.3 + time * 1.6) * cos(worldPos.z * 2.7 + time * 1.3) * 0.07;
+          wave += sin(worldPos.x * 4.1 + time * 2.1) * cos(worldPos.z * 3.9 - time * 1.8) * 0.035;
+          wave += sin(worldPos.x * 6.5 - time * 2.8) * cos(worldPos.z * 5.1 + time * 2.4) * 0.02;
+        }
+        vWave = wave;
+        worldPos.y += wave;
+        gl_Position = projectionMatrix * viewMatrix * worldPos;
+      }
+    `,
+    fragmentShader: `
+      uniform float time;
+      uniform float waterLevel;
+      uniform vec3 fogColor;
+      uniform float fogNear;
+      uniform float fogFar;
+      varying vec3 vWorldPosition;
+      varying vec3 vNormal;
+      varying float vWave;
+      void main() {
+        vec3 waterDeep   = vec3(0.06, 0.18, 0.42);
+        vec3 waterMid    = vec3(0.18, 0.42, 0.58);
+        vec3 waterShallow = vec3(0.38, 0.62, 0.74);
+        float depthFactor = clamp((vWorldPosition.y - waterLevel + 4.0) / 8.0, 0.0, 1.0);
+        vec3 waterColor = mix(waterDeep, waterMid, depthFactor);
+
+        // wave crest highlights
+        float crest = smoothstep(0.02, 0.09, vWave);
+        waterColor = mix(waterColor, waterShallow, crest * 0.55);
+
+        // subtle time-based shimmer
+        float shimmer = sin(vWorldPosition.x * 8.0 + time * 2.3) * cos(vWorldPosition.z * 7.0 - time * 1.9) * 0.03;
+        waterColor += shimmer;
+
+        // specular sun reflection
+        vec3 normal = normalize(vNormal);
+        vec3 sunDir = normalize(vec3(0.62, 0.42, 0.2));
+        vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+        vec3 halfVec = normalize(sunDir + viewDir);
+        float spec = pow(max(dot(normal, halfVec), 0.0), 180.0) * 0.5;
+        waterColor += vec3(1.0, 0.95, 0.78) * spec;
+
+        // fresnel edge darkening
+        float fresnel = 1.0 - abs(dot(normal, viewDir));
+        waterColor = mix(waterColor, waterDeep * 0.7, fresnel * 0.35);
+
+        // foam on wave peaks
+        float foam = smoothstep(0.065, 0.095, vWave) * 0.18;
+        waterColor = mix(waterColor, vec3(0.85, 0.92, 0.95), foam);
+
+        // fog
+        float fogDepth = length(cameraPosition - vWorldPosition);
+        float fogFactor = smoothstep(fogNear, fogFar, fogDepth);
+        waterColor = mix(waterColor, fogColor, fogFactor);
+
+        gl_FragColor = vec4(waterColor, 0.72);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
     side: THREE.DoubleSide,
   });
 }

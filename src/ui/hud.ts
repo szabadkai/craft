@@ -20,6 +20,7 @@ export type HudElements = {
   clearWorldStatusEl: HTMLSpanElement;
   sensitivityInputEl: HTMLInputElement;
   sensitivityValueEl: HTMLElement;
+  waterOverlayEl: HTMLDivElement;
 };
 
 export function createHud(defaultSeedText: string, defaultSensitivityLabel: string): HudElements {
@@ -100,6 +101,7 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
         </div>
       </div>
     </div>
+    <div class="water-overlay"></div>
   `;
   document.body.appendChild(root);
   const seedInputEl = root.querySelector<HTMLInputElement>('#seed-input')!;
@@ -128,5 +130,6 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
     clearWorldStatusEl: root.querySelector<HTMLSpanElement>('#clear-world-status')!,
     sensitivityInputEl,
     sensitivityValueEl: root.querySelector<HTMLElement>('#sensitivity-value')!,
+    waterOverlayEl: root.querySelector<HTMLDivElement>('.water-overlay')!,
   };
 }

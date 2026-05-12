@@ -789,3 +789,17 @@ canvas {
 .swatch.empty {
   background: transparent;
 }
+
+/* water overlay */
+.water-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: rgba(6, 26, 48, 0);
+  pointer-events: none;
+  transition: background 0.4s ease;
+}
+
+.water-overlay.submerged {
+  background: rgba(6, 26, 48, 0.48);
+}

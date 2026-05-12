@@ -8,6 +8,7 @@ export type PlayerState = {
   yaw: number;
   pitch: number;
   onGround: boolean;
+  inWater: boolean;
   width: number;
   height: number;
   eye: number;
@@ -40,25 +41,61 @@ export class PlayerController {
       this.syncCamera();
       return;
     }
+
+    this.state.inWater = this.isBodyInWater();
+    const inWater = this.state.inWater;
+
     const forward = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'));
     const strafe = Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA'));
-    const speed = this.keys.has('ShiftLeft') ? 8.5 : 5.2;
+    const speed = inWater ? (this.keys.has('ShiftLeft') ? 3.6 : 2.8) : (this.keys.has('ShiftLeft') ? 8.5 : 5.2);
     const sin = Math.sin(this.state.yaw);
     const cos = Math.cos(this.state.yaw);
     const wishX = (strafe * cos - forward * sin) * speed;
     const wishZ = (-forward * cos - strafe * sin) * speed;
-    this.state.velocity.x += (wishX - this.state.velocity.x) * Math.min(1, dt * 12);
-    this.state.velocity.z += (wishZ - this.state.velocity.z) * Math.min(1, dt * 12);
-    this.state.velocity.y -= 22 * dt;
-    if (this.keys.has('Space') && this.state.onGround) {
-      this.state.velocity.y = 8.2;
-      this.state.onGround = false;
+    this.state.velocity.x += (wishX - this.state.velocity.x) * Math.min(1, dt * (inWater ? 6 : 12));
+    this.state.velocity.z += (wishZ - this.state.velocity.z) * Math.min(1, dt * (inWater ? 6 : 12));
+
+    if (inWater) {
+      // reduced gravity, buoyancy
+      this.state.velocity.y -= 6 * dt;
+      if (this.keys.has('Space')) {
+        this.state.velocity.y = Math.min(this.state.velocity.y + 14 * dt, 5.5);
+      }
+      if (this.keys.has('ShiftLeft')) {
+        this.state.velocity.y = Math.max(this.state.velocity.y - 10 * dt, -5.0);
+      }
+      // gentle float to surface when idle
+      if (!this.keys.has('Space') && !this.keys.has('ShiftLeft')) {
+        this.state.velocity.y += (0.35 - this.state.velocity.y) * Math.min(1, dt * 1.2);
+      }
+    } else {
+      this.state.velocity.y -= 22 * dt;
+      if (this.keys.has('Space') && this.state.onGround) {
+        this.state.velocity.y = 8.2;
+        this.state.onGround = false;
+      }
     }
+
     this.moveAxis('x', this.state.velocity.x * dt);
     this.moveAxis('z', this.state.velocity.z * dt);
     this.state.onGround = false;
     this.moveAxis('y', this.state.velocity.y * dt);
     this.syncCamera();
+  }
+
+  private isBodyInWater(): boolean {
+    const feetY = Math.floor(this.state.position.y);
+    const headY = Math.floor(this.state.position.y + this.state.height);
+    const cx = Math.floor(this.state.position.x);
+    const cz = Math.floor(this.state.position.z);
+    for (let y = feetY; y <= headY; y++) {
+      for (let z = cz - 1; z <= cz + 1; z++) {
+        for (let x = cx - 1; x <= cx + 1; x++) {
+          if (this.getBlock(x, y, z) === Block.Water) return true;
+        }
+      }
+    }
+    return false;
   }
 
   collides(position: THREE.Vector3): boolean {

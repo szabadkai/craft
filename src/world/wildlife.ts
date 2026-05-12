@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { isSolid } from '../blocks';
-import { biomeAt, generatedBlockAt, terrainHeight } from '../terrain';
+import { biomeAt, generatedBlockAt, terrainHeight, WATER_LEVEL } from '../terrain';
 import { Block, CHUNK_SIZE, chunkKey, ChunkKey } from '../types';
 
 type WildlifeKind = 'rabbit' | 'deer' | 'fox' | 'boar' | 'bird';
@@ -53,6 +53,7 @@ export class WildlifeSystem {
       const wx = cx * CHUNK_SIZE + 2 + this.hash(cx, cz, i * 5 + 3) * (CHUNK_SIZE - 4);
       const wz = cz * CHUNK_SIZE + 2 + this.hash(cx, cz, i * 5 + 4) * (CHUNK_SIZE - 4);
       const h = terrainHeight(wx, wz, this.getSeed());
+      if (h <= WATER_LEVEL) continue;
       const surface = generatedBlockAt(Math.floor(wx), h, Math.floor(wz), this.getSeed());
       if (surface !== Block.Grass && surface !== Block.Snow && surface !== Block.Sand) continue;
       const biome = biomeAt(wx, wz, this.getSeed());

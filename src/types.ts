@@ -54,6 +54,9 @@ export type ChunkMeshPayload = {
   uvs: Float32Array;
   atlas: Float32Array;
   indices: Uint32Array;
+  waterPositions: Float32Array | null;
+  waterNormals: Float32Array | null;
+  waterIndices: Uint32Array | null;
 };
 
 export type WorkerIn =

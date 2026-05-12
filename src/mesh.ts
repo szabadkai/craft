@@ -147,6 +147,9 @@ export function buildChunkMesh(
   const uvs: number[] = [];
   const atlas: number[] = [];
   const indices: number[] = [];
+  const waterPositions: number[] = [];
+  const waterNormals: number[] = [];
+  const waterIndices: number[] = [];
 
   const getBlock = (x: number, y: number, z: number): Block => {
     if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
@@ -178,7 +181,7 @@ export function buildChunkMesh(
           const neighbor = getBlock(p[0] + face.n[0], p[1] + face.n[1], p[2] + face.n[2]);
           const index = u + v * uSize;
           mask[index] =
-            block !== Block.Air && !isDecoration(block) && !occludesFace(block, neighbor)
+            block !== Block.Air && block !== Block.Water && !isDecoration(block) && !occludesFace(block, neighbor)
               ? { block, tile: tileForBlockFace(block, face.n), shade: face.shade }
               : null;
         }
@@ -230,6 +233,23 @@ export function buildChunkMesh(
     }
   }
 
+  // Emit individual water block faces (no greedy merge, for proper vertex waves)
+  for (let y = 0; y < WORLD_HEIGHT; y++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        if (getBlock(x, y, z) !== Block.Water) continue;
+        for (const face of faces) {
+          const nx = x + face.n[0];
+          const ny = y + face.n[1];
+          const nz = z + face.n[2];
+          const neighbor = getBlock(nx, ny, nz);
+          if (neighbor === Block.Water || isSolid(neighbor)) continue;
+          emitWaterBlockFace(cx, cz, x, y, z, face, waterPositions, waterNormals, waterIndices);
+        }
+      }
+    }
+  }
+
   emitDecorations(cx, cz, getBlock, positions, normals, colors, uvs, atlas, indices);
 
   return {
@@ -243,6 +263,9 @@ export function buildChunkMesh(
     uvs: new Float32Array(uvs),
     atlas: new Float32Array(atlas),
     indices: new Uint32Array(indices),
+    waterPositions: waterPositions.length > 0 ? new Float32Array(waterPositions) : null,
+    waterNormals: waterNormals.length > 0 ? new Float32Array(waterNormals) : null,
+    waterIndices: waterIndices.length > 0 ? new Uint32Array(waterIndices) : null,
   };
 }
 
@@ -264,6 +287,30 @@ function occludesFace(block: Block, neighbor: Block): boolean {
 
 function sameCell(a: MaskCell, b: MaskCell | null): boolean {
   return Boolean(b && a.block === b.block && a.tile === b.tile && a.shade === b.shade);
+}
+
+function emitWaterBlockFace(
+  cx: number,
+  cz: number,
+  x: number,
+  y: number,
+  z: number,
+  face: FaceDef,
+  waterPositions: number[],
+  waterNormals: number[],
+  waterIndices: number[],
+): void {
+  const base = waterPositions.length / 3;
+  const plane = face.n[face.dAxis] > 0 ? (face.dAxis === 0 ? x : face.dAxis === 1 ? y : z) + 1 : (face.dAxis === 0 ? x : face.dAxis === 1 ? y : z);
+  const u0 = face.uAxis === 0 ? x : face.uAxis === 1 ? y : z;
+  const v0 = face.vAxis === 0 ? x : face.vAxis === 1 ? y : z;
+  const corners = face.corners(plane, u0, v0, u0 + 1, v0 + 1);
+  for (let i = 0; i < corners.length; i++) {
+    const corner = corners[i];
+    waterPositions.push(cx * CHUNK_SIZE + corner[0], corner[1], cz * CHUNK_SIZE + corner[2]);
+    waterNormals.push(...face.n);
+  }
+  waterIndices.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 
 function emitQuad(input: {

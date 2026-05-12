@@ -26,6 +26,7 @@ type LoadedChunk = {
   cz: number;
   blocks: Uint16Array;
   mesh: THREE.Mesh;
+  waterMesh: THREE.Mesh | null;
   lastSeen: number;
   solidVoxels: number;
 };
@@ -40,6 +41,7 @@ type ChunkWorldOptions = {
   scene: THREE.Scene;
   chunkMaterial: THREE.ShaderMaterial;
   fadeMaterial: THREE.ShaderMaterial;
+  waterMaterial: THREE.ShaderMaterial;
   worldStore: WorldStore;
   farTerrain: FarTerrainSystem;
   wildlife: WildlifeSystem;
@@ -101,6 +103,10 @@ export class ChunkWorldSystem {
         if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
         else material.dispose();
       }
+      if (chunk.waterMesh) {
+        this.options.scene.remove(chunk.waterMesh);
+        chunk.waterMesh.geometry.dispose();
+      }
       this.options.wildlife.removeForChunk(key);
     }
     this.chunks.clear();
@@ -151,10 +157,15 @@ export class ChunkWorldSystem {
     for (const [key, chunk] of this.chunks) {
       const d = Math.hypot(chunk.cx - pcx, chunk.cz - pcz);
       chunk.mesh.visible = d <= DETAIL_RADIUS + 1;
+      if (chunk.waterMesh) chunk.waterMesh.visible = chunk.mesh.visible;
       if (chunk.mesh.visible) chunk.lastSeen = frame;
       if (d > PRELOAD_RADIUS + 3 && frame - chunk.lastSeen > 90) {
         this.options.scene.remove(chunk.mesh);
         chunk.mesh.geometry.dispose();
+        if (chunk.waterMesh) {
+          this.options.scene.remove(chunk.waterMesh);
+          chunk.waterMesh.geometry.dispose();
+        }
         this.chunks.delete(key);
         this.options.wildlife.removeForChunk(key);
       }
@@ -220,6 +231,7 @@ export class ChunkWorldSystem {
     const seconds = now * 0.001;
     this.options.chunkMaterial.uniforms.time.value = seconds;
     this.options.fadeMaterial.uniforms.time.value = seconds;
+    this.options.waterMaterial.uniforms.time.value = seconds;
     for (const chunk of this.chunks.values()) {
       const material = chunk.mesh.material;
       if (material instanceof THREE.ShaderMaterial) material.uniforms.time.value = seconds;
@@ -293,6 +305,10 @@ export class ChunkWorldSystem {
     if (old) {
       this.options.scene.remove(old.mesh);
       old.mesh.geometry.dispose();
+      if (old.waterMesh) {
+        this.options.scene.remove(old.waterMesh);
+        old.waterMesh.geometry.dispose();
+      }
     }
     this.dirty.delete(payload.key);
 
@@ -312,11 +328,26 @@ export class ChunkWorldSystem {
     mesh.frustumCulled = true;
     mesh.userData.birth = performance.now();
     this.options.scene.add(mesh);
+
+    let waterMesh: THREE.Mesh | null = null;
+    if (payload.waterPositions && payload.waterNormals && payload.waterIndices) {
+      const waterGeo = new THREE.BufferGeometry();
+      waterGeo.setAttribute('position', new THREE.BufferAttribute(payload.waterPositions, 3));
+      waterGeo.setAttribute('normal', new THREE.BufferAttribute(payload.waterNormals, 3));
+      waterGeo.setIndex(new THREE.BufferAttribute(payload.waterIndices, 1));
+      waterGeo.computeBoundingSphere();
+      waterMesh = new THREE.Mesh(waterGeo, this.options.waterMaterial);
+      waterMesh.renderOrder = 1;
+      waterMesh.frustumCulled = true;
+      this.options.scene.add(waterMesh);
+    }
+
     this.chunks.set(payload.key, {
       cx: payload.cx,
       cz: payload.cz,
       blocks: payload.blocks,
       mesh,
+      waterMesh,
       lastSeen: 0,
       solidVoxels: countSolidVoxels(payload.blocks),
     });

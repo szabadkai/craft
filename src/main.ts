@@ -14,7 +14,7 @@ import { terrainHeight, WATER_LEVEL } from './terrain';
 import { DiagnosticsSystem, DiagnosticsSummary } from './rendering/diagnostics';
 import { FarTerrainSystem } from './rendering/farTerrain';
 import { HeldItemView } from './rendering/heldItemView';
-import { createSky, createTerrainAtlas, createTerrainMaterial } from './rendering/terrainMaterials';
+import { createSky, createTerrainAtlas, createTerrainMaterial, createWaterMaterial } from './rendering/terrainMaterials';
 import {
   Block,
   CHUNK_SIZE,
@@ -71,6 +71,7 @@ scene.add(sky);
 const terrainAtlas = createTerrainAtlas();
 const chunkMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 1);
 const fadeMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.72);
+const waterMaterial = createWaterMaterial(scene.fog, WATER_LEVEL);
 
 const wildlife: WildlifeSystem = new WildlifeSystem(scene, () => seed, getBlock);
 const worldStore = new WorldStore(() => seed);
@@ -88,6 +89,7 @@ const player = {
   yaw: 0,
   pitch: 0,
   onGround: false,
+  inWater: false,
   width: 0.64,
   height: 1.8,
   eye: 1.62,
@@ -127,6 +129,7 @@ const {
   clearWorldStatusEl,
   sensitivityInputEl,
   sensitivityValueEl,
+  waterOverlayEl,
 } = hud;
 sensitivityInputEl.value = String(mouseSensitivity);
 const diagnostics = new DiagnosticsSystem(renderer, diagnosticsEl, summarizeWorldDiagnostics);
@@ -134,6 +137,7 @@ const chunkWorld = new ChunkWorldSystem({
   scene,
   chunkMaterial,
   fadeMaterial,
+  waterMaterial,
   worldStore,
   farTerrain,
   wildlife,
@@ -210,6 +214,7 @@ function startWorld(seedText: string): void {
   player.position.set(spawn.x, spawn.y, spawn.z);
   player.velocity.set(0, 0, 0);
   player.onGround = false;
+  submergeFactor = 0;
   playerController.syncCamera();
 
   startScreenEl.classList.add('hidden');
@@ -285,6 +290,54 @@ function fadeChunks(now: number): void {
 }
 
 let last = performance.now();
+let submergeFactor = 0;
+const airFogColor = new THREE.Color(0xd8e8f1);
+const waterFogColor = new THREE.Color(0x061a30);
+const airBgColor = new THREE.Color(0xd8e8f1);
+const waterBgColor = new THREE.Color(0x061a30);
+
+function applyUnderwaterEffects(dt: number): void {
+  if (!worldReady) {
+    submergeFactor = 0;
+    return;
+  }
+  const eyeY = player.position.y + player.eye;
+  const eyeInWater =
+    getBlock(Math.floor(player.position.x), Math.floor(eyeY), Math.floor(player.position.z)) ===
+    Block.Water;
+  const headInWater =
+    getBlock(
+      Math.floor(player.position.x),
+      Math.floor(player.position.y + player.height - 0.1),
+      Math.floor(player.position.z),
+    ) === Block.Water;
+  const target = eyeInWater || headInWater ? 1 : 0;
+  submergeFactor += (target - submergeFactor) * Math.min(1, dt * 5);
+  if (submergeFactor < 0.002) submergeFactor = 0;
+
+  if (submergeFactor > 0.005) {
+    // fog
+    if (scene.fog instanceof THREE.Fog) {
+      scene.fog.color.copy(airFogColor).lerp(waterFogColor, submergeFactor);
+      scene.fog.near = THREE.MathUtils.lerp(144, 4, submergeFactor);
+      scene.fog.far = THREE.MathUtils.lerp(304, 16, submergeFactor);
+    }
+    // background
+    scene.background = scene.background ?? new THREE.Color();
+    (scene.background as THREE.Color).copy(airBgColor).lerp(waterBgColor, submergeFactor);
+    // water overlay
+    waterOverlayEl.classList.toggle('submerged', submergeFactor > 0.25);
+  } else {
+    if (scene.fog instanceof THREE.Fog) {
+      scene.fog.color.copy(airFogColor);
+      scene.fog.near = 144;
+      scene.fog.far = 304;
+    }
+    scene.background = new THREE.Color(0xd8e8f1);
+    waterOverlayEl.classList.remove('submerged');
+  }
+}
+
 function tick(now: number): void {
   const frameStartedAt = performance.now();
   const frameMs = now - last;
@@ -297,6 +350,7 @@ function tick(now: number): void {
   updateLoadingState();
   if (worldReady) {
     playerController.update(dt);
+    applyUnderwaterEffects(dt);
     itemPickups.update(dt, now, player.position);
   }
   sky.position.copy(camera.position);
