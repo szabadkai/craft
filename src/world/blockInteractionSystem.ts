@@ -157,6 +157,17 @@ export class BlockInteractionSystem {
     if (block === Block.Log) {
       if (Math.abs(hit.normal.x) > 0) placeBlock = Block.LogX;
       else if (Math.abs(hit.normal.z) > 0) placeBlock = Block.LogZ;
+    } else if (block === Block.BirchLog) {
+      if (Math.abs(hit.normal.x) > 0) placeBlock = Block.BirchLogX;
+      else if (Math.abs(hit.normal.z) > 0) placeBlock = Block.BirchLogZ;
+    } else if (block === Block.OakSlab || block === Block.CobblestoneSlab) {
+      // Top face → bottom slab; Bottom face → top slab; Side → bottom slab
+      if (hit.normal.y < 0) {
+        placeBlock = block === Block.OakSlab ? Block.OakSlabTop : Block.CobblestoneSlabTop;
+      }
+    } else if (block === Block.OakStairsN || block === Block.CobblestoneStairsN) {
+      // Orient stairs based on player's yaw: higher step faces away from player
+      placeBlock = stairForYaw(block === Block.OakStairsN ? 'oak' : 'cobble', this.player.yaw);
     }
 
     // Handle door placement (two-tall)
@@ -246,6 +257,13 @@ export class BlockInteractionSystem {
         this.onBlockBroken(this.mining.block.x, this.mining.block.y, this.mining.block.z, block);
         this.setBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z, Block.Air);
       }
+      // Leaf decay: when a log is broken, nearby leaves decay with drops
+      if (
+        block === Block.Log || block === Block.LogX || block === Block.LogZ ||
+        block === Block.BirchLog || block === Block.BirchLogX || block === Block.BirchLogZ
+      ) {
+        this.decayLeaves(this.mining.block.x, this.mining.block.y, this.mining.block.z);
+      }
       // Chain into next block if still holding
       const nextHit = this.raycaster.raycast();
       if (nextHit && this.getBlock(nextHit.block.x, nextHit.block.y, nextHit.block.z) !== Block.Air) {
@@ -271,6 +289,15 @@ export class BlockInteractionSystem {
     if (block === Block.Log) {
       if (Math.abs(hit.normal.x) > 0) previewBlock = Block.LogX;
       else if (Math.abs(hit.normal.z) > 0) previewBlock = Block.LogZ;
+    } else if (block === Block.BirchLog) {
+      if (Math.abs(hit.normal.x) > 0) previewBlock = Block.BirchLogX;
+      else if (Math.abs(hit.normal.z) > 0) previewBlock = Block.BirchLogZ;
+    } else if (block === Block.OakSlab || block === Block.CobblestoneSlab) {
+      if (hit.normal.y < 0) {
+        previewBlock = block === Block.OakSlab ? Block.OakSlabTop : Block.CobblestoneSlabTop;
+      }
+    } else if (block === Block.OakStairsN || block === Block.CobblestoneStairsN) {
+      previewBlock = stairForYaw(block === Block.OakStairsN ? 'oak' : 'cobble', this.player.yaw);
     }
     // For doors, also check space above and solid below
     if (block === Block.OakDoor) {
@@ -283,7 +310,8 @@ export class BlockInteractionSystem {
       this.placePreview.geometry.dispose();
       this.placePreview.geometry = atlasBoxGeometry(previewBlock);
     }
-    this.placePreview.position.set(place.x + 0.5, place.y + 0.5, place.z + 0.5);
+    const isTopSlab = previewBlock === Block.OakSlabTop || previewBlock === Block.CobblestoneSlabTop;
+    this.placePreview.position.set(place.x + 0.5, place.y + (isTopSlab ? 0.75 : 0.5), place.z + 0.5);
     this.placePreview.visible = true;
   }
 
@@ -435,6 +463,38 @@ export class BlockInteractionSystem {
     const n = Math.sin(stage * 71.17 + index * 23.41) * 43758.5453;
     return n - Math.floor(n);
   }
+
+  private decayLeaves(wx: number, wy: number, wz: number): void {
+    const entries: { wx: number; y: number; wz: number; block: Block }[] = [];
+    const dropped = new Set<string>();
+    for (let dy = -4; dy <= 7; dy++) {
+      for (let dz = -4; dz <= 4; dz++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          if (Math.abs(dx) + Math.abs(dz) > 6) continue;
+          const lx = wx + dx;
+          const ly = wy + dy;
+          const lz = wz + dz;
+          const block = this.getBlock(lx, ly, lz);
+          if (block !== Block.Leaves && block !== Block.BirchLeaves) continue;
+          const key = `${lx},${ly},${lz}`;
+          if (dropped.has(key)) continue;
+          dropped.add(key);
+          if (Math.random() < 0.28) {
+            entries.push({ wx: lx, y: ly, wz: lz, block: Block.Air });
+            const drop = miningDrop(block, 'hand');
+            if (drop) {
+              this.spawnItemDrop(
+                drop.item,
+                drop.count,
+                new THREE.Vector3(lx + 0.5, ly + 0.65, lz + 0.5),
+              );
+            }
+          }
+        }
+      }
+    }
+    if (entries.length > 0) this.setBlocks(entries);
+  }
 }
 
 const FACE_NORMALS: [number, number, number][] = [
@@ -447,7 +507,10 @@ const FACE_NORMALS: [number, number, number][] = [
 ];
 
 function atlasBoxGeometry(block: Block): THREE.BoxGeometry {
-  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const isSlab = block === Block.OakSlab || block === Block.OakSlabTop ||
+    block === Block.CobblestoneSlab || block === Block.CobblestoneSlabTop;
+  const height = isSlab ? 0.5 : 1;
+  const geo = new THREE.BoxGeometry(1, height, 1);
   const uvs = geo.attributes.uv.array as Float32Array;
   for (let face = 0; face < 6; face++) {
     const tile = tileForBlockFace(block, FACE_NORMALS[face]);
@@ -461,4 +524,23 @@ function atlasBoxGeometry(block: Block): THREE.BoxGeometry {
   }
   geo.attributes.uv.needsUpdate = true;
   return geo;
+}
+
+function stairForYaw(material: 'oak' | 'cobble', yaw: number): Block {
+  // Snap yaw to nearest cardinal: 0=-Z, PI/2=-X, ±PI=+Z, -PI/2=+X
+  // Higher step faces away from player's look direction
+  const a = ((yaw % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI; // normalize to [-PI, PI]
+  if (a >= -Math.PI / 4 && a < Math.PI / 4) {
+    // Looking -Z (north): higher step on +Z (south)
+    return material === 'oak' ? Block.OakStairsS : Block.CobblestoneStairsS;
+  } else if (a >= Math.PI / 4 && a < 3 * Math.PI / 4) {
+    // Looking -X (west): higher step on +X (east)
+    return material === 'oak' ? Block.OakStairsE : Block.CobblestoneStairsE;
+  } else if (a >= -3 * Math.PI / 4 && a < -Math.PI / 4) {
+    // Looking +X (east): higher step on -X (west)
+    return material === 'oak' ? Block.OakStairsW : Block.CobblestoneStairsW;
+  } else {
+    // Looking +Z (south): higher step on -Z (north)
+    return material === 'oak' ? Block.OakStairsN : Block.CobblestoneStairsN;
+  }
 }

@@ -119,9 +119,31 @@ export function tileForBlockFace(block: Block, normal: [number, number, number])
     case Block.LogZ:
       // horizontal along Z: rings on Z faces, bark on X and Y
       return normal[2] !== 0 ? Tile.LogTop : Tile.LogSide;
+    case Block.BirchLogX:
+      // horizontal along X: rings on X faces, bark on Y and Z
+      return normal[0] !== 0 ? Tile.BirchLogTop : Tile.BirchLogSide;
+    case Block.BirchLogZ:
+      // horizontal along Z: rings on Z faces, bark on X and Y
+      return normal[2] !== 0 ? Tile.BirchLogTop : Tile.BirchLogSide;
     case Block.OakDoor:
     case Block.OakDoorOpen:
       return Tile.DoorOak;
+    case Block.OakSlab:
+    case Block.OakSlabTop:
+      return Tile.Planks;
+    case Block.CobblestoneSlab:
+    case Block.CobblestoneSlabTop:
+      return Tile.Cobblestone;
+    case Block.OakStairsN:
+    case Block.OakStairsS:
+    case Block.OakStairsE:
+    case Block.OakStairsW:
+      return Tile.Planks;
+    case Block.CobblestoneStairsN:
+    case Block.CobblestoneStairsS:
+    case Block.CobblestoneStairsE:
+    case Block.CobblestoneStairsW:
+      return Tile.Cobblestone;
     default:
       return Tile.Stone;
   }

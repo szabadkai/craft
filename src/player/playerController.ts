@@ -2,6 +2,39 @@ import * as THREE from 'three';
 import { isSolid } from '../blocks';
 import { Block } from '../types';
 
+function isSlabBlock(block: Block): boolean {
+  return (
+    block === Block.OakSlab ||
+    block === Block.OakSlabTop ||
+    block === Block.CobblestoneSlab ||
+    block === Block.CobblestoneSlabTop
+  );
+}
+
+function isStairBlock(block: Block): boolean {
+  return (
+    block === Block.OakStairsN || block === Block.OakStairsS ||
+    block === Block.OakStairsE || block === Block.OakStairsW ||
+    block === Block.CobblestoneStairsN || block === Block.CobblestoneStairsS ||
+    block === Block.CobblestoneStairsE || block === Block.CobblestoneStairsW
+  );
+}
+
+function stairDir(block: Block): 'n' | 's' | 'e' | 'w' {
+  switch (block) {
+    case Block.OakStairsN: case Block.CobblestoneStairsN: return 'n';
+    case Block.OakStairsS: case Block.CobblestoneStairsS: return 's';
+    case Block.OakStairsE: case Block.CobblestoneStairsE: return 'e';
+    case Block.OakStairsW: case Block.CobblestoneStairsW: return 'w';
+    default: return 'n';
+  }
+}
+
+function slabHalfY(block: Block): [number, number] {
+  const isTop = block === Block.OakSlabTop || block === Block.CobblestoneSlabTop;
+  return isTop ? [0.5, 1] : [0, 0.5];
+}
+
 export type PlayerState = {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
@@ -100,17 +133,43 @@ export class PlayerController {
 
   collides(position: THREE.Vector3): boolean {
     const half = this.state.width / 2;
-    const minX = Math.floor(position.x - half);
-    const maxX = Math.floor(position.x + half);
-    const minY = Math.floor(position.y);
-    const maxY = Math.floor(position.y + this.state.height);
-    const minZ = Math.floor(position.z - half);
-    const maxZ = Math.floor(position.z + half);
+    const pxMin = position.x - half;
+    const pxMax = position.x + half;
+    const pyMin = position.y;
+    const pyMax = position.y + this.state.height;
+    const pzMin = position.z - half;
+    const pzMax = position.z + half;
+    const minX = Math.floor(pxMin);
+    const maxX = Math.floor(pxMax + 0.999);
+    const minY = Math.floor(pyMin);
+    const maxY = Math.floor(pyMax + 0.999);
+    const minZ = Math.floor(pzMin);
+    const maxZ = Math.floor(pzMax + 0.999);
     for (let y = minY; y <= maxY; y++) {
       for (let z = minZ; z <= maxZ; z++) {
         for (let x = minX; x <= maxX; x++) {
           const block = this.getBlock(x, y, z);
-          if (block === Block.OakDoor || isSolid(block)) return true;
+          if (block === Block.OakDoor) return true;
+          if (isSlabBlock(block)) {
+            const [yOff, yTop] = slabHalfY(block);
+            const blockMinY = y + yOff;
+            const blockMaxY = y + yTop;
+            if (pxMin < x + 1 && pxMax > x && pyMin < blockMaxY && pyMax > blockMinY && pzMin < z + 1 && pzMax > z) {
+              return true;
+            }
+            continue;
+          }
+          if (isSolid(block)) return true;
+          if (isStairBlock(block)) {
+            // Full collision in lower half (y to y+0.5)
+            if (pyMin < y + 0.5) return true;
+            // Upper half: only half the block is solid
+            const dir = stairDir(block);
+            if (dir === 'n' && pzMin < z + 0.5) return true;
+            if (dir === 's' && pzMax > z + 0.5) return true;
+            if (dir === 'e' && pxMax > x + 0.5) return true;
+            if (dir === 'w' && pxMin < x + 0.5) return true;
+          }
         }
       }
     }

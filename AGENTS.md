@@ -93,6 +93,10 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Damage flash overlay (red screen vignette on hit).
 - Continuous mining while holding mouse1 — chains into next block when current one breaks.
 - Oak doors — two-tall openable blocks with right-click toggle, door state persistence, and planks-based recipe (6 planks → 3 doors).
+- Oak and cobblestone stairs — stepped blocks with 4-directional placement based on player yaw, non-greedy mesh rendering, and stepped collision.
+- Cave spiders — hostile mobs spawning in deep caves, pursuing the player, dealing damage on contact, dropping raw meat.
+- Leaf decay — breaking a log causes ~28% of nearby leaves to drop sticks/apples and disappear.
+- Shoreline improvements — variable-width beaches (sand/grass mix at water line), inland lakes in terrain depressions, biome border blending.
 
 ## Important Implementation Notes
 
@@ -111,7 +115,12 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Wildlife movement uses loaded chunk blocks for ground and obstacle collision; avoid falling back to generated height only for gameplay collision.
 - Health state (`src/player/health.ts`) tracks HP, fall distance, death, and respawn. `reconcile()` handles per-frame fall damage and hearts DOM display. Hearts are 8×8 canvas-drawn pixel sprites (full red with white border, half, empty outline) rendered at 2× nearest-neighbour scale.
 - Caves are generated in `src/terrain.ts` via `isCaveBlock`: 3D value noise caverns (scale 64), worm tunnels (crossed noise, narrow 0.51–0.58 band), surface entrances (scale 14, near-surface), and large chambers (scale 72).
-- Oak doors use two block IDs (`OakDoor`=closed solid, `OakDoorOpen`=open non-solid) plus `DoorSystem` (`src/world/doorSystem.ts`) for orientation tracking. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
+- Oak doors use two block IDs (`OakDoor`=closed solid, `OakDoorOpen`=open non-solid) plus `DoorSystem` (`src/world/doorSystem.ts`) for orientation tracking. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`.
+- Birch logs have orientation variants (`BirchLogX`, `BirchLogZ`) matching the LogX/LogZ pattern. Placing birch logs rotates them based on clicked face. Natural birch trees still generate as plain `BirchLog` (vertical).
+- Slab blocks use four block IDs per material pair: `OakSlab` (bottom half), `OakSlabTop` (top half), `CobblestoneSlab`, `CobblestoneSlabTop`. Slabs render as half-height individual geometry (non-greedy, like water faces) via `emitSlabFace` in `src/mesh.ts`. Collision is half-height AABB in `PlayerController.collides()`. Placement: top face → bottom slab, bottom face → top slab, side face → bottom slab. Crafted from 3 planks → 6 oak slabs, 3 cobblestone → 6 cobblestone slabs.
+- Stair blocks use eight block IDs (4 directions × 2 materials): OakStairsN/S/E/W and CobblestoneStairsN/S/E/W. Stairs render individually (non-greedy) via `emitStairFaces` in `src/mesh.ts`. Collision is stepped: bottom half (full 1×1), upper half (half-block in stair direction). Direction is determined by player's yaw at placement time. Stair blocks are NOT in `solidBlocks` — they have custom collision checks in `PlayerController.collides()`. Crafted from 6 planks → 4 oak stairs, 6 cobblestone → 4 cobblestone stairs.
+- Hostile mobs (cave spiders) are managed by `HostileSystem` (`src/world/hostileMobs.ts`). They spawn in caves when the player is deep underground (>8 blocks below surface), walk toward the player within 18 blocks, deal 2 HP damage on contact (500ms cooldown), have 3 HP, and drop raw meat when killed. Hit detection competes with wildlife/block raycasting (closest target wins).
+- Surface rocks generate in `addSurfaceDetails` in `src/terrain.ts` as cobblestone outcrops. Frequency varies by biome: common on hills (10%), occasional on plains/snow (4-7%), rare in forest (3%). Rocks can be 1-2 blocks tall. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
 - Place preview rebuilds the BoxGeometry UVs per selected block via `atlasBoxGeometry`, mapping each face to the correct atlas tile using `tileForBlockFace`.
 - Console commands are defined in `src/ui/console.ts`. The `give` command resolves item IDs via `itemDefs` fuzzy matching.
 - Existing IndexedDB saves can make old chunks appear near spawn after generator changes.
@@ -126,17 +135,13 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Known Bugs / UX Issues
 
-- Held block/tool can clip behind nearby solid terrain when the player stands next to a wall.
-- Damage overlay duration (300ms) could be tuned to feel more substantial.
-- Animal hit animation is missing (no flinch/pushback).
-- Birch logs lack orientation variants.
-- Oak door open state renders as invisible (air block) — no visual door panel when open.
+- Hostile mob cave spawns may sometimes appear inside solid blocks briefly before resolving.
+
 
 ## Good Next Tasks
 
-- Add slabs/stairs — variable-height blocks with stair collision shapes.
-- Add birch log orientation variants (matching LogX/LogZ pattern).
 - Separate transparent render paths for glass/water if richer translucency becomes necessary.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
-- Add more surface features: rocks, shoreline improvements.
-- Add door open visual (thin panel rendering instead of invisible when open).
+- Add day/night cycle with light propagation model.
+- Add more hostile mob variants (surface zombies, skeletons).
+- Improve stair auto-step (player automatically steps up when walking into stairs from the low side).

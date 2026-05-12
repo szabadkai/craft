@@ -118,7 +118,8 @@ Tasks:
 - [x] Add chest block and small container UI.
 - [x] Add creative/debug item grant controls for testing.
 - [x] Add doors (two-tall openable, right-click toggle).
-- [ ] Add slabs/stairs.
+- [x] Add slabs/stairs (both done).
+- [x] Add door open visual (thin panel).
 
 Exit criteria:
 
@@ -141,7 +142,7 @@ Tasks:
 - [x] Add sticks drop from leaves (~22%).
 - [x] Add continuous mining (hold M1 chains into next block).
 - [x] Add damage flash overlay on hit.
-- [ ] Add simple hostile or environmental threat later.
+- [x] Add simple hostile or environmental threat later.
 - [ ] Add day/night cycle only after lighting strategy is clear.
 
 Exit criteria:
@@ -167,8 +168,9 @@ Tasks:
   - pumpkins
   - flowers (red, yellow, blue)
   - tall grass
-- [ ] Add surface rocks.
-- [ ] Add biome transitions and local color variation.
+- [x] Add surface rocks (cobblestone outcrops, weighted by biome).
+- [x] Add biome transitions and local color variation.
+- [x] Add lakes and shoreline improvements.
 - [x] Add basic wildlife (deer, boar, birds).
 
 Exit criteria:
@@ -204,12 +206,23 @@ Exit criteria:
 2. ✅ Add basic food items and eating.
 3. ✅ Add rotateable/variant blocks (log orientation).
 4. ✅ Add doors (two-tall openable, right-click toggle).
-5. Add slabs/stairs.
-6. Add birch log orientation variants.
+5. ✅ Add slabs (half-height blocks, oak and cobblestone variants).
+6. ✅ Add birch log orientation variants (BirchLogX/BirchLogZ).
+7. ✅ Add surface rocks (cobblestone outcrops, biome-weighted).
+8. ✅ Add door open visual (thin panel rendering).
+9. ✅ Add stairs (stepped blocks, directional placement).
+10. ✅ Add hostile mobs (cave spiders).
+11. ✅ Add leaf decay on log break.
+12. ✅ Add shoreline improvements and inland lakes.
+13. Add day/night cycle and light propagation.
+14. Separate transparent render paths for glass/water.
+15. Move far terrain rebuilds off chunk-boundary path.
 
 ## Current Priority
 
-M4 survival (health, fall damage) and M5 caves are done. M3 building improvements are next: chest storage is the most requested remaining M3 item, followed by variant blocks and doors/slabs. After that, basic food (M4) to use health healing.
+M3 building improvements complete: chests, variant blocks, doors, slabs, and stairs. M4 has hostile mobs (cave spiders) for resource pressure. M5 has caves, rocks, wildlife, shoreline/lake improvements, and biome transitions. M6 (rendering/performance) is next front: transparent material separation, far terrain improvements.
+
+Remaining M4 goal: day/night cycle (gated on lighting strategy).
 
 ## Known Risks
 

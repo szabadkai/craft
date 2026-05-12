@@ -46,6 +46,7 @@ import { ItemPickupSystem } from './world/itemPickups';
 import { itemDefs, foodValueFor } from './inventory/items';
 import { randomSeedText, seedFromString } from './world/seed';
 import { WildlifeSystem } from './world/wildlife';
+import { HostileSystem } from './world/hostileMobs';
 import { createHud } from './ui/hud';
 import { findDrySpawn } from './game/helpers';
 
@@ -92,6 +93,15 @@ const chunkMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 1);
 const fadeMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.72);
 const waterMaterial = createWaterMaterial(scene.fog, WATER_LEVEL);
 
+const hostile: HostileSystem = new HostileSystem(
+  scene,
+  () => seed,
+  getBlock,
+  (position, _kind) => {
+    itemPickups.spawn('raw_meat', 1, position);
+  },
+);
+hostile.setPlayerDamageCallback((amount) => health.damage(amount));
 const wildlife: WildlifeSystem = new WildlifeSystem(
   scene,
   () => seed,
@@ -302,6 +312,7 @@ function startWorld(seedText: string): void {
   chestSystem.close();
   doorSystem.clear();
   itemPickups.clear();
+  hostile.clear();
   void loadFurnaces();
 
   const spawnX = 8;
@@ -415,6 +426,8 @@ function tick(now: number): void {
   updateHand(now);
   if (worldReady) {
     wildlife.update(dt, now);
+    hostile.update(dt, now, player.position);
+    hostile.spawnNear(player.position, now);
     interactionSystem.updateHighlight();
     interactionSystem.updateMining(now);
   } else {
@@ -507,13 +520,26 @@ document.addEventListener('mousedown', (event) => {
   const hit = blockRaycaster.raycast();
   if (event.button === 0) {
     const animalHit = wildlife.raycast(camera);
-    if (animalHit && (!hit || animalHit.distance < hit.distance)) {
-      interactionSystem.stopMining();
-      wildlife.hit(animalHit.animal, performance.now());
-      triggerHandSwing('mine');
-      return;
+    const hostileHit = hostile.raycast(camera);
+    const animalDist = animalHit?.distance ?? Infinity;
+    const hostileDist = hostileHit?.distance ?? Infinity;
+    const blockDist = hit?.distance ?? Infinity;
+    const closestDist = Math.min(animalDist, hostileDist, blockDist);
+    if (closestDist < Infinity) {
+      if (animalDist === closestDist && animalHit) {
+        interactionSystem.stopMining();
+        wildlife.hit(animalHit.animal, performance.now());
+        triggerHandSwing('mine');
+        return;
+      }
+      if (hostileDist === closestDist && hostileHit) {
+        interactionSystem.stopMining();
+        hostile.hit(hostileHit.mob, performance.now());
+        triggerHandSwing('mine');
+        return;
+      }
+      if (hit) interactionSystem.startMining(hit);
     }
-    if (hit) interactionSystem.startMining(hit);
   } else if (event.button === 2) {
     const slot = inventorySystem.slotAt(inventorySystem.selectedHotbarIndex);
     if (slot && foodValueFor(slot.item) > 0) {
@@ -614,6 +640,7 @@ async function clearSavedWorld(): Promise<void> {
   furnaceSystem.load(null);
   chestSystem.load(null);
   doorSystem.clear();
+  hostile.clear();
   worldReady = false;
   if (worldStarted) {
     startWorld(normalizedSeedText);

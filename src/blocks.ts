@@ -28,6 +28,12 @@ export const solidBlocks = new Set<Block>([
   Block.Furnace,
   Block.LogX,
   Block.LogZ,
+  Block.BirchLogX,
+  Block.BirchLogZ,
+  Block.OakSlab,
+  Block.OakSlabTop,
+  Block.CobblestoneSlab,
+  Block.CobblestoneSlabTop,
 ]);
 
 export const selectableBlocks = [
@@ -46,6 +52,14 @@ export const selectableBlocks = [
   Block.Chest,
   Block.LogX,
   Block.LogZ,
+  Block.BirchLogX,
+  Block.BirchLogZ,
+  Block.OakSlab,
+  Block.OakSlabTop,
+  Block.CobblestoneSlab,
+  Block.CobblestoneSlabTop,
+  Block.OakStairsN,
+  Block.CobblestoneStairsN,
   Block.OakDoor,
 ] as const;
 
@@ -122,6 +136,25 @@ export function blockColor(block: Block): [number, number, number] {
     case Block.LogX:
     case Block.LogZ:
       return [0.47, 0.29, 0.13];
+    case Block.BirchLogX:
+    case Block.BirchLogZ:
+      return [0.78, 0.72, 0.58];
+    case Block.OakSlab:
+    case Block.OakSlabTop:
+      return [0.64, 0.45, 0.24];
+    case Block.CobblestoneSlab:
+    case Block.CobblestoneSlabTop:
+      return [0.38, 0.39, 0.38];
+    case Block.OakStairsN:
+    case Block.OakStairsS:
+    case Block.OakStairsE:
+    case Block.OakStairsW:
+      return [0.64, 0.45, 0.24];
+    case Block.CobblestoneStairsN:
+    case Block.CobblestoneStairsS:
+    case Block.CobblestoneStairsE:
+    case Block.CobblestoneStairsW:
+      return [0.38, 0.39, 0.38];
     case Block.Torch:
       return [1.0, 0.78, 0.25];
     case Block.OakDoor:

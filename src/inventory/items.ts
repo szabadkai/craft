@@ -39,7 +39,11 @@ export type Item =
   | 'apple'
   | 'raw_meat'
   | 'cooked_meat'
-  | 'oak_door';
+  | 'oak_door'
+  | 'oak_slab'
+  | 'cobblestone_slab'
+  | 'oak_stairs'
+  | 'cobblestone_stairs';
 
 export type Recipe = {
   name: string;
@@ -106,6 +110,10 @@ export const defaultInventoryCounts: Record<Item, number> = {
   raw_meat: 0,
   cooked_meat: 0,
   oak_door: 0,
+  oak_slab: 0,
+  cobblestone_slab: 0,
+  oak_stairs: 0,
+  cobblestone_stairs: 0,
 };
 
 export const recipes: Recipe[] = [
@@ -121,6 +129,10 @@ export const recipes: Recipe[] = [
   { name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 2 } },
   { name: 'Chest', inputs: { planks: 8 }, outputs: { chest: 1 } },
   { name: 'Oak Door', inputs: { planks: 6 }, outputs: { oak_door: 3 } },
+  { name: 'Oak Slab', inputs: { planks: 3 }, outputs: { oak_slab: 6 } },
+  { name: 'Cobble Slab', inputs: { cobblestone: 3 }, outputs: { cobblestone_slab: 6 } },
+  { name: 'Oak Stairs', inputs: { planks: 6 }, outputs: { oak_stairs: 4 } },
+  { name: 'Cobble Stairs', inputs: { cobblestone: 6 }, outputs: { cobblestone_stairs: 4 } },
 ];
 
 export const itemDefs: ItemDef[] = [
@@ -180,6 +192,10 @@ export const itemDefs: ItemDef[] = [
   { id: 'raw_meat', label: 'Raw Meat', category: 'Food', foodValue: 3, stackLimit: 16 },
   { id: 'cooked_meat', label: 'Cooked Meat', category: 'Food', foodValue: 7, stackLimit: 16 },
   { id: 'oak_door', label: 'Oak Door', category: 'Blocks', block: Block.OakDoor },
+  { id: 'oak_slab', label: 'Oak Slab', category: 'Blocks', block: Block.OakSlab },
+  { id: 'cobblestone_slab', label: 'Cobble Slab', category: 'Blocks', block: Block.CobblestoneSlab },
+  { id: 'oak_stairs', label: 'Oak Stairs', category: 'Blocks', block: Block.OakStairsN },
+  { id: 'cobblestone_stairs', label: 'Cobble Stairs', category: 'Blocks', block: Block.CobblestoneStairsN },
 ];
 
 export function blockToItem(block: Block): Item | null {
@@ -242,11 +258,30 @@ export function blockToItem(block: Block): Item | null {
     case Block.LogX:
     case Block.LogZ:
       return 'wood';
+    case Block.BirchLogX:
+    case Block.BirchLogZ:
+      return 'birch_wood';
     case Block.Torch:
       return 'torch';
     case Block.OakDoor:
     case Block.OakDoorOpen:
       return 'oak_door';
+    case Block.OakSlab:
+    case Block.OakSlabTop:
+      return 'oak_slab';
+    case Block.CobblestoneSlab:
+    case Block.CobblestoneSlabTop:
+      return 'cobblestone_slab';
+    case Block.OakStairsN:
+    case Block.OakStairsS:
+    case Block.OakStairsE:
+    case Block.OakStairsW:
+      return 'oak_stairs';
+    case Block.CobblestoneStairsN:
+    case Block.CobblestoneStairsS:
+    case Block.CobblestoneStairsE:
+    case Block.CobblestoneStairsW:
+      return 'cobblestone_stairs';
     default:
       return null;
   }

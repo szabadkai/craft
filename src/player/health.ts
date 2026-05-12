@@ -46,7 +46,8 @@ export function createHealth(
         lastHeartsText = html;
         heartsEl.innerHTML = html;
       }
-      const flashing = now - state.lastDamageTime < 300;
+      // 500ms flash with gradual fade via CSS transition
+      const flashing = now - state.lastDamageTime < 500;
       heartsEl.classList.toggle('damage-flash', flashing);
       if (damageOverlayEl) {
         damageOverlayEl.classList.toggle('flash', flashing);

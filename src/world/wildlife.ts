@@ -157,10 +157,18 @@ export class WildlifeSystem {
 
   hit(animal: Wildlife, now: number): void {
     animal.health -= 1;
-    animal.hurtUntil = now + 180;
+    animal.hurtUntil = now + 280;
     animal.nextTargetAt = 0;
-    animal.heading +=
+    // Strong flinch — turn away and push back
+    const flinchAngle =
       Math.PI + (this.hash(animal.root.position.x, animal.root.position.z, now) - 0.5);
+    animal.heading += flinchAngle;
+    // Push animal backward in the direction away from the hit
+    const pushX = Math.sin(animal.heading + Math.PI) * 0.65;
+    const pushZ = Math.cos(animal.heading + Math.PI) * 0.65;
+    animal.root.position.x += pushX;
+    animal.root.position.z += pushZ;
+    animal.verticalVelocity += 2.2;
     if (animal.health > 0) return;
     const dropPos = animal.root.position.clone();
     dropPos.y += 0.05;

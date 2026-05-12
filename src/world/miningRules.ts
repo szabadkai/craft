@@ -23,6 +23,8 @@ export function blockHardness(block: Block, tool: MiningTool): number {
     case Block.LogX:
     case Block.LogZ:
     case Block.BirchLog:
+    case Block.BirchLogX:
+    case Block.BirchLogZ:
     case Block.Planks:
     case Block.CraftingTable:
       return 520 / speed;
@@ -39,6 +41,22 @@ export function blockHardness(block: Block, tool: MiningTool): number {
     case Block.MossyCobblestone:
     case Block.Brick:
       return 1300 / speed;
+    case Block.OakSlab:
+    case Block.OakSlabTop:
+      return 450 / speed;
+    case Block.OakStairsN:
+    case Block.OakStairsS:
+    case Block.OakStairsE:
+    case Block.OakStairsW:
+      return 520 / speed;
+    case Block.CobblestoneStairsN:
+    case Block.CobblestoneStairsS:
+    case Block.CobblestoneStairsE:
+    case Block.CobblestoneStairsW:
+      return 1000 / speed;
+    case Block.CobblestoneSlab:
+    case Block.CobblestoneSlabTop:
+      return 1000 / speed;
     case Block.OakDoor:
     case Block.OakDoorOpen:
       return 520 / speed;
@@ -86,6 +104,9 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
     case Block.LogX:
     case Block.LogZ:
       return { item: 'wood', count: 1 };
+    case Block.BirchLogX:
+    case Block.BirchLogZ:
+      return { item: 'birch_wood', count: 1 };
     case Block.BirchLog:
       return { item: 'birch_wood', count: 1 };
     case Block.Gravel:
@@ -114,6 +135,22 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
       return { item: 'furnace', count: 1 };
     case Block.Torch:
       return { item: 'torch', count: 1 };
+    case Block.OakSlab:
+    case Block.OakSlabTop:
+      return { item: 'oak_slab', count: 1 };
+    case Block.OakStairsN:
+    case Block.OakStairsS:
+    case Block.OakStairsE:
+    case Block.OakStairsW:
+      return { item: 'oak_stairs', count: 1 };
+    case Block.CobblestoneStairsN:
+    case Block.CobblestoneStairsS:
+    case Block.CobblestoneStairsE:
+    case Block.CobblestoneStairsW:
+      return { item: 'cobblestone_stairs', count: 1 };
+    case Block.CobblestoneSlab:
+    case Block.CobblestoneSlabTop:
+      return { item: 'cobblestone_slab', count: 1 };
     case Block.OakDoor:
     case Block.OakDoorOpen:
       return { item: 'oak_door', count: 1 };
@@ -150,6 +187,8 @@ function miningSpeedMultiplier(block: Block, tool: MiningTool): number {
     case Block.CopperOre:
     case Block.Furnace:
     case Block.Cobblestone:
+    case Block.CobblestoneSlab:
+    case Block.CobblestoneSlabTop:
     case Block.MossyCobblestone:
     case Block.Brick:
       return tier >= 3 ? 3.35 : tier === 2 ? 2.5 : tier === 1 ? 1.8 : 1;

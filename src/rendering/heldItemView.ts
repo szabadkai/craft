@@ -13,8 +13,9 @@ export class HeldItemView {
   };
 
   constructor(camera: THREE.Camera) {
-    this.handRoot.position.set(0.42, -0.48, -0.72);
-    this.handRoot.rotation.set(-0.16, -0.22, -0.14);
+    // Position further from camera to reduce wall clipping, with slight rightward offset
+    this.handRoot.position.set(0.52, -0.44, -0.88);
+    this.handRoot.rotation.set(-0.12, -0.18, -0.10);
     this.handRoot.add(this.heldRoot);
     camera.add(this.handRoot);
   }
@@ -48,8 +49,8 @@ export class HeldItemView {
 
   update(now: number): void {
     const bob = Math.sin(now * 0.004) * 0.012;
-    this.handRoot.position.set(0.42, -0.48 + bob, -0.72);
-    this.handRoot.rotation.set(-0.16, -0.22, -0.14);
+    this.handRoot.position.set(0.52, -0.44 + bob, -0.88);
+    this.handRoot.rotation.set(-0.12, -0.18, -0.10);
 
     const t = Math.min(
       1,

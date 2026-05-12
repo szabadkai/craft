@@ -44,6 +44,20 @@ export enum Block {
   LogZ = 36,
   OakDoor = 37,
   OakDoorOpen = 38,
+  BirchLogX = 39,
+  BirchLogZ = 40,
+  OakSlab = 41,
+  OakSlabTop = 42,
+  CobblestoneSlab = 43,
+  CobblestoneSlabTop = 44,
+  OakStairsN = 45,
+  OakStairsS = 46,
+  OakStairsE = 47,
+  OakStairsW = 48,
+  CobblestoneStairsN = 49,
+  CobblestoneStairsS = 50,
+  CobblestoneStairsE = 51,
+  CobblestoneStairsW = 52,
 }
 
 export type ChunkKey = `${number},${number}`;

@@ -148,12 +148,33 @@ function terrainHeightBase(x: number, z: number, seed: number): number {
 
 function surfaceBlockAt(x: number, z: number, h: number, seed: number): Block {
   const biome = biomeAt(x, z, seed);
-  if (h <= WATER_LEVEL + 1) return valueNoise(x, z, 11, seed + 17) > 0.78 ? Block.Clay : Block.Sand;
+  const biomeEdge = valueNoise(x + 4111, z - 3111, 140, seed + 251);
+  const nearBorder = biomeEdge > 0.75 || biomeEdge < 0.25;
+
+  // Variable-width shoreline: softer beach transition
+  if (h <= WATER_LEVEL + 3) {
+    if (h <= WATER_LEVEL + 1) {
+      return valueNoise(x, z, 11, seed + 17) > 0.78 ? Block.Clay : Block.Sand;
+    }
+    // Transition zone: mix sand and grass based on height
+    if (h === WATER_LEVEL + 2) {
+      return valueNoise(x, z, 7, seed + 43) > 0.55 ? Block.Sand : Block.Grass;
+    }
+    if (h === WATER_LEVEL + 3) {
+      return valueNoise(x, z, 7, seed + 43) > 0.72 ? Block.Sand : Block.Grass;
+    }
+  }
   if (biome === 'snow') return Block.Snow;
-  if (biome === 'beach') return valueNoise(x, z, 11, seed + 17) > 0.72 ? Block.Clay : Block.Sand;
   if (biome === 'dry') return valueNoise(x, z, 14, seed + 19) > 0.58 ? Block.Sand : Block.Grass;
   if (biome === 'hills' && h > 55)
     return valueNoise(x, z, 10, seed + 23) > 0.55 ? Block.Stone : Block.Gravel;
+  // Biome edge blending — mix surface types at borders
+  if (nearBorder && h > WATER_LEVEL + 3) {
+    const mixVal = valueNoise(x, z, 9, seed + 47);
+    if (biome === 'forest' && mixVal > 0.82) return Block.Gravel;
+    if (biome === 'plains' && mixVal > 0.85) return Block.Sand;
+    if (biome === 'hills' && mixVal > 0.80) return Block.Grass;
+  }
   return Block.Grass;
 }
 
@@ -179,6 +200,7 @@ export function makeChunkBlocks(cx: number, cz: number, seed: number): Uint16Arr
   }
   addTrees(blocks, cx, cz, seed);
   addSurfaceDetails(blocks, cx, cz, seed);
+  addLakes(blocks, cx, cz, seed);
   return blocks;
 }
 
@@ -221,6 +243,17 @@ function addTrees(blocks: Uint16Array, cx: number, cz: number, seed: number): vo
   }
 }
 
+function rockThreshold(biome: Biome): number {
+  switch (biome) {
+    case 'hills': return 0.90;  // rocks common on hills
+    case 'plains': return 0.96;  // occasional rocks
+    case 'forest': return 0.97;  // fewer rocks in forest
+    case 'snow': return 0.93;    // common in snow
+    case 'dry': return 0.95;     // some rocks in dry
+    case 'beach': return 1.0;    // no rocks on beach
+  }
+}
+
 function addSurfaceDetails(blocks: Uint16Array, cx: number, cz: number, seed: number): void {
   for (let z = 0; z < CHUNK_SIZE; z++) {
     for (let x = 0; x < CHUNK_SIZE; x++) {
@@ -230,6 +263,24 @@ function addSurfaceDetails(blocks: Uint16Array, cx: number, cz: number, seed: nu
       if (h + 1 >= WORLD_HEIGHT) continue;
       const surface = blocks[x + CHUNK_SIZE * (z + CHUNK_SIZE * h)] as Block;
       const biome = biomeAt(wx, wz, seed);
+
+      // Surface rocks — cobblestone outcrops (on any biome surface, separate from other details)
+      if (biome !== 'beach' && surface !== Block.Sand && surface !== Block.Water) {
+        const rockVal = hash2(wx, wz, seed + 311);
+        if (rockVal > rockThreshold(biome)) {
+          const i = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 1));
+          blocks[i] = Block.Cobblestone;
+          // Occasionally make a 2-tall rock pillar
+          if (hash2(wx, wz, seed + 313) > 0.62 && h + 2 < WORLD_HEIGHT) {
+            const above = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 2));
+            if (blocks[above] === Block.Air) {
+              blocks[above] = Block.Cobblestone;
+            }
+          }
+          continue;
+        }
+      }
+
       if (surface !== Block.Grass && !(biome === 'dry' && surface === Block.Sand)) continue;
       const detail = hash2(wx, wz, seed + 301);
       const i = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 1));
@@ -250,6 +301,38 @@ function addSurfaceDetails(blocks: Uint16Array, cx: number, cz: number, seed: nu
       } else if ((biome === 'plains' || biome === 'forest') && detail > 0.945) {
         blocks[i] = Block.Pumpkin;
       }
+    }
+  }
+}
+
+/** Fill small inland depressions with water (ponds/lakes above ocean level) */
+function addLakes(blocks: Uint16Array, cx: number, cz: number, seed: number): void {
+  for (let z = 0; z < CHUNK_SIZE; z++) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const wx = cx * CHUNK_SIZE + x;
+      const wz = cz * CHUNK_SIZE + z;
+      const h = terrainHeight(wx, wz, seed);
+      // Only consider terrain above ocean level but not too high
+      if (h <= WATER_LEVEL + 2 || h > WATER_LEVEL + 18) continue;
+      // Lake noise: identify bowl-shaped terrain depressions
+      const lakeVal = valueNoise(wx + 2111, wz - 1333, 42, seed + 501);
+      if (lakeVal < 0.82) continue;
+      // Check surrounding terrain: depression if neighbors are higher
+      const n = terrainHeight(wx, wz + 1, seed);
+      const s = terrainHeight(wx, wz - 1, seed);
+      const e = terrainHeight(wx + 1, wz, seed);
+      const w = terrainHeight(wx - 1, wz, seed);
+      const avgNeighbor = (n + s + e + w) / 4;
+      if (avgNeighbor <= h + 1.5) continue;
+      // This is a depression — fill up to lake level
+      const lakeLevel = Math.min(h + 2, WATER_LEVEL + 4);
+      for (let y = h + 1; y <= lakeLevel && y < WORLD_HEIGHT; y++) {
+        const i = x + CHUNK_SIZE * (z + CHUNK_SIZE * y);
+        if (blocks[i] === Block.Air) blocks[i] = Block.Water;
+      }
+      // Lake bottom: sand/clay
+      const bottomI = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 1));
+      if (blocks[bottomI] === Block.Air) blocks[bottomI] = Block.Sand;
     }
   }
 }
