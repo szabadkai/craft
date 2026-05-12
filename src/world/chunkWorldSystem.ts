@@ -26,6 +26,8 @@ type LoadedChunk = {
   blocks: Uint16Array;
   mesh: THREE.Mesh;
   waterMesh: THREE.Mesh | null;
+  transparentMesh: THREE.Mesh | null;
+  decoMesh: THREE.Mesh | null;
   lastSeen: number;
   solidVoxels: number;
 };
@@ -41,6 +43,8 @@ type ChunkWorldOptions = {
   chunkMaterial: THREE.ShaderMaterial;
   fadeMaterial: THREE.ShaderMaterial;
   waterMaterial: THREE.ShaderMaterial;
+  transparentMaterial: THREE.ShaderMaterial;
+  decoMaterial: THREE.ShaderMaterial;
   worldStore: WorldStore;
   farTerrain: FarTerrainSystem;
   wildlife: WildlifeSystem;
@@ -105,6 +109,14 @@ export class ChunkWorldSystem {
       if (chunk.waterMesh) {
         this.options.scene.remove(chunk.waterMesh);
         chunk.waterMesh.geometry.dispose();
+      }
+      if (chunk.transparentMesh) {
+        this.options.scene.remove(chunk.transparentMesh);
+        chunk.transparentMesh.geometry.dispose();
+      }
+      if (chunk.decoMesh) {
+        this.options.scene.remove(chunk.decoMesh);
+        chunk.decoMesh.geometry.dispose();
       }
       this.options.wildlife.removeForChunk(key);
     }
@@ -212,6 +224,8 @@ export class ChunkWorldSystem {
       const d = Math.hypot(chunk.cx - pcx, chunk.cz - pcz);
       chunk.mesh.visible = d <= detail + 1;
       if (chunk.waterMesh) chunk.waterMesh.visible = chunk.mesh.visible;
+      if (chunk.transparentMesh) chunk.transparentMesh.visible = chunk.mesh.visible;
+      if (chunk.decoMesh) chunk.decoMesh.visible = chunk.mesh.visible;
       if (chunk.mesh.visible) chunk.lastSeen = frame;
       if (d > preload + 3 && frame - chunk.lastSeen > 90) {
         this.options.scene.remove(chunk.mesh);
@@ -219,6 +233,14 @@ export class ChunkWorldSystem {
         if (chunk.waterMesh) {
           this.options.scene.remove(chunk.waterMesh);
           chunk.waterMesh.geometry.dispose();
+        }
+        if (chunk.transparentMesh) {
+          this.options.scene.remove(chunk.transparentMesh);
+          chunk.transparentMesh.geometry.dispose();
+        }
+        if (chunk.decoMesh) {
+          this.options.scene.remove(chunk.decoMesh);
+          chunk.decoMesh.geometry.dispose();
         }
         this.chunks.delete(key);
         this.options.wildlife.removeForChunk(key);
@@ -286,6 +308,8 @@ export class ChunkWorldSystem {
     this.options.chunkMaterial.uniforms.time.value = seconds;
     this.options.fadeMaterial.uniforms.time.value = seconds;
     this.options.waterMaterial.uniforms.time.value = seconds;
+    this.options.transparentMaterial.uniforms.time.value = seconds;
+    this.options.decoMaterial.uniforms.time.value = seconds;
     for (const chunk of this.chunks.values()) {
       const material = chunk.mesh.material;
       if (material instanceof THREE.ShaderMaterial) material.uniforms.time.value = seconds;
@@ -363,6 +387,14 @@ export class ChunkWorldSystem {
         this.options.scene.remove(old.waterMesh);
         old.waterMesh.geometry.dispose();
       }
+      if (old.transparentMesh) {
+        this.options.scene.remove(old.transparentMesh);
+        old.transparentMesh.geometry.dispose();
+      }
+      if (old.decoMesh) {
+        this.options.scene.remove(old.decoMesh);
+        old.decoMesh.geometry.dispose();
+      }
     }
     this.dirty.delete(payload.key);
 
@@ -396,12 +428,48 @@ export class ChunkWorldSystem {
       this.options.scene.add(waterMesh);
     }
 
+    let transparentMesh: THREE.Mesh | null = null;
+    if (payload.transparentPositions && payload.transparentNormals && payload.transparentColors &&
+        payload.transparentUvs && payload.transparentAtlas && payload.transparentIndices) {
+      const transGeo = new THREE.BufferGeometry();
+      transGeo.setAttribute('position', new THREE.BufferAttribute(payload.transparentPositions, 3));
+      transGeo.setAttribute('normal', new THREE.BufferAttribute(payload.transparentNormals, 3));
+      transGeo.setAttribute('color', new THREE.BufferAttribute(payload.transparentColors, 3));
+      transGeo.setAttribute('uv', new THREE.BufferAttribute(payload.transparentUvs, 2));
+      transGeo.setAttribute('atlasRect', new THREE.BufferAttribute(payload.transparentAtlas, 4));
+      transGeo.setIndex(new THREE.BufferAttribute(payload.transparentIndices, 1));
+      transGeo.computeBoundingSphere();
+      transparentMesh = new THREE.Mesh(transGeo, this.options.transparentMaterial);
+      transparentMesh.renderOrder = 1;
+      transparentMesh.frustumCulled = true;
+      this.options.scene.add(transparentMesh);
+    }
+
+    let decoMesh: THREE.Mesh | null = null;
+    if (payload.decoPositions && payload.decoNormals && payload.decoColors &&
+        payload.decoUvs && payload.decoAtlas && payload.decoIndices) {
+      const decoGeo = new THREE.BufferGeometry();
+      decoGeo.setAttribute('position', new THREE.BufferAttribute(payload.decoPositions, 3));
+      decoGeo.setAttribute('normal', new THREE.BufferAttribute(payload.decoNormals, 3));
+      decoGeo.setAttribute('color', new THREE.BufferAttribute(payload.decoColors, 3));
+      decoGeo.setAttribute('uv', new THREE.BufferAttribute(payload.decoUvs, 2));
+      decoGeo.setAttribute('atlasRect', new THREE.BufferAttribute(payload.decoAtlas, 4));
+      decoGeo.setIndex(new THREE.BufferAttribute(payload.decoIndices, 1));
+      decoGeo.computeBoundingSphere();
+      decoMesh = new THREE.Mesh(decoGeo, this.options.decoMaterial);
+      decoMesh.renderOrder = 1;
+      decoMesh.frustumCulled = true;
+      this.options.scene.add(decoMesh);
+    }
+
     this.chunks.set(payload.key, {
       cx: payload.cx,
       cz: payload.cz,
       blocks: payload.blocks,
       mesh,
       waterMesh,
+      transparentMesh,
+      decoMesh,
       lastSeen: 0,
       solidVoxels: countSolidVoxels(payload.blocks),
     });

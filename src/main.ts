@@ -91,6 +91,9 @@ const terrainAtlas = createTerrainAtlas();
 const chunkMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 1);
 const fadeMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.72);
 const waterMaterial = createWaterMaterial(scene.fog, WATER_LEVEL);
+const transparentMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.999);
+transparentMaterial.depthWrite = true; // glass and leaves occlude geometry behind them
+const decoMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.999);
 const dayNight = new DayNightCycle();
 
 const hostile: HostileSystem = new HostileSystem(
@@ -196,6 +199,8 @@ const chunkWorld = new ChunkWorldSystem({
   chunkMaterial,
   fadeMaterial,
   waterMaterial,
+  transparentMaterial,
+  decoMaterial,
   worldStore,
   farTerrain,
   wildlife,
@@ -422,7 +427,7 @@ function tick(now: number): void {
     eatingSystem.tick(now);
   }
   sky.position.copy(camera.position);
-  dayNight.update(dt); dayNight.applyToLights(hemi, sun, sky.material as THREE.ShaderMaterial); dayNight.applyToTerrainMaterials(chunkMaterial, fadeMaterial, waterMaterial); dayNight.applyToScene(scene);
+  dayNight.update(dt); dayNight.applyToLights(hemi, sun, sky.material as THREE.ShaderMaterial); dayNight.applyToTerrainMaterials(chunkMaterial, fadeMaterial, waterMaterial, transparentMaterial, decoMaterial); dayNight.applyToScene(scene);
   updateTerrainMaterialTime(now);
   updateHand(now);
   if (worldReady) {

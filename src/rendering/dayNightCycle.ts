@@ -255,9 +255,11 @@ export class DayNightCycle {
     terrain: THREE.ShaderMaterial,
     fade: THREE.ShaderMaterial,
     water: THREE.ShaderMaterial,
+    transparent: THREE.ShaderMaterial,
+    deco: THREE.ShaderMaterial,
   ): void {
     const dir = this.sunDirection();
-    for (const mat of [terrain, fade, water]) {
+    for (const mat of [terrain, fade, water, transparent, deco]) {
       const u = mat.uniforms;
       if (u.sunDirection) u.sunDirection.value.copy(dir);
       if (u.fogColor) u.fogColor.value.copy(this.fogColor());

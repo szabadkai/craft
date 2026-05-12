@@ -15,6 +15,18 @@ function transferPayload(payload: ReturnType<typeof buildChunkMesh>) {
   if (payload.waterPositions) transfers.push(payload.waterPositions.buffer as ArrayBuffer);
   if (payload.waterNormals) transfers.push(payload.waterNormals.buffer as ArrayBuffer);
   if (payload.waterIndices) transfers.push(payload.waterIndices.buffer as ArrayBuffer);
+  if (payload.transparentPositions) transfers.push(payload.transparentPositions.buffer as ArrayBuffer);
+  if (payload.transparentNormals) transfers.push(payload.transparentNormals.buffer as ArrayBuffer);
+  if (payload.transparentColors) transfers.push(payload.transparentColors.buffer as ArrayBuffer);
+  if (payload.transparentUvs) transfers.push(payload.transparentUvs.buffer as ArrayBuffer);
+  if (payload.transparentAtlas) transfers.push(payload.transparentAtlas.buffer as ArrayBuffer);
+  if (payload.transparentIndices) transfers.push(payload.transparentIndices.buffer as ArrayBuffer);
+  if (payload.decoPositions) transfers.push(payload.decoPositions.buffer as ArrayBuffer);
+  if (payload.decoNormals) transfers.push(payload.decoNormals.buffer as ArrayBuffer);
+  if (payload.decoColors) transfers.push(payload.decoColors.buffer as ArrayBuffer);
+  if (payload.decoUvs) transfers.push(payload.decoUvs.buffer as ArrayBuffer);
+  if (payload.decoAtlas) transfers.push(payload.decoAtlas.buffer as ArrayBuffer);
+  if (payload.decoIndices) transfers.push(payload.decoIndices.buffer as ArrayBuffer);
   const out: WorkerOut = { type: 'chunk', payload };
   self.postMessage(out, transfers);
 }

@@ -76,6 +76,18 @@ export type ChunkMeshPayload = {
   waterPositions: Float32Array | null;
   waterNormals: Float32Array | null;
   waterIndices: Uint32Array | null;
+  transparentPositions: Float32Array | null;
+  transparentNormals: Float32Array | null;
+  transparentColors: Float32Array | null;
+  transparentUvs: Float32Array | null;
+  transparentAtlas: Float32Array | null;
+  transparentIndices: Uint32Array | null;
+  decoPositions: Float32Array | null;
+  decoNormals: Float32Array | null;
+  decoColors: Float32Array | null;
+  decoUvs: Float32Array | null;
+  decoAtlas: Float32Array | null;
+  decoIndices: Uint32Array | null;
 };
 
 export type WorkerIn =

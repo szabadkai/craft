@@ -150,6 +150,18 @@ export function buildChunkMesh(
   const waterPositions: number[] = [];
   const waterNormals: number[] = [];
   const waterIndices: number[] = [];
+  const transparentPositions: number[] = [];
+  const transparentNormals: number[] = [];
+  const transparentColors: number[] = [];
+  const transparentUvs: number[] = [];
+  const transparentAtlas: number[] = [];
+  const transparentIndices: number[] = [];
+  const decoPositions: number[] = [];
+  const decoNormals: number[] = [];
+  const decoColors: number[] = [];
+  const decoUvs: number[] = [];
+  const decoAtlas: number[] = [];
+  const decoIndices: number[] = [];
 
   const getBlock = (x: number, y: number, z: number): Block => {
     if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
@@ -181,7 +193,7 @@ export function buildChunkMesh(
           const neighbor = getBlock(p[0] + face.n[0], p[1] + face.n[1], p[2] + face.n[2]);
           const index = u + v * uSize;
           mask[index] =
-            block !== Block.Air && block !== Block.Water && !isDecoration(block) && !isSlab(block) && !isStair(block) && !occludesFace(block, neighbor)
+            block !== Block.Air && block !== Block.Water && block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves && !isDecoration(block) && !isSlab(block) && !isStair(block) && !occludesFace(block, neighbor)
               ? { block, tile: tileForBlockFace(block, face.n), shade: face.shade }
               : null;
         }
@@ -233,6 +245,21 @@ export function buildChunkMesh(
     }
   }
 
+  // Emit individual glass and leaf faces (no greedy merge, for proper alpha blending)
+  for (let y = 0; y < WORLD_HEIGHT; y++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const block = getBlock(x, y, z);
+        if (block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves) continue;
+        for (const face of faces) {
+          const neighbor = getBlock(x + face.n[0], y + face.n[1], z + face.n[2]);
+          if (neighbor !== Block.Air && neighbor !== Block.Water && !isDecoration(neighbor) && neighbor !== Block.OakDoorOpen) continue;
+          emitTransparentFace(cx, cz, x, y, z, block, face, transparentPositions, transparentNormals, transparentColors, transparentUvs, transparentAtlas, transparentIndices);
+        }
+      }
+    }
+  }
+
   // Emit individual water block faces (no greedy merge, for proper vertex waves)
   for (let y = 0; y < WORLD_HEIGHT; y++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
@@ -269,7 +296,7 @@ export function buildChunkMesh(
     }
   }
 
-  emitDecorations(cx, cz, getBlock, positions, normals, colors, uvs, atlas, indices);
+  emitDecorations(cx, cz, getBlock, decoPositions, decoNormals, decoColors, decoUvs, decoAtlas, decoIndices);
 
   // Emit individual stair faces (non-greedy, stepped geometry)
   for (let y = 0; y < WORLD_HEIGHT; y++) {
@@ -296,6 +323,18 @@ export function buildChunkMesh(
     waterPositions: waterPositions.length > 0 ? new Float32Array(waterPositions) : null,
     waterNormals: waterNormals.length > 0 ? new Float32Array(waterNormals) : null,
     waterIndices: waterIndices.length > 0 ? new Uint32Array(waterIndices) : null,
+    transparentPositions: transparentPositions.length > 0 ? new Float32Array(transparentPositions) : null,
+    transparentNormals: transparentNormals.length > 0 ? new Float32Array(transparentNormals) : null,
+    transparentColors: transparentColors.length > 0 ? new Float32Array(transparentColors) : null,
+    transparentUvs: transparentUvs.length > 0 ? new Float32Array(transparentUvs) : null,
+    transparentAtlas: transparentAtlas.length > 0 ? new Float32Array(transparentAtlas) : null,
+    transparentIndices: transparentIndices.length > 0 ? new Uint32Array(transparentIndices) : null,
+    decoPositions: decoPositions.length > 0 ? new Float32Array(decoPositions) : null,
+    decoNormals: decoNormals.length > 0 ? new Float32Array(decoNormals) : null,
+    decoColors: decoColors.length > 0 ? new Float32Array(decoColors) : null,
+    decoUvs: decoUvs.length > 0 ? new Float32Array(decoUvs) : null,
+    decoAtlas: decoAtlas.length > 0 ? new Float32Array(decoAtlas) : null,
+    decoIndices: decoIndices.length > 0 ? new Uint32Array(decoIndices) : null,
   };
 }
 
@@ -391,6 +430,42 @@ function emitWaterBlockFace(
     waterNormals.push(...face.n);
   }
   waterIndices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+}
+
+function emitTransparentFace(
+  cx: number,
+  cz: number,
+  x: number,
+  y: number,
+  z: number,
+  block: Block,
+  face: FaceDef,
+  positions: number[],
+  normals: number[],
+  colors: number[],
+  uvs: number[],
+  atlas: number[],
+  indices: number[],
+): void {
+  const wx = cx * CHUNK_SIZE + x, wz = cz * CHUNK_SIZE + z, n = face.n;
+  const tile = tileForBlockFace(block, n), rect = tileRect(tile);
+  const variation = colorVariation(block, wx, y, wz, n[1]);
+  const shade = face.shade;
+  const base = positions.length / 3;
+  const plane = n[face.dAxis] > 0 ? (face.dAxis === 0 ? x : face.dAxis === 1 ? y : z) + 1 : (face.dAxis === 0 ? x : face.dAxis === 1 ? y : z);
+  const u0 = face.uAxis === 0 ? x : face.uAxis === 1 ? y : z;
+  const v0 = face.vAxis === 0 ? x : face.vAxis === 1 ? y : z;
+  const corners = face.corners(plane, u0, v0, u0 + 1, v0 + 1);
+  const uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];
+  for (let i = 0; i < 4; i++) {
+    const corner = corners[i];
+    positions.push(cx * CHUNK_SIZE + corner[0], corner[1], cz * CHUNK_SIZE + corner[2]);
+    normals.push(n[0], n[1], n[2]);
+    uvs.push(uv[i][0], uv[i][1]);
+    atlas.push(rect[0], rect[1], rect[2], rect[3]);
+    colors.push(shade * variation[0], shade * variation[1], shade * variation[2]);
+  }
+  indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 
 function emitSlabFace(
