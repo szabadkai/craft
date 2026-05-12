@@ -187,7 +187,11 @@ Goal: improve visual quality without losing browser performance.
 Tasks:
 
 - Restore ambient occlusion compatible with greedy meshing.
-- Add transparent-material separation for decorations/glass/water.
+- [x] Add transparent-material separation for decorations/glass/water.
+  - Four meshes per chunk: opaque (renderOrder 0), water (1, depthWrite false), solid transparent — glass + leaves (1, depthWrite true), decorations — plants + open doors (1, depthWrite false).
+  - Glass and leaves excluded from greedy meshing; individual faces with proper tile mapping.
+  - Decorations moved out of the opaque mesh into their own depthWrite=false mesh.
+  - See `ChunkMeshPayload` for `transparent*` and `deco*` arrays, `src/mesh.ts` `emitTransparentFace` / `emitDecorations`, and `src/world/chunkWorldSystem.ts` mesh creation.
 - Improve far terrain LOD blending.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
 - Add chunk mesh memory accounting.
@@ -221,9 +225,7 @@ Exit criteria:
 
 ## Current Priority
 
-M3 building improvements complete: chests, variant blocks, doors, slabs, and stairs. M4 has hostile mobs (cave spiders) for resource pressure. M5 has caves, rocks, wildlife, shoreline/lake improvements, and biome transitions. M6 is next: transparent material separation, far terrain improvements.
-
-M4 complete. Day/night cycle implemented: dynamic sun position, sky colors, terrain/water lighting, fog, and background transitions over a ~20 min real-time cycle.
+M6 rendering improvements: transparent material separation is done. Next items are far terrain rebuild optimization and ambient occlusion for greedy meshing. Restone/mechanism blocks and additional hostile mobs remain on the backlog.
 
 ## Known Risks
 

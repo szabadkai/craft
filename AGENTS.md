@@ -102,6 +102,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Cave spiders — hostile mobs spawning in deep caves, pursuing the player, dealing damage on contact, dropping raw meat.
 - Leaf decay — breaking a log causes ~28% of nearby leaves to drop sticks/apples and disappear.
 - Shoreline improvements — variable-width beaches (sand/grass mix at water line), inland lakes in terrain depressions, biome border blending.
+- Separate transparent render paths — glass, leaves, and decorations render in dedicated transparent meshes with proper alpha blending and depth ordering.
 
 ## Day/Night Cycle Architecture
 
@@ -110,7 +111,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Sun position: sinusoidal elevation (`sin(sunAngle) * π/2`) and linear azimuth (`sunAngle`). Rises in +X (east), zenith at tick 6000 (noon), sets in -X (west), nadir at tick 18000 (midnight).
 - 12 color keyframe arrays (e.g., `SKY_TOP`, `FOG_COLOR`, `DIRECTIONAL_INTENSITY`) define the visual timeline. Interpolation is linear between stops.
 - `applyToLights(hemi, sun, skyMat)` updates `HemisphereLight` color/intensity, `DirectionalLight` position/color/intensity, and sky shader `topColor`/`horizonColor`/`groundColor`/`sunColor`/`sunDirection` uniforms.
-- `applyToTerrainMaterials(terrain, fade, water)` updates `sunDirection` and `fogColor` on the three shared shader materials. Cloned fade materials lag by one frame (negligible during brief fade-in).
+- `applyToTerrainMaterials(terrain, fade, water, transparent, deco)` updates `sunDirection` and `fogColor` on all five shared shader materials. Cloned fade materials lag by one frame (negligible during brief fade-in).
 - `applyToScene(scene)` sets `scene.fog.color` and `scene.background` to the time-of-day colors. These serve as the baseline that `applyUnderwaterEffects` blends toward for underwater/cave overlays.
 - `applyUnderwaterEffects` (`src/rendering/atmosphere.ts`) now accepts `airFogColor` and `airBgColor` parameters — the caller passes `dayNight.fogColor()` and `dayNight.backgroundColor()` so the water/cave blend always uses the current time-of-day colors as the "normal" baseline.
 
@@ -128,6 +129,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
   - `atlasRect`: vec4 of atlas tile rect.
   - `color`: lighting and variation.
 - Transparent plant blocks are decorations and should not be treated as solid raycast targets.
+- Transparent rendering uses four meshes per chunk: opaque solids (`chunk.mesh`, renderOrder 0), water (`chunk.waterMesh`, renderOrder 1, depthWrite false), solid transparent — glass + leaves (`chunk.transparentMesh`, renderOrder 1, depthWrite true), and decorations — plants, open doors (`chunk.decoMesh`, renderOrder 1, depthWrite false). Glass and leaves are excluded from greedy meshing and emit individual block faces into `transparent*` arrays. Decorations emit X-shaped quads into `deco*` arrays. Both use the terrain atlas shader with `transparent: true`.
 - Wildlife movement uses loaded chunk blocks for ground and obstacle collision; avoid falling back to generated height only for gameplay collision.
 - Health state (`src/player/health.ts`) tracks HP, fall distance, death, and respawn. `reconcile()` handles per-frame fall damage and hearts DOM display. Hearts are 8×8 canvas-drawn pixel sprites (full red with white border, half, empty outline) rendered at 2× nearest-neighbour scale.
 - Caves are generated in `src/terrain.ts` via `isCaveBlock`: 3D value noise caverns (scale 64), worm tunnels (crossed noise, narrow 0.51–0.58 band), surface entrances (scale 14, near-surface), and large chambers (scale 72).
@@ -156,7 +158,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Good Next Tasks
 
-- Separate transparent render paths for glass/water if richer translucency becomes necessary.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
 - Add more hostile mob variants (surface zombies, skeletons).
 - Improve stair auto-step (player automatically steps up when walking into stairs from the low side).
+- Improve water rendering with reflections or wave-based vertex displacement on far water.
+- Add restone/mechanism blocks for more complex building.

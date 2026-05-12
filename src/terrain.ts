@@ -78,27 +78,33 @@ function isCaveBlock(wx: number, y: number, wz: number, h: number, seed: number)
   // caves start below the dirt layer and stop above bedrock
   if (y >= h - 4 || y < 5) return false;
 
-  // wide caverns — large open spaces, more common at mid-depths
+  // caverns — primary open spaces, more common at mid-depths, tapered at top/bottom
   const cavern = valueNoise3D(wx, y * 0.7, wz, 64, seed + 401);
   const depthFactor = Math.sin((y / WORLD_HEIGHT) * Math.PI) * 1.05;
-  if (cavern > 0.67 - depthFactor * 0.07) return true;
+  if (cavern > 0.74 - depthFactor * 0.07) return true;
 
-  // worm tunnels — narrow, connected paths using crossed noise
+  // worm tunnels — narrow, connected paths (primary direction)
   const wx1 = valueNoise3D(wx + 300, y * 1.1, wz - 300, 18, seed + 411);
   const wy1 = valueNoise3D(wx - 300, y * 1.1, wz + 300, 18, seed + 413);
   const worm = Math.min(wx1, wy1);
-  if (worm > 0.51 && worm < 0.58) return true;
+  if (worm > 0.49 && worm < 0.61) return true;
+
+  // secondary worm tunnels — different scale and orientation for path variety
+  const wx2 = valueNoise3D(wx + 800, y * 0.9, wz + 600, 22, seed + 415);
+  const wy2 = valueNoise3D(wx - 600, y * 0.9, wz - 800, 22, seed + 417);
+  const worm2 = Math.max(wx2, wy2);
+  if (worm2 > 0.50 && worm2 < 0.58) return true;
 
   // surface entrances — caves that reach upward near the surface
   if (y >= h - 12 && y < h - 4) {
     const entrance = valueNoise3D(wx, y * 1.5, wz, 14, seed + 431);
-    if (entrance > 0.6 && cavern > 0.42) return true;
+    if (entrance > 0.6 && cavern > 0.44) return true;
   }
 
-  // occasional large chambers
-  if (y > 18 && y < 62) {
-    const chamber = valueNoise3D(wx + 500, y * 0.5 - 300, wz + 500, 72, seed + 441);
-    if (chamber > 0.74) return true;
+  // occasional rooms — modest chambers at mid-depth, rare enough to feel special
+  if (y > 24 && y < 52) {
+    const chamber = valueNoise3D(wx + 500, y * 0.6 - 200, wz + 500, 48, seed + 441);
+    if (chamber > 0.82) return true;
   }
 
   return false;
@@ -284,12 +290,13 @@ function addSurfaceDetails(blocks: Uint16Array, cx: number, cz: number, seed: nu
       if (surface !== Block.Grass && !(biome === 'dry' && surface === Block.Sand)) continue;
       const detail = hash2(wx, wz, seed + 301);
       const i = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 1));
-      if (biome === 'forest' && detail > 0.958) {
-        blocks[i] = detail > 0.976 ? Block.BerryBush : Block.Mushroom;
-      } else if (biome === 'plains' && detail > 0.955) {
+      // cosmetics — sprinkled lightly across eligible terrain
+      if (biome === 'forest' && detail > 0.968) {
+        blocks[i] = detail > 0.982 ? Block.BerryBush : Block.Mushroom;
+      } else if (biome === 'plains' && detail > 0.968) {
         blocks[i] =
-          detail > 0.987 ? Block.BlueFlower : detail > 0.974 ? Block.RedFlower : Block.YellowFlower;
-      } else if ((biome === 'plains' || biome === 'forest') && detail > 0.88) {
+          detail > 0.991 ? Block.BlueFlower : detail > 0.981 ? Block.RedFlower : Block.YellowFlower;
+      } else if ((biome === 'plains' || biome === 'forest') && detail > 0.915) {
         blocks[i] = Block.TallGrass;
       } else if (biome === 'dry' && detail > 0.982) {
         const height = 2 + Math.floor(hash2(wx, wz, seed + 307) * 3);
@@ -298,7 +305,7 @@ function addSurfaceDetails(blocks: Uint16Array, cx: number, cz: number, seed: nu
         }
       } else if (biome === 'dry' && detail > 0.965) {
         blocks[i] = Block.Gravel;
-      } else if ((biome === 'plains' || biome === 'forest') && detail > 0.945) {
+      } else if ((biome === 'plains' || biome === 'forest') && detail > 0.96) {
         blocks[i] = Block.Pumpkin;
       }
     }
