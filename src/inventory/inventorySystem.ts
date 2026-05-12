@@ -106,10 +106,36 @@ export class InventorySystem {
     const result = applyItemDelta(this.inventorySlots, item, amount);
     if (result.applied === 0) return 0;
     this.inventorySlots = result.slots;
-    this.paintInventory();
-    this.paintOverlay();
-    this.callbacks.saveInventory();
+    this.commitInventoryChange();
     return result.applied;
+  }
+
+  inventorySlotsSnapshot(): InventorySlot[] {
+    return this.inventorySlots.map((slot) => (slot ? { ...slot } : null));
+  }
+
+  slotAt(index: number): InventorySlot {
+    if (index < 0 || index >= this.inventorySlots.length) return null;
+    const slot = this.inventorySlots[index];
+    return slot ? { ...slot } : null;
+  }
+
+  takeSlot(index: number): InventorySlot {
+    if (index < 0 || index >= this.inventorySlots.length) return null;
+    const slot = this.inventorySlots[index];
+    if (!slot) return null;
+    const taken = { ...slot };
+    this.inventorySlots[index] = null;
+    this.commitInventoryChange(true);
+    return taken;
+  }
+
+  insertSlot(slot: Exclude<InventorySlot, null>): InventorySlot {
+    const result = insertInventorySlot(this.inventorySlots, slot);
+    if (!result.inserted) return { ...slot };
+    this.inventorySlots = result.slots;
+    this.commitInventoryChange(true);
+    return result.remainder;
   }
 
   consumeSelectedItem(amount: number): number {
@@ -119,10 +145,7 @@ export class InventorySystem {
     const remaining = slot.count - consumed;
     this.inventorySlots[this.selectedHotbarIndex] =
       remaining > 0 ? { ...slot, count: remaining } : null;
-    this.paintHotbar();
-    this.paintInventory();
-    this.paintOverlay();
-    this.callbacks.saveInventory();
+    this.commitInventoryChange();
     this.callbacks.rebuildHeldItem();
     return consumed;
   }
@@ -136,10 +159,7 @@ export class InventorySystem {
     const durability = Math.max(0, (slot.durability ?? maxDurability) - amount);
     if (durability <= 0) this.inventorySlots[this.selectedHotbarIndex] = null;
     else this.inventorySlots[this.selectedHotbarIndex] = { ...slot, durability };
-    this.paintHotbar();
-    this.paintInventory();
-    this.paintOverlay();
-    this.callbacks.saveInventory();
+    this.commitInventoryChange();
     this.callbacks.rebuildHeldItem();
     return true;
   }
@@ -410,6 +430,14 @@ export class InventorySystem {
     return this.inventorySlots[this.selectedHotbarIndex];
   }
 
+  private commitInventoryChange(saveHotbar = false): void {
+    this.paintHotbar();
+    this.paintInventory();
+    this.paintOverlay();
+    this.callbacks.saveInventory();
+    if (saveHotbar) this.callbacks.saveHotbar();
+  }
+
   private swapSlots(a: number, b: number): void {
     const next = this.inventorySlots.slice();
     [next[a], next[b]] = [next[b], next[a]];
@@ -575,6 +603,39 @@ function sanitizeDurability(durability: number, maxDurability: number): number {
 function addToolSlot(slots: InventorySlot[], item: Item, durability: number): void {
   const index = slots.findIndex((slot) => slot === null);
   if (index >= 0) slots[index] = { item, count: 1, durability };
+}
+
+function insertInventorySlot(
+  slots: InventorySlot[],
+  incoming: Exclude<InventorySlot, null>,
+): { slots: InventorySlot[]; remainder: InventorySlot; inserted: boolean } {
+  const next = slots.map((slot) => (slot ? { ...slot } : null));
+  const slotToInsert = { ...incoming };
+  const maxDurability = maxDurabilityFor(slotToInsert.item);
+
+  if (maxDurability !== null) {
+    const emptyIndex = next.findIndex((slot) => slot === null);
+    if (emptyIndex < 0) return { slots, remainder: slotToInsert, inserted: false };
+    next[emptyIndex] = slotToInsert;
+    return { slots: next, remainder: null, inserted: true };
+  }
+
+  const limit = stackLimitFor(slotToInsert.item);
+  for (const slot of next) {
+    if (!slot || slot.item !== slotToInsert.item || slot.count >= limit) continue;
+    const added = Math.min(slotToInsert.count, limit - slot.count);
+    slot.count += added;
+    slotToInsert.count -= added;
+    if (slotToInsert.count <= 0) return { slots: next, remainder: null, inserted: true };
+  }
+  for (let index = 0; index < next.length; index++) {
+    if (next[index]) continue;
+    const added = Math.min(slotToInsert.count, limit);
+    next[index] = { item: slotToInsert.item, count: added };
+    slotToInsert.count -= added;
+    if (slotToInsert.count <= 0) return { slots: next, remainder: null, inserted: true };
+  }
+  return { slots: next, remainder: slotToInsert, inserted: slotToInsert.count !== incoming.count };
 }
 
 function mergeSlots(primary: InventorySlot[], secondary: InventorySlot[]): InventorySlot[] {

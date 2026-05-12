@@ -24,6 +24,10 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
   Item, held-item, recipe, and inventory definition data.
 - `src/inventory/inventorySystem.ts`
   Slot inventory, crafting, Minecraft-style hotbar slots, overlay painting, and inventory persistence snapshots.
+- `src/inventory/furnaceRecipes.ts`
+  Data-driven furnace inputs, outputs, fuel burn times, and smelting helpers.
+- `src/inventory/furnaceSystem.ts`
+  Per-block furnace state, smelting tick/update logic, furnace UI painting, inventory transfer handling, and furnace persistence snapshots.
 - `src/world/wildlife.ts`
   Wildlife spawning, mesh construction, lifetime cleanup, entity ray hits, loaded-world collision, and per-frame movement simulation.
 - `src/world/chunkWorldSystem.ts`
@@ -69,8 +73,10 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Start-screen world tools can clear saved chunks, inventory, and legacy hotbar state for the selected seed.
 - Persistent inventory and legacy hotbar migration via IndexedDB.
 - Slot-based inventory with stack limits, count-map save migration, tabs, crafting, item counts, and Minecraft-style hotbar slots.
+- Furnace block interaction UI with per-furnace smelting queues, fuel consumption, ore ingots, and output collection.
 - Item pickup entities for mined block drops.
 - Mining drop rules and pickaxe durability.
+- Iron pickaxe progression after furnace smelting, with diamond mining gated behind iron tier.
 - Recipe-card crafting UI with output and requirement visibility.
 - Held item/tool visuals and mining swing animation.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
@@ -82,6 +88,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Block IDs in the `Block` enum must only be appended, not reordered, because saved chunks store numeric IDs.
 - Chunk data is `Uint16Array`.
 - World edits should go through `ChunkWorldSystem.setBlock(...)` so saves and remeshes stay coordinated.
+- Furnace contents/progress are persisted separately from chunk block data, keyed by world seed and furnace block position.
 - Main thread should not generate terrain meshes directly.
 - Chunk generation and remeshing jobs are distributed across a small worker pool.
 - Far terrain is generated on the main thread today, but it should stay merged into a small number of meshes; avoid reintroducing one mesh per far patch.
@@ -104,7 +111,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Good Next Tasks
 
-- Add furnace/smelting UI.
 - Add render distance controls to the debug/settings UI.
+- Add health and fall damage to deepen the post-smelting survival loop.
 - Separate transparent render paths for glass/water if richer translucency becomes necessary.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.

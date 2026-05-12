@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { ATLAS_COLUMNS, ATLAS_ROWS, ATLAS_TILE_SIZE, Tile } from '../atlas';
-import { CHUNK_SIZE, FAR_RADIUS } from '../types';
+import { getFarRadius } from '../player/renderDistance';
+import { CHUNK_SIZE } from '../types';
 
 export function createSky(): THREE.Mesh {
-  const geometry = new THREE.SphereGeometry(CHUNK_SIZE * FAR_RADIUS * 0.92, 32, 16);
+  const radius = getFarRadius() * CHUNK_SIZE * 0.92;
+  const geometry = new THREE.SphereGeometry(radius, 32, 16);
   const material = new THREE.ShaderMaterial({
     depthWrite: false,
     side: THREE.BackSide,
@@ -323,11 +325,36 @@ function drawTile(
   } else if (pattern === 'grassSide') {
     context.fillStyle = accent;
     context.fillRect(x, y + 5, 16, 11);
+    // dirt speckles on the brown band
+    context.globalAlpha = 0.2;
+    context.fillStyle = '#7a4828';
+    for (let i = 0; i < 18; i++) {
+      context.fillRect(
+        x + Math.floor(rand(i + 50) * 16),
+        y + 5 + Math.floor(rand(i + 70) * 11),
+        1 + Math.floor(rand(i + 90) * 2),
+        1,
+      );
+    }
+    // grass blades on top
+    context.globalAlpha = 1;
     context.fillStyle = base;
     for (let i = 0; i < 9; i++) {
       const gx = x + Math.floor(rand(i) * 16);
       context.fillRect(gx, y, 2, 5 + Math.floor(rand(i + 9) * 5));
     }
+    // green speckles on the grass top
+    context.globalAlpha = 0.18;
+    context.fillStyle = '#8aa047';
+    for (let i = 0; i < 10; i++) {
+      context.fillRect(
+        x + Math.floor(rand(i + 110) * 16),
+        y + Math.floor(rand(i + 130) * 5),
+        1,
+        1,
+      );
+    }
+    context.globalAlpha = 1;
   } else if (pattern === 'cracks') {
     context.globalAlpha = 0.28;
     for (let i = 0; i < 8; i++) {

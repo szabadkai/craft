@@ -4,6 +4,7 @@ import type { PlayerState } from '../player/playerController';
 import { WorldStore } from '../persistence/worldStore';
 import type { DiagnosticsSummary } from '../rendering/diagnostics';
 import type { FarTerrainSystem } from '../rendering/farTerrain';
+import { getDetailRadius, getFarRadius, getPreloadRadius } from '../player/renderDistance';
 import {
   Block,
   blockIndex,
@@ -11,10 +12,8 @@ import {
   chunkKey,
   ChunkKey,
   ChunkMeshPayload,
-  DETAIL_RADIUS,
   divFloor,
   mod,
-  PRELOAD_RADIUS,
   WorkerIn,
   WorkerOut,
   WORLD_HEIGHT,
@@ -144,22 +143,24 @@ export class ChunkWorldSystem {
     if (pcx !== this.playerChunkX || pcz !== this.playerChunkZ) {
       this.playerChunkX = pcx;
       this.playerChunkZ = pcz;
-      this.options.farTerrain.rebuild(pcx, pcz, this.options.getSeed());
+      this.options.farTerrain.rebuild(pcx, pcz, this.options.getSeed(), getFarRadius());
     }
 
-    for (let dz = -PRELOAD_RADIUS; dz <= PRELOAD_RADIUS; dz++) {
-      for (let dx = -PRELOAD_RADIUS; dx <= PRELOAD_RADIUS; dx++) {
+    const preload = getPreloadRadius();
+    const detail = getDetailRadius();
+    for (let dz = -preload; dz <= preload; dz++) {
+      for (let dx = -preload; dx <= preload; dx++) {
         const d = Math.hypot(dx, dz);
-        if (d <= PRELOAD_RADIUS) this.requestChunk(pcx + dx, pcz + dz);
+        if (d <= preload) this.requestChunk(pcx + dx, pcz + dz);
       }
     }
 
     for (const [key, chunk] of this.chunks) {
       const d = Math.hypot(chunk.cx - pcx, chunk.cz - pcz);
-      chunk.mesh.visible = d <= DETAIL_RADIUS + 1;
+      chunk.mesh.visible = d <= detail + 1;
       if (chunk.waterMesh) chunk.waterMesh.visible = chunk.mesh.visible;
       if (chunk.mesh.visible) chunk.lastSeen = frame;
-      if (d > PRELOAD_RADIUS + 3 && frame - chunk.lastSeen > 90) {
+      if (d > preload + 3 && frame - chunk.lastSeen > 90) {
         this.options.scene.remove(chunk.mesh);
         chunk.mesh.geometry.dispose();
         if (chunk.waterMesh) {

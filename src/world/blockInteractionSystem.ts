@@ -12,6 +12,8 @@ import {
   MiningTool,
 } from './miningRules';
 
+type UseBlockResult = 'handled' | 'pass';
+
 export class BlockInteractionSystem {
   private readonly highlight: THREE.Mesh;
   private readonly placePreview: THREE.Mesh;
@@ -44,6 +46,7 @@ export class BlockInteractionSystem {
     private readonly setBlock: (wx: number, y: number, wz: number, block: Block) => void,
     private readonly triggerSwing: (kind: 'mine' | 'place') => void,
     private readonly spawnItemDrop: (item: Item | null, count: number, position: THREE.Vector3) => void,
+    private readonly onBlockBroken: (wx: number, y: number, wz: number, block: Block) => void,
   ) {
     const highlightMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
@@ -103,6 +106,12 @@ export class BlockInteractionSystem {
       this.highlight.position.set(hit.block.x + 0.5, hit.block.y + 0.5, hit.block.z + 0.5);
       this.updatePlacePreview(hit);
     }
+  }
+
+  use(hit: BlockHit): UseBlockResult {
+    if (hit.block && this.getBlock(hit.block.x, hit.block.y, hit.block.z) === Block.Furnace)
+      return 'handled';
+    return 'pass';
   }
 
   place(hit: BlockHit): void {
@@ -181,6 +190,7 @@ export class BlockInteractionSystem {
       );
       if (drop) this.spawnItemDrop(drop.item, drop.count, dropPosition);
       if (damagesTool(block, tool)) this.inventory.damageSelectedTool(1);
+      this.onBlockBroken(this.mining.block.x, this.mining.block.y, this.mining.block.z, block);
       this.setBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z, Block.Air);
       this.stopMining();
     }

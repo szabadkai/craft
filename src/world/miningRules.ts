@@ -1,7 +1,7 @@
 import { Item } from '../inventory/items';
 import { Block } from '../types';
 
-export type MiningTool = 'hand' | 'stick' | 'wood_pickaxe' | 'stone_pickaxe';
+export type MiningTool = 'hand' | 'stick' | 'wood_pickaxe' | 'stone_pickaxe' | 'iron_pickaxe';
 
 export type MiningDrop = {
   item: Item;
@@ -63,7 +63,7 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
     case Block.GoldOre:
       return toolTier(tool) >= 2 ? { item: 'gold_ore', count: 1 } : null;
     case Block.DiamondOre:
-      return toolTier(tool) >= 2 ? { item: 'diamond', count: 1 } : null;
+      return toolTier(tool) >= 3 ? { item: 'diamond', count: 1 } : null;
     case Block.Leaves:
     case Block.BirchLeaves:
     case Block.Glass:
@@ -112,7 +112,8 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
 }
 
 export function damagesTool(block: Block, tool: MiningTool): boolean {
-  if (tool !== 'wood_pickaxe' && tool !== 'stone_pickaxe') return false;
+  if (tool !== 'wood_pickaxe' && tool !== 'stone_pickaxe' && tool !== 'iron_pickaxe')
+    return false;
   switch (block) {
     case Block.Stone:
     case Block.CoalOre:
@@ -140,17 +141,18 @@ function miningSpeedMultiplier(block: Block, tool: MiningTool): number {
     case Block.Cobblestone:
     case Block.MossyCobblestone:
     case Block.Brick:
-      return tier === 2 ? 2.5 : tier === 1 ? 1.8 : 1;
+      return tier >= 3 ? 3.35 : tier === 2 ? 2.5 : tier === 1 ? 1.8 : 1;
     case Block.IronOre:
     case Block.GoldOre:
     case Block.DiamondOre:
-      return tier === 2 ? 2.2 : tier === 1 ? 1.25 : 1;
+      return tier >= 3 ? 3 : tier === 2 ? 2.2 : tier === 1 ? 1.25 : 1;
     default:
       return 1;
   }
 }
 
 function toolTier(tool: MiningTool): number {
+  if (tool === 'iron_pickaxe') return 3;
   if (tool === 'stone_pickaxe') return 2;
   if (tool === 'wood_pickaxe') return 1;
   return 0;

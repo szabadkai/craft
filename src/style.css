@@ -714,6 +714,104 @@ canvas {
   font-weight: 700;
 }
 
+.furnace-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background: rgba(5, 8, 10, 0.28);
+}
+
+.furnace-overlay.hidden {
+  display: none;
+}
+
+.furnace-window {
+  width: min(520px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(16, 23, 29, 0.94);
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.35);
+}
+
+.furnace-top {
+  display: grid;
+  grid-template-columns: 64px 24px 64px minmax(56px, 1fr) 64px;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.furnace-slot {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  background: rgba(8, 12, 15, 0.56);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.22);
+}
+
+.furnace-slot .inventory-swatch {
+  left: 16px;
+  top: 14px;
+  width: 32px;
+  height: 32px;
+}
+
+.furnace-slot.empty .inventory-swatch {
+  display: none;
+}
+
+.furnace-meter {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.furnace-meter span {
+  position: absolute;
+  inset: 0;
+  transform-origin: center bottom;
+}
+
+.furnace-meter.burn {
+  width: 22px;
+  height: 54px;
+  justify-self: center;
+}
+
+.furnace-meter.burn span {
+  background: linear-gradient(180deg, #ffd36a, #d26d2d);
+}
+
+.furnace-meter.progress {
+  height: 16px;
+}
+
+.furnace-meter.progress span {
+  background: linear-gradient(90deg, #f3efe4, #9fdb8c);
+  transform-origin: left center;
+}
+
+.furnace-storage {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.furnace-inventory {
+  display: grid;
+  grid-template-columns: repeat(9, 34px);
+  gap: 5px;
+  margin-top: 8px;
+}
+
 @media (max-width: 520px) {
   .diagnostics {
     left: 12px;
@@ -726,6 +824,19 @@ canvas {
   .hotbar {
     grid-template-columns: repeat(9, 30px);
     gap: 4px;
+  }
+
+  .furnace-top {
+    grid-template-columns: repeat(3, 64px);
+    justify-content: center;
+  }
+
+  .furnace-meter.progress {
+    grid-column: 1 / -1;
+  }
+
+  .furnace-meter.burn {
+    display: none;
   }
 
   .slot {
@@ -802,4 +913,90 @@ canvas {
 
 .water-overlay.submerged {
   background: rgba(6, 26, 48, 0.48);
+}
+
+/* console */
+.console {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 16px;
+  pointer-events: none;
+  transform: translateY(calc(-100% - 16px));
+  transition: transform 180ms ease;
+}
+
+.console.open {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.console-body {
+  width: min(620px, calc(100vw - 24px));
+  height: 48vh;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid #7e7088;
+  background: #1a1c2b;
+  box-shadow:
+    inset -2px -2px 0 #0d0e1a,
+    inset 2px 2px 0 #3d3d5c,
+    0 8px 32px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.console-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0.4px;
+  color: #c2c3c7;
+}
+
+.console-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.console-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 8px;
+  border-top: 2px solid #2d2d4a;
+  background: #121324;
+}
+
+.console-prompt {
+  color: #ff77a8;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.console-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff1e8;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  outline: none;
+  caret-color: #ff77a8;
+}
+
+.console-input::selection {
+  background: rgba(255, 119, 168, 0.45);
+  color: #fff1e8;
 }

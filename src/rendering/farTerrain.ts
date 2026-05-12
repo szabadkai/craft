@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { blockColor } from '../blocks';
 import { generatedBlockAt, terrainHeight } from '../terrain';
-import { Block, CHUNK_SIZE, DETAIL_RADIUS, FAR_RADIUS } from '../types';
+import { getDetailRadius } from '../player/renderDistance';
+import { Block, CHUNK_SIZE } from '../types';
 
 export class FarTerrainSystem {
   private readonly group = new THREE.Group();
@@ -14,20 +15,20 @@ export class FarTerrainSystem {
     scene.add(this.group);
   }
 
-  rebuild(pcx: number, pcz: number, seed: number): void {
+  rebuild(pcx: number, pcz: number, seed: number, farRadius: number): void {
     this.clear();
 
     const step = 4;
     const patchChunkSpan = 2;
-    const ringMin = DETAIL_RADIUS - 1;
+    const ringMin = getDetailRadius() - 1;
     const positions: number[] = [];
     const colors: number[] = [];
     const indices: number[] = [];
 
-    for (let cz = pcz - FAR_RADIUS; cz <= pcz + FAR_RADIUS; cz += patchChunkSpan) {
-      for (let cx = pcx - FAR_RADIUS; cx <= pcx + FAR_RADIUS; cx += patchChunkSpan) {
+    for (let cz = pcz - farRadius; cz <= pcz + farRadius; cz += patchChunkSpan) {
+      for (let cx = pcx - farRadius; cx <= pcx + farRadius; cx += patchChunkSpan) {
         const d = Math.hypot(cx + patchChunkSpan * 0.5 - pcx, cz + patchChunkSpan * 0.5 - pcz);
-        if (d < ringMin || d > FAR_RADIUS) continue;
+        if (d < ringMin || d > farRadius) continue;
         appendFarPatch(cx, cz, step, patchChunkSpan, seed, positions, colors, indices);
       }
     }

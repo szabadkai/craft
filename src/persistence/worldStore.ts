@@ -1,3 +1,4 @@
+import { FurnaceSnapshot } from '../inventory/furnaceSystem';
 import { Item } from '../inventory/items';
 import type { InventorySnapshot } from '../inventory/inventorySystem';
 import { ChunkKey } from '../types';
@@ -52,12 +53,22 @@ export class WorldStore {
     await this.saveState('hotbar', hotbar);
   }
 
+  async loadFurnaces(): Promise<Record<string, FurnaceSnapshot> | null> {
+    const value = await this.loadState<Record<string, FurnaceSnapshot>>(this.furnaceStateKey());
+    return value ?? null;
+  }
+
+  async saveFurnaces(furnaces: Record<string, FurnaceSnapshot>): Promise<void> {
+    await this.saveState(this.furnaceStateKey(), furnaces);
+  }
+
   async clearCurrentWorld(): Promise<void> {
     const db = await this.open();
     await Promise.all([
       this.clearChunksForCurrentSeed(db),
       this.deleteState(db, 'inventory'),
       this.deleteState(db, 'hotbar'),
+      this.deleteState(db, this.furnaceStateKey()),
     ]);
   }
 
@@ -67,6 +78,10 @@ export class WorldStore {
 
   private storedChunkPrefix(): string {
     return `${this.getSeed()}:v${CHUNK_STORAGE_VERSION}:`;
+  }
+
+  private furnaceStateKey(): string {
+    return `furnaces:${this.getSeed()}`;
   }
 
   private async loadState<T>(key: string): Promise<T | undefined> {

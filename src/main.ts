@@ -1,6 +1,8 @@
 import './style.css';
 import * as THREE from 'three';
+import { FurnaceSystem } from './inventory/furnaceSystem';
 import { InventorySystem } from './inventory/inventorySystem';
+import { ConsoleCommand, ConsoleSystem, defaultConsoleCommands } from './ui/console';
 import { PlayerController } from './player/playerController';
 import {
   BASE_MOUSE_RADIANS_PER_PIXEL,
@@ -9,6 +11,15 @@ import {
   loadMouseSensitivity,
   saveMouseSensitivity,
 } from './player/mouseSensitivity';
+import {
+  clampDetailRadius,
+  formatRenderDistance,
+  getDetailRadius,
+  getFarRadius,
+  getFogFar,
+  getFogNear,
+  setDetailRadius,
+} from './player/renderDistance';
 import { WorldStore } from './persistence/worldStore';
 import { terrainHeight, WATER_LEVEL } from './terrain';
 import { DiagnosticsSystem, DiagnosticsSummary } from './rendering/diagnostics';
@@ -18,14 +29,13 @@ import { createSky, createTerrainAtlas, createTerrainMaterial, createWaterMateri
 import {
   Block,
   CHUNK_SIZE,
-  DETAIL_RADIUS,
-  FAR_RADIUS,
   WORLD_HEIGHT,
 } from './types';
 import { BlockInteractionSystem } from './world/blockInteractionSystem';
 import { BlockRaycaster } from './world/blockRaycaster';
 import { ChunkWorldSystem } from './world/chunkWorldSystem';
 import { ItemPickupSystem } from './world/itemPickups';
+import { itemDefs, Item } from './inventory/items';
 import { randomSeedText, seedFromString } from './world/seed';
 import { WildlifeSystem } from './world/wildlife';
 import { createHud } from './ui/hud';
@@ -36,19 +46,19 @@ if (!app) throw new Error('Missing #app');
 const savedSeedText = localStorage.getItem('craft-seed');
 const defaultSeedText = savedSeedText && savedSeedText !== '18441' ? savedSeedText : '4';
 let seed = seedFromString(defaultSeedText);
+
+let airFogNear = getFogNear();
+let airFogFar = getFogFar();
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xd8e8f1);
-scene.fog = new THREE.Fog(
-  0xd8e8f1,
-  CHUNK_SIZE * (DETAIL_RADIUS + 1),
-  CHUNK_SIZE * (DETAIL_RADIUS + 10),
-);
+scene.fog = new THREE.Fog(0xd8e8f1, airFogNear, airFogFar);
 
 const camera = new THREE.PerspectiveCamera(
   70,
   window.innerWidth / window.innerHeight,
   0.05,
-  CHUNK_SIZE * FAR_RADIUS,
+  getFarRadius() * CHUNK_SIZE,
 );
 camera.position.set(8, 76, 8);
 scene.add(camera);
@@ -106,7 +116,11 @@ const playerController = new PlayerController(
   () => inventorySystem.isOpen,
 );
 const heldItemView = new HeldItemView(camera);
-const hud = createHud(defaultSeedText, formatMouseSensitivity(mouseSensitivity));
+const hud = createHud(
+  defaultSeedText,
+  formatMouseSensitivity(mouseSensitivity),
+  formatRenderDistance(getDetailRadius()),
+);
 const {
   root: hudRoot,
   panelEl,
@@ -118,6 +132,14 @@ const {
   inventoryOverlayEl,
   inventoryTabsEl,
   inventoryGridLargeEl,
+  furnaceOverlayEl,
+  furnaceInputEl,
+  furnaceFuelEl,
+  furnaceOutputEl,
+  furnaceInventoryEl,
+  furnaceBurnFillEl,
+  furnaceProgressFillEl,
+  furnaceStatusEl,
   startScreenEl,
   loadingScreenEl,
   loadingStatusEl,
@@ -132,6 +154,8 @@ const {
   waterOverlayEl,
 } = hud;
 sensitivityInputEl.value = String(mouseSensitivity);
+const { renderDistanceInputEl, renderDistanceValueEl } = hud;
+renderDistanceInputEl.value = String(getDetailRadius());
 const diagnostics = new DiagnosticsSystem(renderer, diagnosticsEl, summarizeWorldDiagnostics);
 const chunkWorld = new ChunkWorldSystem({
   scene,
@@ -161,6 +185,26 @@ const inventorySystem = new InventorySystem(
   },
 );
 const itemPickups = new ItemPickupSystem(scene, (item, amount) => inventorySystem.addItem(item, amount));
+const furnaceSystem = new FurnaceSystem(
+  inventorySystem,
+  {
+    furnaceOverlayEl,
+    furnaceInputEl,
+    furnaceFuelEl,
+    furnaceOutputEl,
+    furnaceInventoryEl,
+    furnaceBurnFillEl,
+    furnaceProgressFillEl,
+    furnaceStatusEl,
+  },
+  {
+    save: () => saveFurnaces(),
+    spawnDrop: (slot, position) => {
+      itemPickups.spawn(slot.item, slot.count, new THREE.Vector3(position.x + 0.5, position.y + 0.75, position.z + 0.5));
+    },
+    getBlock,
+  },
+);
 const interactionSystem = new BlockInteractionSystem(
   scene,
   blockRaycaster,
@@ -170,7 +214,21 @@ const interactionSystem = new BlockInteractionSystem(
   setBlock,
   triggerHandSwing,
   (item, count, position) => itemPickups.spawn(item, count, position),
+  (wx, y, wz, block) => {
+    if (block === Block.Furnace) furnaceSystem.removeAt({ x: wx, y, z: wz });
+  },
 );
+
+function resolveItem(name: string): Item | null {
+  const lower = name.toLowerCase();
+  return itemDefs.find((d) => d.id === lower)?.id ?? itemDefs.find((d) => d.id.includes(lower))?.id ?? null;
+}
+
+const consoleCommands: ConsoleCommand[] = defaultConsoleCommands(
+  (item, count) => inventorySystem.addItem(resolveItem(item)!, count),
+);
+
+const consoleSystem = new ConsoleSystem(consoleCommands);
 inventorySystem.init();
 rebuildHeldItem();
 
@@ -206,7 +264,9 @@ function startWorld(seedText: string): void {
   worldReady = false;
   chunkWorld.resetStreaming();
   interactionSystem.stopMining();
+  furnaceSystem.close();
   itemPickups.clear();
+  void loadFurnaces();
 
   const spawnX = 8;
   const spawnZ = 8;
@@ -215,6 +275,7 @@ function startWorld(seedText: string): void {
   player.velocity.set(0, 0, 0);
   player.onGround = false;
   submergeFactor = 0;
+  caveFactor = 0;
   playerController.syncCamera();
 
   startScreenEl.classList.add('hidden');
@@ -259,12 +320,20 @@ async function loadHotbar(): Promise<void> {
   if (saved) inventorySystem.applyHotbar(saved);
 }
 
+async function loadFurnaces(): Promise<void> {
+  furnaceSystem.load(await worldStore.loadFurnaces());
+}
+
 async function saveInventory(): Promise<void> {
   await worldStore.saveInventory(inventorySystem.snapshotInventory());
 }
 
 async function saveHotbar(): Promise<void> {
   await worldStore.saveHotbar(inventorySystem.snapshotHotbar());
+}
+
+async function saveFurnaces(): Promise<void> {
+  await worldStore.saveFurnaces(furnaceSystem.snapshot());
 }
 
 function updateLoadingState(): void {
@@ -291,10 +360,61 @@ function fadeChunks(now: number): void {
 
 let last = performance.now();
 let submergeFactor = 0;
+let caveFactor = 0;
 const airFogColor = new THREE.Color(0xd8e8f1);
 const waterFogColor = new THREE.Color(0x061a30);
+const caveFogColor = new THREE.Color(0x080810);
 const airBgColor = new THREE.Color(0xd8e8f1);
 const waterBgColor = new THREE.Color(0x061a30);
+const caveBgColor = new THREE.Color(0x080810);
+
+function applyRenderDistance(): void {
+  airFogNear = getFogNear();
+  airFogFar = getFogFar();
+  camera.far = getFarRadius() * CHUNK_SIZE;
+  camera.updateProjectionMatrix();
+  if (scene.fog instanceof THREE.Fog && caveFactor < 0.005 && submergeFactor < 0.005) {
+    scene.fog.near = airFogNear;
+    scene.fog.far = airFogFar;
+  }
+  const pcx = Math.floor(player.position.x / CHUNK_SIZE);
+  const pcz = Math.floor(player.position.z / CHUNK_SIZE);
+  farTerrain.rebuild(pcx, pcz, seed, getFarRadius());
+}
+
+function updateCaveFactor(dt: number): void {
+  if (!worldReady) {
+    caveFactor = Number.NaN;
+    return;
+  }
+  const px = Math.floor(player.position.x);
+  const pz = Math.floor(player.position.z);
+  const eyeY = player.position.y + player.eye;
+  const surfaceH = terrainHeight(px, pz, seed);
+  const depth = surfaceH - eyeY;
+  if (depth < 4) {
+    caveFactor += (0 - caveFactor) * Math.min(1, dt * 4);
+    if (caveFactor < 0.002) caveFactor = 0;
+    return;
+  }
+  let overheadSolid = 0;
+  let overheadChecked = 0;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      overheadChecked++;
+      for (let y = Math.floor(eyeY) + 1; y <= Math.min(surfaceH, WORLD_HEIGHT - 1); y++) {
+        if (getBlock(px + dx, y, pz + dz) !== Block.Air) {
+          overheadSolid++;
+          break;
+        }
+      }
+    }
+  }
+  const overheadRatio = overheadChecked > 0 ? overheadSolid / overheadChecked : 0;
+  const target = Math.min(1, (depth - 4) / 20) * Math.min(1, overheadRatio * 2);
+  caveFactor += (target - caveFactor) * Math.min(1, dt * 4);
+  if (caveFactor < 0.002) caveFactor = 0;
+}
 
 function applyUnderwaterEffects(dt: number): void {
   if (!worldReady) {
@@ -315,23 +435,40 @@ function applyUnderwaterEffects(dt: number): void {
   submergeFactor += (target - submergeFactor) * Math.min(1, dt * 5);
   if (submergeFactor < 0.002) submergeFactor = 0;
 
-  if (submergeFactor > 0.005) {
-    // fog
+  const dominant = submergeFactor > caveFactor ? 'water' : 'cave';
+  const dominantFactor = Math.max(submergeFactor, caveFactor);
+
+  if (dominantFactor > 0.005) {
     if (scene.fog instanceof THREE.Fog) {
-      scene.fog.color.copy(airFogColor).lerp(waterFogColor, submergeFactor);
-      scene.fog.near = THREE.MathUtils.lerp(144, 4, submergeFactor);
-      scene.fog.far = THREE.MathUtils.lerp(304, 16, submergeFactor);
+      if (dominant === 'water') {
+        const blended = THREE.MathUtils.lerp(
+          caveFogColor.getHex(),
+          waterFogColor.getHex(),
+          submergeFactor > caveFactor ? 1 : caveFactor / submergeFactor,
+        );
+        scene.fog.color.setHex(blended);
+        scene.fog.color.lerp(airFogColor, 1 - dominantFactor);
+        scene.fog.near = THREE.MathUtils.lerp(airFogNear, 4, submergeFactor);
+        scene.fog.far = THREE.MathUtils.lerp(airFogFar, 16, submergeFactor);
+      } else {
+        scene.fog.color.copy(caveFogColor).lerp(airFogColor, 1 - caveFactor);
+        scene.fog.near = THREE.MathUtils.lerp(airFogNear, 8, caveFactor);
+        scene.fog.far = THREE.MathUtils.lerp(airFogFar, 48, caveFactor);
+      }
     }
-    // background
-    scene.background = scene.background ?? new THREE.Color();
-    (scene.background as THREE.Color).copy(airBgColor).lerp(waterBgColor, submergeFactor);
-    // water overlay
+    if (dominant === 'water') {
+      scene.background = scene.background ?? new THREE.Color();
+      (scene.background as THREE.Color).copy(airBgColor).lerp(waterBgColor, submergeFactor);
+    } else {
+      scene.background = scene.background ?? new THREE.Color();
+      (scene.background as THREE.Color).copy(airBgColor).lerp(caveBgColor, caveFactor);
+    }
     waterOverlayEl.classList.toggle('submerged', submergeFactor > 0.25);
   } else {
     if (scene.fog instanceof THREE.Fog) {
       scene.fog.color.copy(airFogColor);
-      scene.fog.near = 144;
-      scene.fog.far = 304;
+      scene.fog.near = airFogNear;
+      scene.fog.far = airFogFar;
     }
     scene.background = new THREE.Color(0xd8e8f1);
     waterOverlayEl.classList.remove('submerged');
@@ -350,8 +487,10 @@ function tick(now: number): void {
   updateLoadingState();
   if (worldReady) {
     playerController.update(dt);
+    updateCaveFactor(dt);
     applyUnderwaterEffects(dt);
     itemPickups.update(dt, now, player.position);
+    furnaceSystem.tick(dt);
   }
   sky.position.copy(camera.position);
   updateTerrainMaterialTime(now);
@@ -385,19 +524,43 @@ document.addEventListener('keydown', (event) => {
     diagnostics.setOpen(!diagnostics.isOpen);
     return;
   }
+  if (event.code === 'Backquote') {
+    event.preventDefault();
+    consoleSystem.toggle();
+    interactionSystem.stopMining();
+    if (consoleSystem.isOpen && document.pointerLockElement === renderer.domElement)
+      document.exitPointerLock();
+    return;
+  }
+  if (consoleSystem.isOpen) return;
   if (!worldStarted && event.code !== 'Tab') return;
   if (event.code === 'KeyE') {
     event.preventDefault();
+    if (furnaceSystem.isOpen) {
+      furnaceSystem.close();
+      return;
+    }
     const inventoryOpen = inventorySystem.toggleOpen();
     interactionSystem.stopMining();
     if (inventoryOpen && document.pointerLockElement === renderer.domElement)
       document.exitPointerLock();
     return;
   }
-  if (event.code === 'Escape' && inventorySystem.isOpen) {
-    inventorySystem.setOpen(false);
-    return;
+  if (event.code === 'Escape') {
+    if (consoleSystem.isOpen) {
+      consoleSystem.toggle();
+      return;
+    }
+    if (furnaceSystem.isOpen) {
+      furnaceSystem.close();
+      return;
+    }
+    if (inventorySystem.isOpen) {
+      inventorySystem.setOpen(false);
+      return;
+    }
   }
+  if (furnaceSystem.isOpen && event.code !== 'Tab') return;
   keys.add(event.code);
   const slot = Number(event.key) - 1;
   if (slot >= 0 && slot < inventorySystem.hotbarSize) inventorySystem.selectHotbarSlot(slot);
@@ -428,7 +591,7 @@ document.addEventListener('mousemove', (event) => {
 });
 
 document.addEventListener('mousedown', (event) => {
-  if (!worldReady || !mouse.locked || inventorySystem.isOpen) return;
+  if (!worldReady || !mouse.locked || inventorySystem.isOpen || furnaceSystem.isOpen) return;
   const hit = blockRaycaster.raycast();
   if (event.button === 0) {
     const animalHit = wildlife.raycast(camera);
@@ -440,7 +603,15 @@ document.addEventListener('mousedown', (event) => {
     }
     if (hit) interactionSystem.startMining(hit);
   } else if (event.button === 2) {
-    if (hit) interactionSystem.place(hit);
+    if (!hit) return;
+    if (getBlock(hit.block.x, hit.block.y, hit.block.z) === Block.Furnace) {
+      inventorySystem.setOpen(false);
+      interactionSystem.stopMining();
+      furnaceSystem.openAt({ x: hit.block.x, y: hit.block.y, z: hit.block.z });
+      if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+      return;
+    }
+    interactionSystem.place(hit);
   }
 });
 
@@ -473,6 +644,13 @@ sensitivityInputEl.addEventListener('input', () => {
   saveMouseSensitivity(mouseSensitivity);
 });
 
+renderDistanceInputEl.addEventListener('input', () => {
+  const value = clampDetailRadius(Number(renderDistanceInputEl.value));
+  renderDistanceValueEl.textContent = formatRenderDistance(value);
+  setDetailRadius(value);
+  applyRenderDistance();
+});
+
 randomSeedEl.addEventListener('click', () => {
   seedInputEl.value = randomSeedText();
   updateSeedPreview();
@@ -493,6 +671,7 @@ window.addEventListener('resize', () => {
 
 loadInventory().catch(console.error);
 loadHotbar().catch(console.error);
+loadFurnaces().catch(console.error);
 updateSeedPreview();
 requestAnimationFrame(tick);
 
@@ -507,6 +686,7 @@ async function clearSavedWorld(): Promise<void> {
   itemPickups.clear();
   interactionSystem.stopMining();
   inventorySystem.resetInventory();
+  furnaceSystem.load(null);
   worldReady = false;
   if (worldStarted) {
     startWorld(normalizedSeedText);

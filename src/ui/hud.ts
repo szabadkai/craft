@@ -9,6 +9,14 @@ export type HudElements = {
   inventoryOverlayEl: HTMLDivElement;
   inventoryTabsEl: HTMLDivElement;
   inventoryGridLargeEl: HTMLDivElement;
+  furnaceOverlayEl: HTMLDivElement;
+  furnaceInputEl: HTMLButtonElement;
+  furnaceFuelEl: HTMLButtonElement;
+  furnaceOutputEl: HTMLButtonElement;
+  furnaceInventoryEl: HTMLDivElement;
+  furnaceBurnFillEl: HTMLSpanElement;
+  furnaceProgressFillEl: HTMLSpanElement;
+  furnaceStatusEl: HTMLSpanElement;
   startScreenEl: HTMLDivElement;
   loadingScreenEl: HTMLDivElement;
   loadingStatusEl: HTMLSpanElement;
@@ -20,10 +28,16 @@ export type HudElements = {
   clearWorldStatusEl: HTMLSpanElement;
   sensitivityInputEl: HTMLInputElement;
   sensitivityValueEl: HTMLElement;
+  renderDistanceInputEl: HTMLInputElement;
+  renderDistanceValueEl: HTMLElement;
   waterOverlayEl: HTMLDivElement;
 };
 
-export function createHud(defaultSeedText: string, defaultSensitivityLabel: string): HudElements {
+export function createHud(
+  defaultSeedText: string,
+  defaultSensitivityLabel: string,
+  defaultRenderDistanceLabel: string,
+): HudElements {
   const root = document.createElement('div');
   root.className = 'hud';
   root.innerHTML = `
@@ -51,6 +65,18 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
             max="6"
             step="0.05"
             value="1"
+          />
+        </label>
+        <label class="sensitivity-field" for="render-distance-input">
+          <span>Render distance</span>
+          <output id="render-distance-value" for="render-distance-input">${defaultRenderDistanceLabel}</output>
+          <input
+            id="render-distance-input"
+            type="range"
+            min="4"
+            max="12"
+            step="2"
+            value="8"
           />
         </label>
         <div class="seed-presets" aria-label="Seed presets">
@@ -101,6 +127,25 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
         </div>
       </div>
     </div>
+    <div class="furnace-overlay hidden">
+      <div class="furnace-window">
+        <div class="inventory-head">
+          <b>Furnace</b>
+          <span id="furnace-status">Add ore and fuel.</span>
+        </div>
+        <div class="furnace-top">
+          <button type="button" class="furnace-slot" data-furnace-slot="input" title="Input"></button>
+          <div class="furnace-meter burn"><span></span></div>
+          <button type="button" class="furnace-slot" data-furnace-slot="fuel" title="Fuel"></button>
+          <div class="furnace-meter progress"><span></span></div>
+          <button type="button" class="furnace-slot" data-furnace-slot="output" title="Output"></button>
+        </div>
+        <div class="inventory-crafting furnace-storage">
+          <b>Inventory</b>
+          <div class="furnace-inventory"></div>
+        </div>
+      </div>
+    </div>
     <div class="water-overlay"></div>
   `;
   document.body.appendChild(root);
@@ -119,6 +164,14 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
     inventoryOverlayEl: root.querySelector<HTMLDivElement>('.inventory-overlay')!,
     inventoryTabsEl: root.querySelector<HTMLDivElement>('.inventory-tabs')!,
     inventoryGridLargeEl: root.querySelector<HTMLDivElement>('.inventory-grid-large')!,
+    furnaceOverlayEl: root.querySelector<HTMLDivElement>('.furnace-overlay')!,
+    furnaceInputEl: root.querySelector<HTMLButtonElement>('[data-furnace-slot="input"]')!,
+    furnaceFuelEl: root.querySelector<HTMLButtonElement>('[data-furnace-slot="fuel"]')!,
+    furnaceOutputEl: root.querySelector<HTMLButtonElement>('[data-furnace-slot="output"]')!,
+    furnaceInventoryEl: root.querySelector<HTMLDivElement>('.furnace-inventory')!,
+    furnaceBurnFillEl: root.querySelector<HTMLSpanElement>('.furnace-meter.burn span')!,
+    furnaceProgressFillEl: root.querySelector<HTMLSpanElement>('.furnace-meter.progress span')!,
+    furnaceStatusEl: root.querySelector<HTMLSpanElement>('#furnace-status')!,
     startScreenEl: root.querySelector<HTMLDivElement>('.start-screen')!,
     loadingScreenEl: root.querySelector<HTMLDivElement>('.loading-screen')!,
     loadingStatusEl: root.querySelector<HTMLSpanElement>('#loading-status')!,
@@ -130,6 +183,8 @@ export function createHud(defaultSeedText: string, defaultSensitivityLabel: stri
     clearWorldStatusEl: root.querySelector<HTMLSpanElement>('#clear-world-status')!,
     sensitivityInputEl,
     sensitivityValueEl: root.querySelector<HTMLElement>('#sensitivity-value')!,
+    renderDistanceInputEl: root.querySelector<HTMLInputElement>('#render-distance-input')!,
+    renderDistanceValueEl: root.querySelector<HTMLElement>('#render-distance-value')!,
     waterOverlayEl: root.querySelector<HTMLDivElement>('.water-overlay')!,
   };
 }

@@ -119,5 +119,6 @@ function itemColor(item: Item): THREE.Color {
   if (item === 'sticks') return new THREE.Color(0x8b5a2b);
   if (item === 'wood_pickaxe') return new THREE.Color(0x9a6835);
   if (item === 'stone_pickaxe') return new THREE.Color(0xc2c7c4);
+  if (item === 'iron_pickaxe') return new THREE.Color(0xd6d8db);
   return new THREE.Color(0x90999c);
 }

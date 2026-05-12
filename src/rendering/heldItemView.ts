@@ -89,7 +89,7 @@ function makeStick(): THREE.Group {
   return group;
 }
 
-function makePickaxe(tool: 'wood_pickaxe' | 'stone_pickaxe'): THREE.Group {
+function makePickaxe(tool: 'wood_pickaxe' | 'stone_pickaxe' | 'iron_pickaxe'): THREE.Group {
   const group = new THREE.Group();
   const handle = new THREE.Mesh(
     new THREE.BoxGeometry(0.06, 0.64, 0.06),
@@ -99,7 +99,8 @@ function makePickaxe(tool: 'wood_pickaxe' | 'stone_pickaxe'): THREE.Group {
   handle.position.set(0.02, -0.06, 0);
   group.add(handle);
 
-  const headColor = tool === 'stone_pickaxe' ? 0x9b9d98 : 0x9a6835;
+  const headColor =
+    tool === 'iron_pickaxe' ? 0xd6d8db : tool === 'stone_pickaxe' ? 0x9b9d98 : 0x9a6835;
   const headMaterial = new THREE.MeshLambertMaterial({ color: headColor });
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.09), headMaterial);
   head.rotation.set(0.34, 0, -0.55);

@@ -31,8 +31,9 @@ The prototype currently supports:
 - Start-screen world tools can clear saved chunks, inventory, and legacy hotbar state for the selected seed.
 - Persistent inventory and migrated legacy hotbar bindings.
 - Slot-based inventory with stack limits, migration from older count-map saves, item categories, crafting, and a Minecraft-style hotbar backed by real inventory slots.
+- Furnace interaction UI with per-block smelting queues, fuel consumption, ore-to-ingot processing, and output collection.
 - Item pickup entities for mined block drops, with collection into available inventory slots.
-- Mining drop rules and tool durability for pickaxes.
+- Mining drop rules and tool durability for pickaxes, including iron pickaxe progression and diamond harvest gating.
 - Recipe cards show crafting outputs, ingredient requirements, and missing inputs.
 - Sky, terrain atlas generation, terrain shader materials, far terrain, chunk streaming/world lifecycle, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
 - F3 diagnostic overlay with frame, render, world, worker, memory, and supported GPU timing counters.
@@ -130,9 +131,9 @@ Goal: create a minimal progression loop beyond mining and placing.
 
 Tasks:
 
-- Add furnace/smelting UI.
-- Smelt iron/copper/gold ore.
-- Add iron pickaxe.
+- [x] Add furnace/smelting UI.
+- [x] Smelt iron/copper/gold ore.
+- [x] Add iron pickaxe.
 - Add health.
 - Add fall damage.
 - Add basic food items.
@@ -193,9 +194,9 @@ Exit criteria:
 
 ## Near-Term Recommended Order
 
-1. Add furnace/smelting.
-2. Add render distance controls to the debug/settings UI.
-3. Add static water and caves.
+1. Add render distance controls to the debug/settings UI.
+2. Add caves.
+3. Add health/fall damage.
 
 ## Known Risks
 
@@ -207,4 +208,4 @@ Exit criteria:
 
 ## Current Priority
 
-Milestone 2 is functionally complete for the planned first pass, chunk streaming/world lifecycle has been extracted from `src/main.ts`, and clear-save world tools exist. The next best gameplay task is furnace/smelting.
+Milestone 2 is functionally complete for the planned first pass, furnace/smelting now supports per-block smelting queues and iron-tier progression, and the next best extension task is render distance controls in the debug/settings UI.

@@ -13,6 +13,9 @@ export type Item =
   | 'copper_ore'
   | 'gold_ore'
   | 'diamond'
+  | 'iron_ingot'
+  | 'copper_ingot'
+  | 'gold_ingot'
   | 'gravel'
   | 'clay'
   | 'snow'
@@ -28,6 +31,7 @@ export type Item =
   | 'berries'
   | 'wood_pickaxe'
   | 'stone_pickaxe'
+  | 'iron_pickaxe'
   | 'torch'
   | 'crafting_table'
   | 'furnace';
@@ -40,14 +44,19 @@ export type Recipe = {
 
 export type HeldItem =
   | { kind: 'block'; block: Block; label: string; item: Item | null }
-  | { kind: 'tool'; tool: 'stick' | 'wood_pickaxe' | 'stone_pickaxe'; label: string; item: Item };
+  | {
+      kind: 'tool';
+      tool: 'stick' | 'wood_pickaxe' | 'stone_pickaxe' | 'iron_pickaxe';
+      label: string;
+      item: Item;
+    };
 
 export type ItemDef = {
   id: Item;
   label: string;
   category: 'Blocks' | 'Materials' | 'Tools';
   block?: Block;
-  tool?: 'stick' | 'wood_pickaxe' | 'stone_pickaxe';
+  tool?: 'stick' | 'wood_pickaxe' | 'stone_pickaxe' | 'iron_pickaxe';
   stackLimit?: number;
   durability?: number;
 };
@@ -64,6 +73,9 @@ export const defaultInventoryCounts: Record<Item, number> = {
   copper_ore: 0,
   gold_ore: 0,
   diamond: 0,
+  iron_ingot: 0,
+  copper_ingot: 0,
+  gold_ingot: 0,
   gravel: 0,
   clay: 0,
   snow: 0,
@@ -79,6 +91,7 @@ export const defaultInventoryCounts: Record<Item, number> = {
   berries: 0,
   wood_pickaxe: 0,
   stone_pickaxe: 0,
+  iron_pickaxe: 0,
   torch: 0,
   crafting_table: 0,
   furnace: 0,
@@ -88,10 +101,11 @@ export const recipes: Recipe[] = [
   { name: 'Planks', inputs: { wood: 1 }, outputs: { planks: 4 } },
   { name: 'Sticks', inputs: { planks: 2 }, outputs: { sticks: 4 } },
   { name: 'Wood Pick', inputs: { planks: 3, sticks: 2 }, outputs: { wood_pickaxe: 1 } },
-  { name: 'Stone Pick', inputs: { stone: 3, sticks: 2 }, outputs: { stone_pickaxe: 1 } },
+  { name: 'Stone Pick', inputs: { cobblestone: 3, sticks: 2 }, outputs: { stone_pickaxe: 1 } },
+  { name: 'Iron Pick', inputs: { iron_ingot: 3, sticks: 2 }, outputs: { iron_pickaxe: 1 } },
   { name: 'Torch', inputs: { coal: 1, sticks: 1 }, outputs: { torch: 4 } },
   { name: 'Table', inputs: { planks: 4 }, outputs: { crafting_table: 1 } },
-  { name: 'Furnace', inputs: { stone: 8 }, outputs: { furnace: 1 } },
+  { name: 'Furnace', inputs: { cobblestone: 8 }, outputs: { furnace: 1 } },
   { name: 'Bricks', inputs: { clay: 2 }, outputs: { brick: 2 } },
   { name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 2 } },
 ];
@@ -132,11 +146,21 @@ export const itemDefs: ItemDef[] = [
     tool: 'stone_pickaxe',
     durability: 80,
   },
+  {
+    id: 'iron_pickaxe',
+    label: 'Iron Pick',
+    category: 'Tools',
+    tool: 'iron_pickaxe',
+    durability: 160,
+  },
   { id: 'coal', label: 'Coal', category: 'Materials' },
   { id: 'iron_ore', label: 'Iron Ore', category: 'Materials' },
   { id: 'copper_ore', label: 'Copper Ore', category: 'Materials' },
   { id: 'gold_ore', label: 'Gold Ore', category: 'Materials' },
   { id: 'diamond', label: 'Diamond', category: 'Materials' },
+  { id: 'iron_ingot', label: 'Iron Ingot', category: 'Materials' },
+  { id: 'copper_ingot', label: 'Copper Ingot', category: 'Materials' },
+  { id: 'gold_ingot', label: 'Gold Ingot', category: 'Materials' },
   { id: 'torch', label: 'Torch', category: 'Materials' },
 ];
 
@@ -242,6 +266,8 @@ export function itemSwatch(item: Item): string {
       return 'linear-gradient(135deg, #7a4a23 0 35%, #9a6835 36% 68%, transparent 69%)';
     case 'stone_pickaxe':
       return 'linear-gradient(135deg, #7a4a23 0 35%, #c2c7c4 36% 68%, transparent 69%)';
+    case 'iron_pickaxe':
+      return 'linear-gradient(135deg, #7a4a23 0 35%, #d6d8db 36% 68%, transparent 69%)';
     case 'coal':
       return '#252525';
     case 'iron_ore':
@@ -252,6 +278,12 @@ export function itemSwatch(item: Item): string {
       return '#e0b83c';
     case 'diamond':
       return '#56d5dd';
+    case 'iron_ingot':
+      return '#cfd4d8';
+    case 'copper_ingot':
+      return '#d08856';
+    case 'gold_ingot':
+      return '#f0cb56';
     case 'flower':
       return 'linear-gradient(135deg, #4d8f35 0 45%, #d63b2e 46% 70%, #e7c52a 71%)';
     case 'snow':
