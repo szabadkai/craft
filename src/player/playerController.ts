@@ -149,14 +149,15 @@ export class PlayerController {
       for (let z = minZ; z <= maxZ; z++) {
         for (let x = minX; x <= maxX; x++) {
           const block = this.getBlock(x, y, z);
+          // Must actually overlap the block AABB
+          if (pyMax <= y || pyMin >= y + 1) continue;
+          if (pxMax <= x || pxMin >= x + 1) continue;
+          if (pzMax <= z || pzMin >= z + 1) continue;
+
           if (block === Block.OakDoor) return true;
           if (isSlabBlock(block)) {
             const [yOff, yTop] = slabHalfY(block);
-            const blockMinY = y + yOff;
-            const blockMaxY = y + yTop;
-            if (pxMin < x + 1 && pxMax > x && pyMin < blockMaxY && pyMax > blockMinY && pzMin < z + 1 && pzMax > z) {
-              return true;
-            }
+            if (pyMin < y + yTop && pyMax > y + yOff) return true;
             continue;
           }
           if (isSolid(block)) return true;

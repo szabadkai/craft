@@ -92,30 +92,58 @@ function makeStick(): THREE.Group {
 
 function makePickaxe(tool: 'wood_pickaxe' | 'stone_pickaxe' | 'iron_pickaxe'): THREE.Group {
   const group = new THREE.Group();
-  const handle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.10, 0.80, 0.10),
-    new THREE.MeshLambertMaterial({ color: 0x8a572b }),
-  );
-  handle.rotation.set(0.34, 0, -0.55);
-  handle.position.set(0.02, -0.08, 0);
+
+  // Handle and head share position + rotation so the head is built in handle-local space.
+  const pos = { x: 0.02, y: -0.08, z: 0 };
+  const rot = { x: 0.34, y: 0, z: -0.55 };
+
+  // ---- handle ----
+  const handleMat = new THREE.MeshLambertMaterial({ color: 0x8a572b });
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.80, 0.10), handleMat);
+  handle.rotation.set(rot.x, rot.y, rot.z);
+  handle.position.set(pos.x, pos.y, pos.z);
   group.add(handle);
 
+  // ---- pickaxe head in handle-local coordinates ----
+  // +Y is along the handle, +X is side-to-side, +Z is forward-back.
+  // The handle top is at local Y = +0.40.
   const headColor =
     tool === 'iron_pickaxe' ? 0xd6d8db : tool === 'stone_pickaxe' ? 0x9b9d98 : 0x9a6835;
-  const headMaterial = new THREE.MeshLambertMaterial({ color: headColor });
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.12, 0.12), headMaterial);
-  head.rotation.set(0.34, 0, -0.55);
-  head.position.set(-0.10, 0.28, 0);
+  const headMat = new THREE.MeshLambertMaterial({ color: headColor });
+
+  const head = new THREE.Group();
+  head.rotation.set(rot.x, rot.y, rot.z);
+  head.position.set(pos.x, pos.y, pos.z);
   group.add(head);
 
-  const tipA = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.10, 0.11), headMaterial.clone());
-  tipA.rotation.set(0.34, 0, -0.9);
-  tipA.position.set(-0.38, 0.38, 0);
-  group.add(tipA);
+  // Eye — wraps the handle near its top
+  const eye = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.14), headMat);
+  eye.position.set(0, 0.36, 0);
+  head.add(eye);
 
-  const tipB = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.10, 0.11), headMaterial.clone());
-  tipB.rotation.set(0.34, 0, -0.2);
-  tipB.position.set(0.14, 0.20, 0);
-  group.add(tipB);
+  // Left arm — extends -X, angles slightly downward
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.12), headMat);
+  armL.position.set(-0.22, 0.35, 0);
+  armL.rotation.z = 0.18;
+  head.add(armL);
+
+  // Right arm — extends +X, angles slightly downward
+  const armR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.12), headMat);
+  armR.position.set(0.22, 0.35, 0);
+  armR.rotation.z = -0.18;
+  head.add(armR);
+
+  // Left tip — narrower, angled further downward (pick point)
+  const tipL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.11), headMat);
+  tipL.position.set(-0.39, 0.29, 0);
+  tipL.rotation.z = 0.45;
+  head.add(tipL);
+
+  // Right tip
+  const tipR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.11), headMat);
+  tipR.position.set(0.39, 0.29, 0);
+  tipR.rotation.z = -0.45;
+  head.add(tipR);
+
   return group;
 }

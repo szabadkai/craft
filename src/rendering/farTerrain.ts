@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { blockColor } from '../blocks';
-import { generatedBlockAt, terrainHeight } from '../terrain';
+import { generatedBlockAt, terrainHeight, WATER_LEVEL } from '../terrain';
 import { getDetailRadius } from '../player/renderDistance';
 import { Block, CHUNK_SIZE } from '../types';
 
@@ -10,8 +10,12 @@ export class FarTerrainSystem {
     vertexColors: true,
     side: THREE.DoubleSide,
   });
+  private waterMesh: THREE.Mesh | null = null;
 
-  constructor(scene: THREE.Scene) {
+  constructor(
+    scene: THREE.Scene,
+    private readonly waterMaterial: THREE.ShaderMaterial,
+  ) {
     scene.add(this.group);
   }
 
@@ -42,6 +46,25 @@ export class FarTerrainSystem {
     geo.computeVertexNormals();
     geo.computeBoundingSphere();
     this.group.add(new THREE.Mesh(geo, this.material));
+
+    // Far water plane at WATER_LEVEL
+    this.buildWater(pcx, pcz, farRadius);
+  }
+
+  private buildWater(pcx: number, pcz: number, farRadius: number): void {
+    const halfSide = farRadius * CHUNK_SIZE;
+    const segments = Math.max(8, farRadius * 3);
+    const waterGeo = new THREE.PlaneGeometry(
+      halfSide * 2,
+      halfSide * 2,
+      segments,
+      segments,
+    );
+    waterGeo.rotateX(-Math.PI / 2);
+    waterGeo.translate(pcx * CHUNK_SIZE, WATER_LEVEL - 0.05, pcz * CHUNK_SIZE);
+    this.waterMesh = new THREE.Mesh(waterGeo, this.waterMaterial);
+    this.waterMesh.renderOrder = 1;
+    this.group.add(this.waterMesh);
   }
 
   private clear(): void {
@@ -50,6 +73,7 @@ export class FarTerrainSystem {
       mesh.geometry.dispose();
     }
     this.group.clear();
+    this.waterMesh = null;
   }
 }
 

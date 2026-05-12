@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { isSolid } from '../blocks';
 import { terrainHeight } from '../terrain';
+import { WATER_LEVEL } from '../terrain';
 import { Block, WORLD_HEIGHT } from '../types';
 
-type HostileKind = 'cave_spider';
+type HostileKind = 'cave_spider' | 'zombie' | 'skeleton';
 
 export type Hostile = {
   kind: HostileKind;
@@ -38,7 +39,13 @@ export class HostileSystem {
     private readonly getSeed: () => number,
     private readonly getBlock: (wx: number, y: number, wz: number) => Block,
     private readonly onDrop: (position: THREE.Vector3, kind: HostileKind) => void,
+    private readonly getTimeOfDay: () => number = () => 0,
   ) {}
+
+  private isNight(): boolean {
+    const tod = this.getTimeOfDay();
+    return tod > 13000 && tod < 23000;
+  }
 
   spawnNear(playerPos: THREE.Vector3, now: number): void {
     if (now < this.spawnTimer.next || this.mobs.length >= this.MAX_MOBS) return;
@@ -47,27 +54,45 @@ export class HostileSystem {
     const py = Math.floor(playerPos.y);
     const pz = Math.floor(playerPos.z);
     const surface = terrainHeight(px, pz, seed);
-    // Only spawn if player is deep enough underground
-    if (py > surface - 8) {
+    const isUnderground = py < surface - 8;
+    const isSurface = py >= surface - 3 && this.isNight();
+
+    if (!isUnderground && !isSurface) {
       this.spawnTimer.next = now + this.spawnTimer.cooldownMs;
       return;
     }
+
     // Try a few random positions around the player
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       const dx = Math.floor((Math.random() - 0.5) * 28);
-      const dy = Math.floor((Math.random() - 0.5) * 10);
+      const dy = isSurface
+        ? 0
+        : Math.floor((Math.random() - 0.5) * 10);
       const dz = Math.floor((Math.random() - 0.5) * 28);
       const wx = px + dx;
-      const wy = py + dy;
+      let wy = py + dy;
       const wz = pz + dz;
-      if (wy < 4 || wy >= WORLD_HEIGHT - 2) continue;
-      if (wy >= terrainHeight(wx, wz, seed) - 3) continue;
-      // Spawn in air with solid below
+
+      if (isSurface) {
+        wy = terrainHeight(wx, wz, seed);
+        // Must be on solid ground above water
+        if (wy <= WATER_LEVEL || wy < 12 || wy >= WORLD_HEIGHT - 2) continue;
+        const groundBlock = this.getBlock(wx, wy - 1, wz);
+        if (groundBlock !== Block.Grass && groundBlock !== Block.Sand && groundBlock !== Block.Snow) continue;
+      } else {
+        if (wy < 4 || wy >= WORLD_HEIGHT - 2) continue;
+        if (wy >= terrainHeight(wx, wz, seed) - 3) continue;
+      }
+
+      // Spawn in air with solid below, two blocks clear above
       if (this.getBlock(wx, wy, wz) !== Block.Air) continue;
       if (!isSolid(this.getBlock(wx, wy - 1, wz))) continue;
-      // Check two blocks clear above
       if (this.getBlock(wx, wy + 1, wz) !== Block.Air) continue;
-      const mob = this.createMob(wx + 0.5, wy, wz + 0.5);
+
+      const kind: HostileKind = isSurface
+        ? (Math.random() < 0.5 ? 'zombie' : 'skeleton')
+        : 'cave_spider';
+      const mob = this.createMob(kind, wx + 0.5, wy, wz + 0.5);
       this.mobs.push(mob);
       this.scene.add(mob.root);
       this.spawnTimer.next = now + this.spawnTimer.cooldownMs;
@@ -279,28 +304,113 @@ export class HostileSystem {
     );
   }
 
-  private createMob(x: number, y: number, z: number): Hostile {
+  private createMob(kind: HostileKind, x: number, y: number, z: number): Hostile {
     const group = new THREE.Group();
     group.position.set(x, y, z);
-    const darkMat = new THREE.MeshLambertMaterial({ color: 0x1a1512 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.36, 0.52), darkMat);
-    body.position.y = 0.32;
-    group.add(body);
-    for (const sx of [-0.16, 0.16]) {
-      for (const sz of [-0.18, 0.18]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.08), darkMat);
-        leg.position.set(sx, 0.14, sz);
+
+    if (kind === 'cave_spider') {
+      const darkMat = new THREE.MeshLambertMaterial({ color: 0x1a1512 });
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.36, 0.52), darkMat);
+      body.position.y = 0.32;
+      group.add(body);
+      for (const sx of [-0.16, 0.16]) {
+        for (const sz of [-0.18, 0.18]) {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.08), darkMat);
+          leg.position.set(sx, 0.14, sz);
+          leg.userData.leg = true;
+          group.add(leg);
+        }
+      }
+      return {
+        kind: 'cave_spider',
+        root: group,
+        health: 3,
+        width: 0.52,
+        height: 0.68,
+        speed: 1.4,
+        verticalVelocity: 0,
+        hurtUntil: 0,
+        lastAttackAt: 0,
+        phase: Math.random() * Math.PI * 2,
+      };
+    }
+
+    if (kind === 'zombie') {
+      const skinMat = new THREE.MeshLambertMaterial({ color: 0x4a7c59 });
+      const pantsMat = new THREE.MeshLambertMaterial({ color: 0x3a4a8c });
+      // Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.66, 0.36), skinMat);
+      body.position.y = 1.08;
+      group.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), skinMat);
+      head.position.y = 1.64;
+      group.add(head);
+      // Arms
+      for (const sx of [-0.38, 0.38]) {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.52, 0.16), skinMat);
+        arm.position.set(sx, 1.12, 0);
+        arm.userData.leg = true;
+        group.add(arm);
+      }
+      // Legs
+      for (const sx of [-0.14, 0.14]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.48, 0.18), pantsMat);
+        leg.position.set(sx, 0.32, 0);
         leg.userData.leg = true;
         group.add(leg);
       }
+      return {
+        kind: 'zombie',
+        root: group,
+        health: 6,
+        width: 0.6,
+        height: 1.84,
+        speed: 1.05,
+        verticalVelocity: 0,
+        hurtUntil: 0,
+        lastAttackAt: 0,
+        phase: Math.random() * Math.PI * 2,
+      };
     }
+
+    // skeleton
+    const boneMat = new THREE.MeshLambertMaterial({ color: 0xe8e0d0 });
+    const darkMat2 = new THREE.MeshLambertMaterial({ color: 0x3a3834 });
+    // Body (ribcage)
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.28), boneMat);
+    body.position.y = 1.14;
+    group.add(body);
+    // Head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.38), boneMat);
+    head.position.y = 1.66;
+    group.add(head);
+    // Arms
+    for (const sx of [-0.34, 0.34]) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.48, 0.12), boneMat);
+      arm.position.set(sx, 1.16, 0);
+      arm.userData.leg = true;
+      group.add(arm);
+    }
+    // Legs
+    for (const sx of [-0.12, 0.12]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 0.14), boneMat);
+      leg.position.set(sx, 0.32, 0);
+      leg.userData.leg = true;
+      group.add(leg);
+    }
+    // Bow (on back)
+    const bow = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.06), darkMat2);
+    bow.position.set(-0.28, 1.2, 0.22);
+    bow.rotation.z = 0.25;
+    group.add(bow);
     return {
-      kind: 'cave_spider',
+      kind: 'skeleton',
       root: group,
-      health: 3,
-      width: 0.52,
-      height: 0.68,
-      speed: 1.4,
+      health: 4,
+      width: 0.54,
+      height: 1.84,
+      speed: 1.25,
       verticalVelocity: 0,
       hurtUntil: 0,
       lastAttackAt: 0,

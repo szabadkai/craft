@@ -100,9 +100,11 @@ const hostile: HostileSystem = new HostileSystem(
   scene,
   () => seed,
   getBlock,
-  (position, _kind) => {
-    itemPickups.spawn('raw_meat', 1, position);
+  (position, kind) => {
+    const count = kind === 'zombie' ? 1 + Math.floor(Math.random() * 2) : 1;
+    itemPickups.spawn('raw_meat', count, position);
   },
+  () => dayNight.timeOfDay,
 );
 hostile.setPlayerDamageCallback((amount) => health.damage(amount));
 const wildlife: WildlifeSystem = new WildlifeSystem(
@@ -120,7 +122,7 @@ let frame = 0;
 let worldStarted = false;
 let worldReady = false;
 
-const farTerrain = new FarTerrainSystem(scene);
+const farTerrain = new FarTerrainSystem(scene, waterMaterial);
 const blockRaycaster = new BlockRaycaster(camera, getBlock);
 
 const player = {
