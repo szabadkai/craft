@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { blockColor } from '../blocks';
+import { tileForBlockFace, tileRect } from '../atlas';
 import { InventorySystem } from '../inventory/inventorySystem';
 import { Item } from '../inventory/items';
 import { PlayerState } from '../player/playerController';
@@ -16,13 +16,10 @@ type UseBlockResult = 'handled' | 'pass';
 
 export class BlockInteractionSystem {
   private readonly highlight: THREE.Mesh;
+  private readonly atlasTexture: THREE.CanvasTexture;
   private readonly placePreview: THREE.Mesh;
-  private readonly placePreviewMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.28,
-    depthWrite: false,
-  });
+  private readonly placePreviewMaterial: THREE.MeshLambertMaterial;
+  private previewBlock: Block | null = null;
   private readonly crackCanvas = document.createElement('canvas');
   private readonly crackTexture: THREE.CanvasTexture;
   private readonly crackOverlay: THREE.Mesh;
@@ -47,7 +44,16 @@ export class BlockInteractionSystem {
     private readonly triggerSwing: (kind: 'mine' | 'place') => void,
     private readonly spawnItemDrop: (item: Item | null, count: number, position: THREE.Vector3) => void,
     private readonly onBlockBroken: (wx: number, y: number, wz: number, block: Block) => void,
+    atlasTexture: THREE.CanvasTexture,
   ) {
+    this.atlasTexture = atlasTexture;
+    this.placePreviewMaterial = new THREE.MeshLambertMaterial({
+      map: atlasTexture,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
     const highlightMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       wireframe: true,
@@ -58,7 +64,10 @@ export class BlockInteractionSystem {
     this.highlight.visible = false;
     scene.add(this.highlight);
 
-    this.placePreview = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.placePreviewMaterial);
+    this.placePreview = new THREE.Mesh(
+      atlasBoxGeometry(Block.Stone),
+      this.placePreviewMaterial,
+    );
     this.placePreview.visible = false;
     scene.add(this.placePreview);
 
@@ -206,8 +215,11 @@ export class BlockInteractionSystem {
     if (this.getBlock(place.x, place.y, place.z) !== Block.Air) return;
     if (this.wouldIntersectPlayer(place)) return;
 
-    const [r, g, b] = blockColor(block);
-    this.placePreviewMaterial.color.setRGB(r, g, b);
+    if (this.previewBlock !== block) {
+      this.previewBlock = block;
+      this.placePreview.geometry.dispose();
+      this.placePreview.geometry = atlasBoxGeometry(block);
+    }
     this.placePreview.position.set(place.x + 0.5, place.y + 0.5, place.z + 0.5);
     this.placePreview.visible = true;
   }
@@ -360,4 +372,30 @@ export class BlockInteractionSystem {
     const n = Math.sin(stage * 71.17 + index * 23.41) * 43758.5453;
     return n - Math.floor(n);
   }
+}
+
+const FACE_NORMALS: [number, number, number][] = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+];
+
+function atlasBoxGeometry(block: Block): THREE.BoxGeometry {
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const uvs = geo.attributes.uv.array as Float32Array;
+  for (let face = 0; face < 6; face++) {
+    const tile = tileForBlockFace(block, FACE_NORMALS[face]);
+    const [minU, minV, w, h] = tileRect(tile);
+    const base = face * 8;
+    for (let v = 0; v < 4; v++) {
+      const i = base + v * 2;
+      uvs[i] = minU + uvs[i] * w;
+      uvs[i + 1] = minV + uvs[i + 1] * h;
+    }
+  }
+  geo.attributes.uv.needsUpdate = true;
+  return geo;
 }

@@ -1,9 +1,11 @@
 import './style.css';
 import * as THREE from 'three';
+import { ChestSystem } from './inventory/chestSystem';
 import { FurnaceSystem } from './inventory/furnaceSystem';
 import { InventorySystem } from './inventory/inventorySystem';
 import { ConsoleCommand, ConsoleSystem, defaultConsoleCommands } from './ui/console';
 import { PlayerController } from './player/playerController';
+import { createHealth } from './player/health';
 import {
   BASE_MOUSE_RADIANS_PER_PIXEL,
   clampMouseSensitivity,
@@ -35,7 +37,7 @@ import { BlockInteractionSystem } from './world/blockInteractionSystem';
 import { BlockRaycaster } from './world/blockRaycaster';
 import { ChunkWorldSystem } from './world/chunkWorldSystem';
 import { ItemPickupSystem } from './world/itemPickups';
-import { itemDefs, Item } from './inventory/items';
+import { itemDefs } from './inventory/items';
 import { randomSeedText, seedFromString } from './world/seed';
 import { WildlifeSystem } from './world/wildlife';
 import { createHud } from './ui/hud';
@@ -140,6 +142,9 @@ const {
   furnaceBurnFillEl,
   furnaceProgressFillEl,
   furnaceStatusEl,
+  chestOverlayEl,
+  chestGridEl,
+  chestInventoryEl,
   startScreenEl,
   loadingScreenEl,
   loadingStatusEl,
@@ -152,6 +157,7 @@ const {
   sensitivityInputEl,
   sensitivityValueEl,
   waterOverlayEl,
+  heartsEl,
 } = hud;
 sensitivityInputEl.value = String(mouseSensitivity);
 const { renderDistanceInputEl, renderDistanceValueEl } = hud;
@@ -180,11 +186,21 @@ const inventorySystem = new InventorySystem(
   },
   {
     saveInventory: () => saveInventory(),
-    saveHotbar: () => saveHotbar(),
+    saveHotbar: () => saveInventory(),
     rebuildHeldItem: () => rebuildHeldItem(),
   },
 );
 const itemPickups = new ItemPickupSystem(scene, (item, amount) => inventorySystem.addItem(item, amount));
+const chestSystem = new ChestSystem(
+  inventorySystem,
+  { chestOverlayEl, chestGridEl, chestInventoryEl },
+  {
+    save: () => worldStore.saveChests(chestSystem.snapshot()).catch(console.error),
+    spawnDrop: (slot, pos) =>
+      itemPickups.spawn(slot.item, slot.count, new THREE.Vector3(pos.x + 0.5, pos.y + 0.65, pos.z + 0.5)),
+    getBlock,
+  },
+);
 const furnaceSystem = new FurnaceSystem(
   inventorySystem,
   {
@@ -199,9 +215,7 @@ const furnaceSystem = new FurnaceSystem(
   },
   {
     save: () => saveFurnaces(),
-    spawnDrop: (slot, position) => {
-      itemPickups.spawn(slot.item, slot.count, new THREE.Vector3(position.x + 0.5, position.y + 0.75, position.z + 0.5));
-    },
+    spawnDrop: (s, p) => itemPickups.spawn(s.item, s.count, new THREE.Vector3(p.x + 0.5, p.y + 0.75, p.z + 0.5)),
     getBlock,
   },
 );
@@ -216,17 +230,16 @@ const interactionSystem = new BlockInteractionSystem(
   (item, count, position) => itemPickups.spawn(item, count, position),
   (wx, y, wz, block) => {
     if (block === Block.Furnace) furnaceSystem.removeAt({ x: wx, y, z: wz });
+    if (block === Block.Chest) chestSystem.removeAt({ x: wx, y, z: wz });
   },
+  terrainAtlas,
 );
 
-function resolveItem(name: string): Item | null {
-  const lower = name.toLowerCase();
-  return itemDefs.find((d) => d.id === lower)?.id ?? itemDefs.find((d) => d.id.includes(lower))?.id ?? null;
-}
-
-const consoleCommands: ConsoleCommand[] = defaultConsoleCommands(
-  (item, count) => inventorySystem.addItem(resolveItem(item)!, count),
-);
+const consoleCommands: ConsoleCommand[] = defaultConsoleCommands((item, count) => {
+  const lower = item.toLowerCase();
+  return inventorySystem.addItem(
+    (itemDefs.find((d) => d.id === lower)?.id ?? itemDefs.find((d) => d.id.includes(lower))?.id)!, count);
+});
 
 const consoleSystem = new ConsoleSystem(consoleCommands);
 inventorySystem.init();
@@ -265,6 +278,7 @@ function startWorld(seedText: string): void {
   chunkWorld.resetStreaming();
   interactionSystem.stopMining();
   furnaceSystem.close();
+  chestSystem.close();
   itemPickups.clear();
   void loadFurnaces();
 
@@ -322,14 +336,11 @@ async function loadHotbar(): Promise<void> {
 
 async function loadFurnaces(): Promise<void> {
   furnaceSystem.load(await worldStore.loadFurnaces());
+  chestSystem.load(await worldStore.loadChests());
 }
 
 async function saveInventory(): Promise<void> {
-  await worldStore.saveInventory(inventorySystem.snapshotInventory());
-}
-
-async function saveHotbar(): Promise<void> {
-  await worldStore.saveHotbar(inventorySystem.snapshotHotbar());
+  await Promise.all([worldStore.saveInventory(inventorySystem.snapshotInventory()), worldStore.saveHotbar(inventorySystem.snapshotHotbar())]);
 }
 
 async function saveFurnaces(): Promise<void> {
@@ -357,6 +368,15 @@ function setBlock(wx: number, y: number, wz: number, block: Block): void {
 function fadeChunks(now: number): void {
   chunkWorld.fadeChunks(now);
 }
+
+const health = createHealth(
+  () => terrainHeight(Math.floor(player.position.x), Math.floor(player.position.z), seed) + 2,
+  (spawnY) => {
+    player.position.set(8, spawnY, 8);
+    player.velocity.set(0, 0, 0);
+  },
+);
+health.mount(heartsEl);
 
 let last = performance.now();
 let submergeFactor = 0;
@@ -487,9 +507,11 @@ function tick(now: number): void {
   updateLoadingState();
   if (worldReady) {
     playerController.update(dt);
+    health.reconcile(player.onGround, player.position.y, now);
     updateCaveFactor(dt);
     applyUnderwaterEffects(dt);
     itemPickups.update(dt, now, player.position);
+    chestSystem.tick();
     furnaceSystem.tick(dt);
   }
   sky.position.copy(camera.position);
@@ -536,10 +558,8 @@ document.addEventListener('keydown', (event) => {
   if (!worldStarted && event.code !== 'Tab') return;
   if (event.code === 'KeyE') {
     event.preventDefault();
-    if (furnaceSystem.isOpen) {
-      furnaceSystem.close();
-      return;
-    }
+    if (furnaceSystem.isOpen) { furnaceSystem.close(); return; }
+    if (chestSystem.isOpen) { chestSystem.close(); return; }
     const inventoryOpen = inventorySystem.toggleOpen();
     interactionSystem.stopMining();
     if (inventoryOpen && document.pointerLockElement === renderer.domElement)
@@ -547,18 +567,10 @@ document.addEventListener('keydown', (event) => {
     return;
   }
   if (event.code === 'Escape') {
-    if (consoleSystem.isOpen) {
-      consoleSystem.toggle();
-      return;
-    }
-    if (furnaceSystem.isOpen) {
-      furnaceSystem.close();
-      return;
-    }
-    if (inventorySystem.isOpen) {
-      inventorySystem.setOpen(false);
-      return;
-    }
+    if (consoleSystem.isOpen) { consoleSystem.toggle(); return; }
+    if (furnaceSystem.isOpen) { furnaceSystem.close(); return; }
+    if (chestSystem.isOpen) { chestSystem.close(); return; }
+    if (inventorySystem.isOpen) { inventorySystem.setOpen(false); return; }
   }
   if (furnaceSystem.isOpen && event.code !== 'Tab') return;
   keys.add(event.code);
@@ -591,7 +603,7 @@ document.addEventListener('mousemove', (event) => {
 });
 
 document.addEventListener('mousedown', (event) => {
-  if (!worldReady || !mouse.locked || inventorySystem.isOpen || furnaceSystem.isOpen) return;
+  if (!worldReady || !mouse.locked || inventorySystem.isOpen || furnaceSystem.isOpen || chestSystem.isOpen) return;
   const hit = blockRaycaster.raycast();
   if (event.button === 0) {
     const animalHit = wildlife.raycast(camera);
@@ -602,12 +614,13 @@ document.addEventListener('mousedown', (event) => {
       return;
     }
     if (hit) interactionSystem.startMining(hit);
-  } else if (event.button === 2) {
-    if (!hit) return;
-    if (getBlock(hit.block.x, hit.block.y, hit.block.z) === Block.Furnace) {
+  } else if (event.button === 2 && hit) {
+    const b = getBlock(hit.block.x, hit.block.y, hit.block.z);
+    if (b === Block.Furnace || b === Block.Chest) {
       inventorySystem.setOpen(false);
       interactionSystem.stopMining();
-      furnaceSystem.openAt({ x: hit.block.x, y: hit.block.y, z: hit.block.z });
+      const p = { x: hit.block.x, y: hit.block.y, z: hit.block.z };
+      (b === Block.Furnace ? furnaceSystem : chestSystem).openAt(p);
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
       return;
     }
@@ -687,6 +700,7 @@ async function clearSavedWorld(): Promise<void> {
   interactionSystem.stopMining();
   inventorySystem.resetInventory();
   furnaceSystem.load(null);
+  chestSystem.load(null);
   worldReady = false;
   if (worldStarted) {
     startWorld(normalizedSeedText);

@@ -311,6 +311,33 @@ canvas {
   height: 2px;
 }
 
+.hearts {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: flex;
+  gap: 2px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hearts.damage-flash .heart {
+  animation: heart-flash 0.3s ease-out;
+}
+
+.heart {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  background-size: 40px 20px;
+  image-rendering: pixelated;
+}
+
+@keyframes heart-flash {
+  0% { filter: brightness(2.5) saturate(0.2); }
+  100% { filter: brightness(1) saturate(1); }
+}
+
 .panel {
   position: absolute;
   left: 16px;
@@ -810,6 +837,43 @@ canvas {
   grid-template-columns: repeat(9, 34px);
   gap: 5px;
   margin-top: 8px;
+}
+
+.chest-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 120;
+}
+
+.chest-overlay.hidden {
+  display: none;
+}
+
+.chest-window {
+  background: rgba(35, 38, 41, 0.96);
+  border: 2px solid rgba(160, 160, 160, 0.45);
+  border-radius: 6px;
+  padding: 16px;
+  min-width: 380px;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.45);
+}
+
+.chest-grid,
+.chest-inventory {
+  display: grid;
+  grid-template-columns: repeat(9, 34px);
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.chest-inventory {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 @media (max-width: 520px) {

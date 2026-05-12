@@ -75,16 +75,33 @@ function valueNoise3D(x: number, y: number, z: number, scale: number, seed: numb
 }
 
 function isCaveBlock(wx: number, y: number, wz: number, h: number, seed: number): boolean {
+  // caves start below the dirt layer and stop above bedrock
   if (y >= h - 4 || y < 5) return false;
-  const main = valueNoise3D(wx, y * 0.75, wz, 55, seed + 401);
-  const tunnel = valueNoise3D(wx + 200, y * 0.85, wz - 200, 24, seed + 411);
-  const detail = valueNoise3D(wx - 150, y + 70, wz + 150, 12, seed + 421);
-  const depthFactor = Math.sin((y / WORLD_HEIGHT) * Math.PI) * 1.1;
-  return (
-    main > 0.64 - depthFactor * 0.05 ||
-    (tunnel > 0.56 && main > 0.36) ||
-    (detail > 0.75 && y > 12 && y < 68)
-  );
+
+  // wide caverns — large open spaces, more common at mid-depths
+  const cavern = valueNoise3D(wx, y * 0.7, wz, 64, seed + 401);
+  const depthFactor = Math.sin((y / WORLD_HEIGHT) * Math.PI) * 1.05;
+  if (cavern > 0.67 - depthFactor * 0.07) return true;
+
+  // worm tunnels — narrow, connected paths using crossed noise
+  const wx1 = valueNoise3D(wx + 300, y * 1.1, wz - 300, 18, seed + 411);
+  const wy1 = valueNoise3D(wx - 300, y * 1.1, wz + 300, 18, seed + 413);
+  const worm = Math.min(wx1, wy1);
+  if (worm > 0.51 && worm < 0.58) return true;
+
+  // surface entrances — caves that reach upward near the surface
+  if (y >= h - 12 && y < h - 4) {
+    const entrance = valueNoise3D(wx, y * 1.5, wz, 14, seed + 431);
+    if (entrance > 0.6 && cavern > 0.42) return true;
+  }
+
+  // occasional large chambers
+  if (y > 18 && y < 62) {
+    const chamber = valueNoise3D(wx + 500, y * 0.5 - 300, wz + 500, 72, seed + 441);
+    if (chamber > 0.74) return true;
+  }
+
+  return false;
 }
 
 export function generatedBlockAt(x: number, y: number, z: number, seed: number): Block {

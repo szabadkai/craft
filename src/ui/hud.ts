@@ -9,6 +9,7 @@ export type HudElements = {
   inventoryOverlayEl: HTMLDivElement;
   inventoryTabsEl: HTMLDivElement;
   inventoryGridLargeEl: HTMLDivElement;
+  heartsEl: HTMLElement;
   furnaceOverlayEl: HTMLDivElement;
   furnaceInputEl: HTMLButtonElement;
   furnaceFuelEl: HTMLButtonElement;
@@ -17,6 +18,9 @@ export type HudElements = {
   furnaceBurnFillEl: HTMLSpanElement;
   furnaceProgressFillEl: HTMLSpanElement;
   furnaceStatusEl: HTMLSpanElement;
+  chestOverlayEl: HTMLDivElement;
+  chestGridEl: HTMLDivElement;
+  chestInventoryEl: HTMLDivElement;
   startScreenEl: HTMLDivElement;
   loadingScreenEl: HTMLDivElement;
   loadingStatusEl: HTMLSpanElement;
@@ -105,6 +109,7 @@ export function createHud(
       </div>
     </div>
     <div class="crosshair"></div>
+    <div class="hearts"></div>
     <div class="panel">
       <b>Craft</b>
       <span>Click to play. E inventory. F3 diagnostics.</span>
@@ -147,6 +152,16 @@ export function createHud(
       </div>
     </div>
     <div class="water-overlay"></div>
+    <div class="chest-overlay hidden">
+      <div class="chest-window">
+        <div class="inventory-head">
+          <b>Chest</b>
+          <span>Click to transfer items.</span>
+        </div>
+        <div class="chest-grid"></div>
+        <div class="chest-inventory"></div>
+      </div>
+    </div>
   `;
   document.body.appendChild(root);
   const seedInputEl = root.querySelector<HTMLInputElement>('#seed-input')!;
@@ -164,6 +179,7 @@ export function createHud(
     inventoryOverlayEl: root.querySelector<HTMLDivElement>('.inventory-overlay')!,
     inventoryTabsEl: root.querySelector<HTMLDivElement>('.inventory-tabs')!,
     inventoryGridLargeEl: root.querySelector<HTMLDivElement>('.inventory-grid-large')!,
+    heartsEl: root.querySelector<HTMLElement>('.hearts')!,
     furnaceOverlayEl: root.querySelector<HTMLDivElement>('.furnace-overlay')!,
     furnaceInputEl: root.querySelector<HTMLButtonElement>('[data-furnace-slot="input"]')!,
     furnaceFuelEl: root.querySelector<HTMLButtonElement>('[data-furnace-slot="fuel"]')!,
@@ -172,6 +188,9 @@ export function createHud(
     furnaceBurnFillEl: root.querySelector<HTMLSpanElement>('.furnace-meter.burn span')!,
     furnaceProgressFillEl: root.querySelector<HTMLSpanElement>('.furnace-meter.progress span')!,
     furnaceStatusEl: root.querySelector<HTMLSpanElement>('#furnace-status')!,
+    chestOverlayEl: root.querySelector<HTMLDivElement>('.chest-overlay')!,
+    chestGridEl: root.querySelector<HTMLDivElement>('.chest-grid')!,
+    chestInventoryEl: root.querySelector<HTMLDivElement>('.chest-inventory')!,
     startScreenEl: root.querySelector<HTMLDivElement>('.start-screen')!,
     loadingScreenEl: root.querySelector<HTMLDivElement>('.loading-screen')!,
     loadingStatusEl: root.querySelector<HTMLSpanElement>('#loading-status')!,

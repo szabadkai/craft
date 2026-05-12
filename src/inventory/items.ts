@@ -34,7 +34,8 @@ export type Item =
   | 'iron_pickaxe'
   | 'torch'
   | 'crafting_table'
-  | 'furnace';
+  | 'furnace'
+  | 'chest';
 
 export type Recipe = {
   name: string;
@@ -95,6 +96,7 @@ export const defaultInventoryCounts: Record<Item, number> = {
   torch: 0,
   crafting_table: 0,
   furnace: 0,
+  chest: 0,
 };
 
 export const recipes: Recipe[] = [
@@ -108,6 +110,7 @@ export const recipes: Recipe[] = [
   { name: 'Furnace', inputs: { cobblestone: 8 }, outputs: { furnace: 1 } },
   { name: 'Bricks', inputs: { clay: 2 }, outputs: { brick: 2 } },
   { name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 2 } },
+  { name: 'Chest', inputs: { planks: 8 }, outputs: { chest: 1 } },
 ];
 
 export const itemDefs: ItemDef[] = [
@@ -119,6 +122,7 @@ export const itemDefs: ItemDef[] = [
   { id: 'planks', label: 'Planks', category: 'Blocks', block: Block.Planks },
   { id: 'crafting_table', label: 'Table', category: 'Blocks', block: Block.CraftingTable },
   { id: 'furnace', label: 'Furnace', category: 'Blocks', block: Block.Furnace },
+  { id: 'chest', label: 'Chest', category: 'Blocks', block: Block.Chest },
   { id: 'cobblestone', label: 'Cobble', category: 'Blocks', block: Block.Cobblestone },
   { id: 'mossy_cobble', label: 'Mossy', category: 'Blocks', block: Block.MossyCobblestone },
   { id: 'brick', label: 'Brick', category: 'Blocks', block: Block.Brick },
@@ -219,6 +223,8 @@ export function blockToItem(block: Block): Item | null {
       return 'crafting_table';
     case Block.Furnace:
       return 'furnace';
+    case Block.Chest:
+      return 'chest';
     case Block.Torch:
       return 'torch';
     default:
@@ -288,6 +294,8 @@ export function itemSwatch(item: Item): string {
       return 'linear-gradient(135deg, #4d8f35 0 45%, #d63b2e 46% 70%, #e7c52a 71%)';
     case 'snow':
       return '#e8f1f4';
+    case 'chest':
+      return 'linear-gradient(135deg, #8b5e3c 0 44%, #d4a05a 45% 79%, transparent 80%)';
     default:
       return '#90999c';
   }

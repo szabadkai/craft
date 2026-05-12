@@ -63,7 +63,7 @@ Tasks:
   - chunk streaming/world lifecycle. Done in `src/world/chunkWorldSystem.ts`.
 - Add a debug/settings panel. Done for start-screen world save tools.
 - Add a clear-world button for IndexedDB saves. Done for saved chunks, inventory, and legacy hotbar state.
-- Add render distance controls.
+- [x] Add render distance controls.
 - Add basic performance counters:
   - visible chunks
   - queued chunks
@@ -113,11 +113,11 @@ Tasks:
 
 - Add rotateable/variant blocks where useful.
 - Add better placement validation.
-- Add block preview using actual block material/texture.
-- Add glass placement.
+- [x] Add block preview using actual block material/texture.
+- [x] Add glass placement.
 - Add doors or simple slabs/stairs.
 - Add chest block and small container UI.
-- Add creative/debug item grant controls for testing.
+- [x] Add creative/debug item grant controls for testing.
 
 Exit criteria:
 
@@ -134,8 +134,8 @@ Tasks:
 - [x] Add furnace/smelting UI.
 - [x] Smelt iron/copper/gold ore.
 - [x] Add iron pickaxe.
-- Add health.
-- Add fall damage.
+- [x] Add health.
+- [x] Add fall damage.
 - Add basic food items.
 - Add simple hostile or environmental threat later.
 - Add day/night cycle only after lighting strategy is clear.
@@ -154,7 +154,7 @@ Tasks:
 
 - Improve water rendering with a separated transparent/reflection pass if the current shader-only water becomes limiting.
 - Add lakes and shoreline improvements.
-- Add caves using 3D noise.
+- [x] Add caves using 3D noise.
 - Add richer tree variants.
 - Add more surface features:
   - rocks
@@ -194,9 +194,13 @@ Exit criteria:
 
 ## Near-Term Recommended Order
 
-1. Add render distance controls to the debug/settings UI.
-2. Add caves.
-3. Add health/fall damage.
+1. Add chest block and container UI.
+2. Add basic food items and eating.
+3. Add rotateable/variant blocks.
+
+## Current Priority
+
+M4 survival (health, fall damage) and M5 caves are done. M3 building improvements are next: chest storage is the most requested remaining M3 item, followed by variant blocks and doors/slabs. After that, basic food (M4) to use health healing.
 
 ## Known Risks
 
@@ -205,7 +209,3 @@ Exit criteria:
 - Block enum numeric IDs are persistence-sensitive.
 - Greedy meshing plus transparent blocks needs careful material separation.
 - Hotbar migration from older item-type shortcuts is best-effort; current hotbar state lives in inventory slots.
-
-## Current Priority
-
-Milestone 2 is functionally complete for the planned first pass, furnace/smelting now supports per-block smelting queues and iron-tier progression, and the next best extension task is render distance controls in the debug/settings UI.

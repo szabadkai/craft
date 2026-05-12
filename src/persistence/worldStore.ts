@@ -1,9 +1,10 @@
+import { ChestSnapshot } from '../inventory/chestSystem';
 import { FurnaceSnapshot } from '../inventory/furnaceSystem';
 import { Item } from '../inventory/items';
 import type { InventorySnapshot } from '../inventory/inventorySystem';
 import { ChunkKey } from '../types';
 
-const CHUNK_STORAGE_VERSION = 2;
+const CHUNK_STORAGE_VERSION = 3;
 
 export class WorldStore {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -62,6 +63,15 @@ export class WorldStore {
     await this.saveState(this.furnaceStateKey(), furnaces);
   }
 
+  async loadChests(): Promise<Record<string, ChestSnapshot> | null> {
+    const value = await this.loadState<Record<string, ChestSnapshot>>(this.chestStateKey());
+    return value ?? null;
+  }
+
+  async saveChests(chests: Record<string, ChestSnapshot>): Promise<void> {
+    await this.saveState(this.chestStateKey(), chests);
+  }
+
   async clearCurrentWorld(): Promise<void> {
     const db = await this.open();
     await Promise.all([
@@ -69,6 +79,7 @@ export class WorldStore {
       this.deleteState(db, 'inventory'),
       this.deleteState(db, 'hotbar'),
       this.deleteState(db, this.furnaceStateKey()),
+      this.deleteState(db, this.chestStateKey()),
     ]);
   }
 
@@ -82,6 +93,10 @@ export class WorldStore {
 
   private furnaceStateKey(): string {
     return `furnaces:${this.getSeed()}`;
+  }
+
+  private chestStateKey(): string {
+    return `chests:${this.getSeed()}`;
   }
 
   private async loadState<T>(key: string): Promise<T | undefined> {

@@ -78,7 +78,10 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Mining drop rules and pickaxe durability.
 - Iron pickaxe progression after furnace smelting, with diamond mining gated behind iron tier.
 - Recipe-card crafting UI with output and requirement visibility.
-- Held item/tool visuals and mining swing animation.
+- Health system: 20 HP, pixel-art hearts (top-left HUD), fall damage (>3 blocks), death, and respawn at surface.
+- Caves with 3D-noise caverns, worm tunnels, surface entrances, and large chambers.
+- Place preview now uses the terrain atlas texture with per-face tile mapping so the ghost block matches the placed block's actual appearance.
+- Console command system (`` ` `` key) with `give <item> [count]`, `items`, `help`, `clear`, tab completion.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Far terrain heightfield ring merged into a single mesh to keep draw calls low.
 - F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, memory estimates, and GPU timing when supported.
@@ -98,7 +101,10 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
   - `color`: lighting and variation.
 - Transparent plant blocks are decorations and should not be treated as solid raycast targets.
 - Wildlife movement uses loaded chunk blocks for ground and obstacle collision; avoid falling back to generated height only for gameplay collision.
-- Greedy meshing currently merges by block, atlas tile, and face orientation.
+- Health state (`src/player/health.ts`) tracks HP, fall distance, death, and respawn. `reconcile()` handles per-frame fall damage and hearts DOM display. Hearts are 8×8 canvas-drawn pixel sprites (full red with white border, half, empty outline) rendered at 2× nearest-neighbour scale.
+- Caves are generated in `src/terrain.ts` via `isCaveBlock`: 3D value noise caverns (scale 64), worm tunnels (crossed noise, narrow 0.51–0.58 band), surface entrances (scale 14, near-surface), and large chambers (scale 72).
+- Place preview rebuilds the BoxGeometry UVs per selected block via `atlasBoxGeometry`, mapping each face to the correct atlas tile using `tileForBlockFace`.
+- Console commands are defined in `src/ui/console.ts`. The `give` command resolves item IDs via `itemDefs` fuzzy matching.
 - Existing IndexedDB saves can make old chunks appear near spawn after generator changes.
 - ESLint enforces a 650 effective-line cap for TypeScript files. Run `npm run lint` regularly during refactors and split modules along durable system boundaries before files approach the cap.
 - Refactors should prefer hierarchical ownership such as `rendering/*`, `world/*`, `inventory/*`, or `player/*`; avoid scattering small lateral helper files without a clear parent system.
@@ -111,7 +117,9 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Good Next Tasks
 
-- Add render distance controls to the debug/settings UI.
-- Add health and fall damage to deepen the post-smelting survival loop.
+- Add rotateable/variant blocks (log orientation, etc.).
+- Add doors or simple slabs/stairs.
+- Add chest block and small container UI.
+- Add basic food items and eating.
 - Separate transparent render paths for glass/water if richer translucency becomes necessary.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.

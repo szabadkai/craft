@@ -284,6 +284,7 @@ export function createTerrainAtlas(): THREE.CanvasTexture {
   drawTile(context, Tile.Mushroom, '#d7c3a2', '#b33b2d', 'mushroom');
   drawTile(context, Tile.BerryBush, '#3e7d34', '#c22d39', 'berries');
   drawTile(context, Tile.Water, '#2f76b8', '#b7d9ef', 'water');
+  drawTile(context, Tile.Chest, '#8b5e3c', '#d4a05a', 'chest');
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
@@ -511,6 +512,14 @@ function drawTile(
     for (let i = 0; i < 14; i++) {
       context.fillRect(x + Math.floor(rand(i + 80) * 16), y + Math.floor(rand(i + 120) * 16), 1, 1);
     }
+  } else if (pattern === 'chest') {
+    context.globalAlpha = 0.65;
+    context.fillStyle = accent;
+    context.fillRect(x + 2, y + 10, 12, 1);
+    context.fillRect(x + 7, y, 2, 1);
+    context.fillStyle = '#6b4226';
+    context.fillRect(x + 7, y + 1, 2, 1);
+    context.globalAlpha = 1;
   }
   context.globalAlpha = 1;
 }

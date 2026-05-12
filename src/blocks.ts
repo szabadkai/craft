@@ -41,6 +41,7 @@ export const selectableBlocks = [
   Block.Cactus,
   Block.Pumpkin,
   Block.CraftingTable,
+  Block.Chest,
 ] as const;
 
 export function isSolid(block: Block): boolean {
