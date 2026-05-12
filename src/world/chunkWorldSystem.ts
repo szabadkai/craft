@@ -171,7 +171,11 @@ export class ChunkWorldSystem {
         chunk.blocks[blockIndex(mod(e.wx, CHUNK_SIZE), e.y, mod(e.wz, CHUNK_SIZE))] = e.block;
       }
       this.scheduleChunkSave(key);
-      // Force a single remesh — capture the full state with both blocks
+      // If already dirty (e.g., block was just set to Air), a stale remesh is
+      // in-flight. Clear dirty so a fresh remesh with the current blocks is queued.
+      if (this.dirty.has(key)) {
+        this.dirty.delete(key);
+      }
       if (!this.dirty.has(key)) {
         this.dirty.add(key);
         const copy = new Uint16Array(chunk.blocks);

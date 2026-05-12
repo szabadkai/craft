@@ -13,6 +13,7 @@ import {
   miningDrop,
   MiningTool,
 } from './miningRules';
+import { WaterFlowSystem } from './waterFlow';
 
 type UseBlockResult = 'handled' | 'pass';
 
@@ -256,6 +257,12 @@ export class BlockInteractionSystem {
       } else {
         this.onBlockBroken(this.mining.block.x, this.mining.block.y, this.mining.block.z, block);
         this.setBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z, Block.Air);
+        // Water flow: fill the new air space and its surroundings if adjacent to water
+        this.triggerWaterFlow(
+          this.mining.block.x,
+          this.mining.block.y,
+          this.mining.block.z,
+        );
       }
       // Leaf decay: when a log is broken, nearby leaves decay with drops
       if (
@@ -494,6 +501,16 @@ export class BlockInteractionSystem {
       }
     }
     if (entries.length > 0) this.setBlocks(entries);
+  }
+
+  private triggerWaterFlow(wx: number, wy: number, wz: number): void {
+    const fills = WaterFlowSystem.flow({ x: wx, y: wy, z: wz }, this.getBlock);
+    if (fills.length === 0) return;
+    const entries: { wx: number; y: number; wz: number; block: Block }[] = [];
+    for (const f of fills) {
+      entries.push({ wx: f.x, y: f.y, wz: f.z, block: Block.Water });
+    }
+    this.setBlocks(entries);
   }
 }
 
