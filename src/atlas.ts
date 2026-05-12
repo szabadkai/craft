@@ -2,7 +2,7 @@ import { Block } from './types';
 
 export const ATLAS_TILE_SIZE = 16;
 export const ATLAS_COLUMNS = 4;
-export const ATLAS_ROWS = 9;
+export const ATLAS_ROWS = 10;
 
 export const enum Tile {
   GrassTop = 0,
@@ -42,6 +42,7 @@ export const enum Tile {
   BerryBush = 34,
   Water = 35,
   Chest = 36,
+  DoorOak = 37,
 }
 
 export function tileForBlockFace(block: Block, normal: [number, number, number]): Tile {
@@ -112,6 +113,15 @@ export function tileForBlockFace(block: Block, normal: [number, number, number])
       return Tile.Chest;
     case Block.Furnace:
       return Tile.Furnace;
+    case Block.LogX:
+      // horizontal along X: rings on X faces, bark on Y and Z
+      return normal[0] !== 0 ? Tile.LogTop : Tile.LogSide;
+    case Block.LogZ:
+      // horizontal along Z: rings on Z faces, bark on X and Y
+      return normal[2] !== 0 ? Tile.LogTop : Tile.LogSide;
+    case Block.OakDoor:
+    case Block.OakDoorOpen:
+      return Tile.DoorOak;
     default:
       return Tile.Stone;
   }

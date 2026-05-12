@@ -35,6 +35,9 @@ export type HudElements = {
   renderDistanceInputEl: HTMLInputElement;
   renderDistanceValueEl: HTMLElement;
   waterOverlayEl: HTMLDivElement;
+  damageOverlayEl: HTMLDivElement;
+  eatingBarEl: HTMLDivElement;
+  eatingBarFillEl: HTMLDivElement;
 };
 
 export function createHud(
@@ -152,6 +155,10 @@ export function createHud(
       </div>
     </div>
     <div class="water-overlay"></div>
+    <div class="damage-overlay"></div>
+    <div class="eating-bar hidden">
+      <div class="eating-bar-fill"></div>
+    </div>
     <div class="chest-overlay hidden">
       <div class="chest-window">
         <div class="inventory-head">
@@ -205,5 +212,8 @@ export function createHud(
     renderDistanceInputEl: root.querySelector<HTMLInputElement>('#render-distance-input')!,
     renderDistanceValueEl: root.querySelector<HTMLElement>('#render-distance-value')!,
     waterOverlayEl: root.querySelector<HTMLDivElement>('.water-overlay')!,
+    damageOverlayEl: root.querySelector<HTMLDivElement>('.damage-overlay')!,
+    eatingBarEl: root.querySelector<HTMLDivElement>('.eating-bar')!,
+    eatingBarFillEl: root.querySelector<HTMLDivElement>('.eating-bar-fill')!,
   };
 }

@@ -35,7 +35,11 @@ export type Item =
   | 'torch'
   | 'crafting_table'
   | 'furnace'
-  | 'chest';
+  | 'chest'
+  | 'apple'
+  | 'raw_meat'
+  | 'cooked_meat'
+  | 'oak_door';
 
 export type Recipe = {
   name: string;
@@ -55,11 +59,12 @@ export type HeldItem =
 export type ItemDef = {
   id: Item;
   label: string;
-  category: 'Blocks' | 'Materials' | 'Tools';
+  category: 'Blocks' | 'Materials' | 'Tools' | 'Food';
   block?: Block;
   tool?: 'stick' | 'wood_pickaxe' | 'stone_pickaxe' | 'iron_pickaxe';
   stackLimit?: number;
   durability?: number;
+  foodValue?: number;
 };
 
 export const defaultInventoryCounts: Record<Item, number> = {
@@ -97,6 +102,10 @@ export const defaultInventoryCounts: Record<Item, number> = {
   crafting_table: 0,
   furnace: 0,
   chest: 0,
+  apple: 0,
+  raw_meat: 0,
+  cooked_meat: 0,
+  oak_door: 0,
 };
 
 export const recipes: Recipe[] = [
@@ -111,6 +120,7 @@ export const recipes: Recipe[] = [
   { name: 'Bricks', inputs: { clay: 2 }, outputs: { brick: 2 } },
   { name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 2 } },
   { name: 'Chest', inputs: { planks: 8 }, outputs: { chest: 1 } },
+  { name: 'Oak Door', inputs: { planks: 6 }, outputs: { oak_door: 3 } },
 ];
 
 export const itemDefs: ItemDef[] = [
@@ -166,6 +176,10 @@ export const itemDefs: ItemDef[] = [
   { id: 'copper_ingot', label: 'Copper Ingot', category: 'Materials' },
   { id: 'gold_ingot', label: 'Gold Ingot', category: 'Materials' },
   { id: 'torch', label: 'Torch', category: 'Materials' },
+  { id: 'apple', label: 'Apple', category: 'Food', foodValue: 4, stackLimit: 16 },
+  { id: 'raw_meat', label: 'Raw Meat', category: 'Food', foodValue: 3, stackLimit: 16 },
+  { id: 'cooked_meat', label: 'Cooked Meat', category: 'Food', foodValue: 7, stackLimit: 16 },
+  { id: 'oak_door', label: 'Oak Door', category: 'Blocks', block: Block.OakDoor },
 ];
 
 export function blockToItem(block: Block): Item | null {
@@ -225,8 +239,14 @@ export function blockToItem(block: Block): Item | null {
       return 'furnace';
     case Block.Chest:
       return 'chest';
+    case Block.LogX:
+    case Block.LogZ:
+      return 'wood';
     case Block.Torch:
       return 'torch';
+    case Block.OakDoor:
+    case Block.OakDoorOpen:
+      return 'oak_door';
     default:
       return null;
   }
@@ -257,6 +277,10 @@ export function stackLimitFor(item: Item): number {
 
 export function maxDurabilityFor(item: Item): number | null {
   return itemDefs.find((entry) => entry.id === item)?.durability ?? null;
+}
+
+export function foodValueFor(item: Item): number {
+  return itemDefs.find((entry) => entry.id === item)?.foodValue ?? 0;
 }
 
 export function itemSwatch(item: Item): string {
@@ -296,6 +320,12 @@ export function itemSwatch(item: Item): string {
       return '#e8f1f4';
     case 'chest':
       return 'linear-gradient(135deg, #8b5e3c 0 44%, #d4a05a 45% 79%, transparent 80%)';
+    case 'apple':
+      return '#d63b2e';
+    case 'raw_meat':
+      return '#c46e5a';
+    case 'cooked_meat':
+      return '#8b4a30';
     default:
       return '#90999c';
   }

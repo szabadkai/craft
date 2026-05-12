@@ -5,7 +5,9 @@ import { FurnaceSystem } from './inventory/furnaceSystem';
 import { InventorySystem } from './inventory/inventorySystem';
 import { ConsoleCommand, ConsoleSystem, defaultConsoleCommands } from './ui/console';
 import { PlayerController } from './player/playerController';
+import { DoorSystem } from './world/doorSystem';
 import { createHealth } from './player/health';
+import { EatingSystem } from './player/eating';
 import {
   BASE_MOUSE_RADIANS_PER_PIXEL,
   clampMouseSensitivity,
@@ -29,18 +31,23 @@ import { FarTerrainSystem } from './rendering/farTerrain';
 import { HeldItemView } from './rendering/heldItemView';
 import { createSky, createTerrainAtlas, createTerrainMaterial, createWaterMaterial } from './rendering/terrainMaterials';
 import {
+  applyRenderDistance,
+  updateCaveFactor,
+  applyUnderwaterEffects,
+} from './rendering/atmosphere';
+import {
   Block,
   CHUNK_SIZE,
-  WORLD_HEIGHT,
 } from './types';
 import { BlockInteractionSystem } from './world/blockInteractionSystem';
 import { BlockRaycaster } from './world/blockRaycaster';
 import { ChunkWorldSystem } from './world/chunkWorldSystem';
 import { ItemPickupSystem } from './world/itemPickups';
-import { itemDefs } from './inventory/items';
+import { itemDefs, foodValueFor } from './inventory/items';
 import { randomSeedText, seedFromString } from './world/seed';
 import { WildlifeSystem } from './world/wildlife';
 import { createHud } from './ui/hud';
+import { findDrySpawn } from './game/helpers';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
@@ -49,8 +56,8 @@ const savedSeedText = localStorage.getItem('craft-seed');
 const defaultSeedText = savedSeedText && savedSeedText !== '18441' ? savedSeedText : '4';
 let seed = seedFromString(defaultSeedText);
 
-let airFogNear = getFogNear();
-let airFogFar = getFogFar();
+const airFogNear = getFogNear();
+const airFogFar = getFogFar();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xd8e8f1);
@@ -85,7 +92,15 @@ const chunkMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 1);
 const fadeMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.72);
 const waterMaterial = createWaterMaterial(scene.fog, WATER_LEVEL);
 
-const wildlife: WildlifeSystem = new WildlifeSystem(scene, () => seed, getBlock);
+const wildlife: WildlifeSystem = new WildlifeSystem(
+  scene,
+  () => seed,
+  getBlock,
+  (position, kind) => {
+    const count = kind === 'deer' || kind === 'boar' ? 1 + Math.floor(Math.random() * 2) : 1;
+    itemPickups.spawn('raw_meat', count, position);
+  },
+);
 const worldStore = new WorldStore(() => seed);
 
 let frame = 0;
@@ -145,6 +160,8 @@ const {
   chestOverlayEl,
   chestGridEl,
   chestInventoryEl,
+  eatingBarEl,
+  eatingBarFillEl,
   startScreenEl,
   loadingScreenEl,
   loadingStatusEl,
@@ -157,6 +174,7 @@ const {
   sensitivityInputEl,
   sensitivityValueEl,
   waterOverlayEl,
+  damageOverlayEl,
   heartsEl,
 } = hud;
 sensitivityInputEl.value = String(mouseSensitivity);
@@ -219,6 +237,7 @@ const furnaceSystem = new FurnaceSystem(
     getBlock,
   },
 );
+const doorSystem = new DoorSystem();
 const interactionSystem = new BlockInteractionSystem(
   scene,
   blockRaycaster,
@@ -232,6 +251,8 @@ const interactionSystem = new BlockInteractionSystem(
     if (block === Block.Furnace) furnaceSystem.removeAt({ x: wx, y, z: wz });
     if (block === Block.Chest) chestSystem.removeAt({ x: wx, y, z: wz });
   },
+  doorSystem,
+  (entries) => chunkWorld.setBlocks(entries),
   terrainAtlas,
 );
 
@@ -279,12 +300,13 @@ function startWorld(seedText: string): void {
   interactionSystem.stopMining();
   furnaceSystem.close();
   chestSystem.close();
+  doorSystem.clear();
   itemPickups.clear();
   void loadFurnaces();
 
   const spawnX = 8;
   const spawnZ = 8;
-  const spawn = findDrySpawn(spawnX, spawnZ);
+  const spawn = findDrySpawn(spawnX, spawnZ, seed, player.height);
   player.position.set(spawn.x, spawn.y, spawn.z);
   player.velocity.set(0, 0, 0);
   player.onGround = false;
@@ -295,33 +317,6 @@ function startWorld(seedText: string): void {
   startScreenEl.classList.add('hidden');
   loadingScreenEl.classList.remove('hidden');
   chunkWorld.updateChunkSet(frame);
-}
-
-function findDrySpawn(originX: number, originZ: number): { x: number; y: number; z: number } {
-  let best = { x: originX, z: originZ, h: terrainHeight(originX, originZ, seed) };
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (let radius = 0; radius <= 48; radius += 2) {
-    for (let dz = -radius; dz <= radius; dz += 2) {
-      for (let dx = -radius; dx <= radius; dx += 2) {
-        if (Math.abs(dx) !== radius && Math.abs(dz) !== radius) continue;
-        const x = originX + dx;
-        const z = originZ + dz;
-        const h = terrainHeight(x, z, seed);
-        if (h <= WATER_LEVEL + 1) continue;
-        const score = dx * dx + dz * dz + Math.abs(h - WATER_LEVEL - 5) * 6;
-        if (score < bestScore) {
-          best = { x, z, h };
-          bestScore = score;
-        }
-      }
-    }
-    if (bestScore < Number.POSITIVE_INFINITY) break;
-  }
-  return {
-    x: best.x + 0.5,
-    y: Math.min(WORLD_HEIGHT - player.height - 1, best.h + 1.02),
-    z: best.z + 0.5,
-  };
 }
 
 async function loadInventory(): Promise<void> {
@@ -337,6 +332,7 @@ async function loadHotbar(): Promise<void> {
 async function loadFurnaces(): Promise<void> {
   furnaceSystem.load(await worldStore.loadFurnaces());
   chestSystem.load(await worldStore.loadChests());
+  doorSystem.load(await worldStore.loadDoors());
 }
 
 async function saveInventory(): Promise<void> {
@@ -345,6 +341,7 @@ async function saveInventory(): Promise<void> {
 
 async function saveFurnaces(): Promise<void> {
   await worldStore.saveFurnaces(furnaceSystem.snapshot());
+  await worldStore.saveDoors(doorSystem.snapshot());
 }
 
 function updateLoadingState(): void {
@@ -376,123 +373,19 @@ const health = createHealth(
     player.velocity.set(0, 0, 0);
   },
 );
-health.mount(heartsEl);
+health.mount(heartsEl, damageOverlayEl);
+
+const eatingSystem = new EatingSystem(health, inventorySystem, eatingBarEl, eatingBarFillEl);
 
 let last = performance.now();
 let submergeFactor = 0;
 let caveFactor = 0;
-const airFogColor = new THREE.Color(0xd8e8f1);
-const waterFogColor = new THREE.Color(0x061a30);
-const caveFogColor = new THREE.Color(0x080810);
-const airBgColor = new THREE.Color(0xd8e8f1);
-const waterBgColor = new THREE.Color(0x061a30);
-const caveBgColor = new THREE.Color(0x080810);
 
-function applyRenderDistance(): void {
-  airFogNear = getFogNear();
-  airFogFar = getFogFar();
-  camera.far = getFarRadius() * CHUNK_SIZE;
-  camera.updateProjectionMatrix();
-  if (scene.fog instanceof THREE.Fog && caveFactor < 0.005 && submergeFactor < 0.005) {
-    scene.fog.near = airFogNear;
-    scene.fog.far = airFogFar;
-  }
+function applyRenderDistanceInternal(): void {
+  applyRenderDistance(scene, camera, farTerrain, player, seed, submergeFactor, caveFactor);
   const pcx = Math.floor(player.position.x / CHUNK_SIZE);
   const pcz = Math.floor(player.position.z / CHUNK_SIZE);
   farTerrain.rebuild(pcx, pcz, seed, getFarRadius());
-}
-
-function updateCaveFactor(dt: number): void {
-  if (!worldReady) {
-    caveFactor = Number.NaN;
-    return;
-  }
-  const px = Math.floor(player.position.x);
-  const pz = Math.floor(player.position.z);
-  const eyeY = player.position.y + player.eye;
-  const surfaceH = terrainHeight(px, pz, seed);
-  const depth = surfaceH - eyeY;
-  if (depth < 4) {
-    caveFactor += (0 - caveFactor) * Math.min(1, dt * 4);
-    if (caveFactor < 0.002) caveFactor = 0;
-    return;
-  }
-  let overheadSolid = 0;
-  let overheadChecked = 0;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dz = -1; dz <= 1; dz++) {
-      overheadChecked++;
-      for (let y = Math.floor(eyeY) + 1; y <= Math.min(surfaceH, WORLD_HEIGHT - 1); y++) {
-        if (getBlock(px + dx, y, pz + dz) !== Block.Air) {
-          overheadSolid++;
-          break;
-        }
-      }
-    }
-  }
-  const overheadRatio = overheadChecked > 0 ? overheadSolid / overheadChecked : 0;
-  const target = Math.min(1, (depth - 4) / 20) * Math.min(1, overheadRatio * 2);
-  caveFactor += (target - caveFactor) * Math.min(1, dt * 4);
-  if (caveFactor < 0.002) caveFactor = 0;
-}
-
-function applyUnderwaterEffects(dt: number): void {
-  if (!worldReady) {
-    submergeFactor = 0;
-    return;
-  }
-  const eyeY = player.position.y + player.eye;
-  const eyeInWater =
-    getBlock(Math.floor(player.position.x), Math.floor(eyeY), Math.floor(player.position.z)) ===
-    Block.Water;
-  const headInWater =
-    getBlock(
-      Math.floor(player.position.x),
-      Math.floor(player.position.y + player.height - 0.1),
-      Math.floor(player.position.z),
-    ) === Block.Water;
-  const target = eyeInWater || headInWater ? 1 : 0;
-  submergeFactor += (target - submergeFactor) * Math.min(1, dt * 5);
-  if (submergeFactor < 0.002) submergeFactor = 0;
-
-  const dominant = submergeFactor > caveFactor ? 'water' : 'cave';
-  const dominantFactor = Math.max(submergeFactor, caveFactor);
-
-  if (dominantFactor > 0.005) {
-    if (scene.fog instanceof THREE.Fog) {
-      if (dominant === 'water') {
-        const blended = THREE.MathUtils.lerp(
-          caveFogColor.getHex(),
-          waterFogColor.getHex(),
-          submergeFactor > caveFactor ? 1 : caveFactor / submergeFactor,
-        );
-        scene.fog.color.setHex(blended);
-        scene.fog.color.lerp(airFogColor, 1 - dominantFactor);
-        scene.fog.near = THREE.MathUtils.lerp(airFogNear, 4, submergeFactor);
-        scene.fog.far = THREE.MathUtils.lerp(airFogFar, 16, submergeFactor);
-      } else {
-        scene.fog.color.copy(caveFogColor).lerp(airFogColor, 1 - caveFactor);
-        scene.fog.near = THREE.MathUtils.lerp(airFogNear, 8, caveFactor);
-        scene.fog.far = THREE.MathUtils.lerp(airFogFar, 48, caveFactor);
-      }
-    }
-    if (dominant === 'water') {
-      scene.background = scene.background ?? new THREE.Color();
-      (scene.background as THREE.Color).copy(airBgColor).lerp(waterBgColor, submergeFactor);
-    } else {
-      scene.background = scene.background ?? new THREE.Color();
-      (scene.background as THREE.Color).copy(airBgColor).lerp(caveBgColor, caveFactor);
-    }
-    waterOverlayEl.classList.toggle('submerged', submergeFactor > 0.25);
-  } else {
-    if (scene.fog instanceof THREE.Fog) {
-      scene.fog.color.copy(airFogColor);
-      scene.fog.near = airFogNear;
-      scene.fog.far = airFogFar;
-    }
-    scene.background = new THREE.Color(0xd8e8f1);
-    waterOverlayEl.classList.remove('submerged');
-  }
 }
 
 function tick(now: number): void {
@@ -508,11 +401,14 @@ function tick(now: number): void {
   if (worldReady) {
     playerController.update(dt);
     health.reconcile(player.onGround, player.position.y, now);
-    updateCaveFactor(dt);
-    applyUnderwaterEffects(dt);
+    const cf = updateCaveFactor(dt, worldReady, player, getBlock, seed);
+    if (!isNaN(cf)) caveFactor += (cf - caveFactor) * Math.min(1, dt * 4);
+    if (caveFactor < 0.002) caveFactor = 0;
+    submergeFactor = applyUnderwaterEffects(dt, worldReady, scene, player, getBlock, submergeFactor, caveFactor, waterOverlayEl);
     itemPickups.update(dt, now, player.position);
     chestSystem.tick();
     furnaceSystem.tick(dt);
+    eatingSystem.tick(now);
   }
   sky.position.copy(camera.position);
   updateTerrainMaterialTime(now);
@@ -558,6 +454,7 @@ document.addEventListener('keydown', (event) => {
   if (!worldStarted && event.code !== 'Tab') return;
   if (event.code === 'KeyE') {
     event.preventDefault();
+    eatingSystem.cancel();
     if (furnaceSystem.isOpen) { furnaceSystem.close(); return; }
     if (chestSystem.isOpen) { chestSystem.close(); return; }
     const inventoryOpen = inventorySystem.toggleOpen();
@@ -575,7 +472,10 @@ document.addEventListener('keydown', (event) => {
   if (furnaceSystem.isOpen && event.code !== 'Tab') return;
   keys.add(event.code);
   const slot = Number(event.key) - 1;
-  if (slot >= 0 && slot < inventorySystem.hotbarSize) inventorySystem.selectHotbarSlot(slot);
+  if (slot >= 0 && slot < inventorySystem.hotbarSize) {
+    eatingSystem.cancel();
+    inventorySystem.selectHotbarSlot(slot);
+  }
 });
 
 document.addEventListener('keyup', (event) => keys.delete(event.code));
@@ -614,8 +514,19 @@ document.addEventListener('mousedown', (event) => {
       return;
     }
     if (hit) interactionSystem.startMining(hit);
-  } else if (event.button === 2 && hit) {
+  } else if (event.button === 2) {
+    const slot = inventorySystem.slotAt(inventorySystem.selectedHotbarIndex);
+    if (slot && foodValueFor(slot.item) > 0) {
+      eatingSystem.tryStart();
+      return;
+    }
+    if (!hit) return;
     const b = getBlock(hit.block.x, hit.block.y, hit.block.z);
+    // Door toggle
+    if (b === Block.OakDoor || b === Block.OakDoorOpen) {
+      doorSystem.toggle(hit.block.x, hit.block.y, hit.block.z, getBlock, (entries) => chunkWorld.setBlocks(entries));
+      return;
+    }
     if (b === Block.Furnace || b === Block.Chest) {
       inventorySystem.setOpen(false);
       interactionSystem.stopMining();
@@ -630,6 +541,7 @@ document.addEventListener('mousedown', (event) => {
 
 document.addEventListener('mouseup', (event) => {
   if (event.button === 0) interactionSystem.stopMining();
+  if (event.button === 2) eatingSystem.cancel();
 });
 
 window.addEventListener('blur', () => interactionSystem.stopMining());
@@ -661,7 +573,7 @@ renderDistanceInputEl.addEventListener('input', () => {
   const value = clampDetailRadius(Number(renderDistanceInputEl.value));
   renderDistanceValueEl.textContent = formatRenderDistance(value);
   setDetailRadius(value);
-  applyRenderDistance();
+  applyRenderDistanceInternal();
 });
 
 randomSeedEl.addEventListener('click', () => {
@@ -701,6 +613,7 @@ async function clearSavedWorld(): Promise<void> {
   inventorySystem.resetInventory();
   furnaceSystem.load(null);
   chestSystem.load(null);
+  doorSystem.clear();
   worldReady = false;
   if (worldStarted) {
     startWorld(normalizedSeedText);

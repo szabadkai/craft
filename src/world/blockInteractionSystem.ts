@@ -1,10 +1,12 @@
 import * as THREE from 'three';
+import { isSolid } from '../blocks';
 import { tileForBlockFace, tileRect } from '../atlas';
 import { InventorySystem } from '../inventory/inventorySystem';
 import { Item } from '../inventory/items';
 import { PlayerState } from '../player/playerController';
 import { Block } from '../types';
 import { BlockHit, BlockRaycaster } from './blockRaycaster';
+import { DoorSystem } from './doorSystem';
 import {
   blockHardness,
   damagesTool,
@@ -44,6 +46,8 @@ export class BlockInteractionSystem {
     private readonly triggerSwing: (kind: 'mine' | 'place') => void,
     private readonly spawnItemDrop: (item: Item | null, count: number, position: THREE.Vector3) => void,
     private readonly onBlockBroken: (wx: number, y: number, wz: number, block: Block) => void,
+    private readonly doorSystem: DoorSystem,
+    private readonly setBlocks: (entries: { wx: number; y: number; wz: number; block: Block }[]) => void,
     atlasTexture: THREE.CanvasTexture,
   ) {
     this.atlasTexture = atlasTexture;
@@ -118,8 +122,12 @@ export class BlockInteractionSystem {
   }
 
   use(hit: BlockHit): UseBlockResult {
-    if (hit.block && this.getBlock(hit.block.x, hit.block.y, hit.block.z) === Block.Furnace)
+    const block = this.getBlock(hit.block.x, hit.block.y, hit.block.z);
+    if (block === Block.Furnace) return 'handled';
+    if (block === Block.OakDoor || block === Block.OakDoorOpen) {
+      this.doorSystem.toggle(hit.block.x, hit.block.y, hit.block.z, this.getBlock, this.setBlocks);
       return 'handled';
+    }
     return 'pass';
   }
 
@@ -132,10 +140,38 @@ export class BlockInteractionSystem {
     }
     const item = this.inventory.selectedPlaceItem();
     if (item && this.inventory.itemCount(item) <= 0) return;
+
+    // Toggle door if targeting a door
+    const targetBlock = this.getBlock(hit.block.x, hit.block.y, hit.block.z);
+    if (targetBlock === Block.OakDoor || targetBlock === Block.OakDoorOpen) {
+      this.doorSystem.toggle(hit.block.x, hit.block.y, hit.block.z, this.getBlock, this.setBlocks);
+      return;
+    }
+
     const place = hit.block.clone().add(hit.normal);
     if (this.getBlock(place.x, place.y, place.z) !== Block.Air || this.wouldIntersectPlayer(place))
       return;
-    this.setBlock(place.x, place.y, place.z, block);
+
+    // Orient logs based on placement face normal
+    let placeBlock = block;
+    if (block === Block.Log) {
+      if (Math.abs(hit.normal.x) > 0) placeBlock = Block.LogX;
+      else if (Math.abs(hit.normal.z) > 0) placeBlock = Block.LogZ;
+    }
+
+    // Handle door placement (two-tall)
+    if (block === Block.OakDoor) {
+      const below = this.getBlock(place.x, place.y - 1, place.z);
+      if (!isSolid(below) || this.getBlock(place.x, place.y + 1, place.z) !== Block.Air) return;
+      if (this.wouldIntersectPlayer(new THREE.Vector3(place.x, place.y + 1, place.z))) return;
+      const orientation: 'x' | 'z' = Math.abs(hit.normal.x) > 0 ? 'z' : 'x';
+      this.doorSystem.place(place.x, place.y, place.z, orientation, this.setBlocks);
+      this.triggerSwing('place');
+      if (item) this.inventory.consumeSelectedItem(1);
+      return;
+    }
+
+    this.setBlock(place.x, place.y, place.z, placeBlock);
     this.triggerSwing('place');
     if (item) this.inventory.consumeSelectedItem(1);
   }
@@ -199,9 +235,24 @@ export class BlockInteractionSystem {
       );
       if (drop) this.spawnItemDrop(drop.item, drop.count, dropPosition);
       if (damagesTool(block, tool)) this.inventory.damageSelectedTool(1);
-      this.onBlockBroken(this.mining.block.x, this.mining.block.y, this.mining.block.z, block);
-      this.setBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z, Block.Air);
-      this.stopMining();
+
+      // Handle door breaking — remove both halves atomically
+      if (block === Block.OakDoor || block === Block.OakDoorOpen) {
+        this.doorSystem.remove(
+          this.mining.block.x, this.mining.block.y, this.mining.block.z,
+          this.getBlock, this.setBlocks,
+        );
+      } else {
+        this.onBlockBroken(this.mining.block.x, this.mining.block.y, this.mining.block.z, block);
+        this.setBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z, Block.Air);
+      }
+      // Chain into next block if still holding
+      const nextHit = this.raycaster.raycast();
+      if (nextHit && this.getBlock(nextHit.block.x, nextHit.block.y, nextHit.block.z) !== Block.Air) {
+        this.startMining(nextHit);
+      } else {
+        this.stopMining();
+      }
     }
   }
 
@@ -215,10 +266,22 @@ export class BlockInteractionSystem {
     if (this.getBlock(place.x, place.y, place.z) !== Block.Air) return;
     if (this.wouldIntersectPlayer(place)) return;
 
-    if (this.previewBlock !== block) {
-      this.previewBlock = block;
+    // Orient log preview based on placement face normal
+    let previewBlock = block;
+    if (block === Block.Log) {
+      if (Math.abs(hit.normal.x) > 0) previewBlock = Block.LogX;
+      else if (Math.abs(hit.normal.z) > 0) previewBlock = Block.LogZ;
+    }
+    // For doors, also check space above and solid below
+    if (block === Block.OakDoor) {
+      const below = this.getBlock(place.x, place.y - 1, place.z);
+      if (!isSolid(below) || this.getBlock(place.x, place.y + 1, place.z) !== Block.Air) return;
+      if (this.wouldIntersectPlayer(new THREE.Vector3(place.x, place.y + 1, place.z))) return;
+    }
+    if (this.previewBlock !== previewBlock) {
+      this.previewBlock = previewBlock;
       this.placePreview.geometry.dispose();
-      this.placePreview.geometry = atlasBoxGeometry(block);
+      this.placePreview.geometry = atlasBoxGeometry(previewBlock);
     }
     this.placePreview.position.set(place.x + 0.5, place.y + 0.5, place.z + 0.5);
     this.placePreview.visible = true;

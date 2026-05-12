@@ -40,6 +40,10 @@ export enum Block {
   BerryBush = 32,
   Water = 33,
   Chest = 34,
+  LogX = 35,
+  LogZ = 36,
+  OakDoor = 37,
+  OakDoorOpen = 38,
 }
 
 export type ChunkKey = `${number},${number}`;

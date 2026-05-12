@@ -69,22 +69,30 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Static water fills low terrain basins up to the shared terrain water level.
 - Surface details: flowers, tall grass, trees.
 - Ores: coal, iron, copper, gold, diamond.
+- Rotatable log orientation: logs placed horizontally align with clicked face.
 - Persistent modified chunks via IndexedDB.
 - Start-screen world tools can clear saved chunks, inventory, and legacy hotbar state for the selected seed.
 - Persistent inventory and legacy hotbar migration via IndexedDB.
 - Slot-based inventory with stack limits, count-map save migration, tabs, crafting, item counts, and Minecraft-style hotbar slots.
 - Furnace block interaction UI with per-furnace smelting queues, fuel consumption, ore ingots, and output collection.
+- Chest block with 27-slot container UI, inventory transfer, persistence, and drop-on-break.
 - Item pickup entities for mined block drops.
 - Mining drop rules and pickaxe durability.
+- Sticks occasionally drop from breaking leaves (~22%).
 - Iron pickaxe progression after furnace smelting, with diamond mining gated behind iron tier.
 - Recipe-card crafting UI with output and requirement visibility.
 - Health system: 20 HP, pixel-art hearts (top-left HUD), fall damage (>3 blocks), death, and respawn at surface.
+- Food items (apple, raw meat, cooked meat) with eating system (progress bar, HP healing, consumption via right-click).
 - Caves with 3D-noise caverns, worm tunnels, surface entrances, and large chambers.
 - Place preview now uses the terrain atlas texture with per-face tile mapping so the ghost block matches the placed block's actual appearance.
 - Console command system (`` ` `` key) with `give <item> [count]`, `items`, `help`, `clear`, tab completion.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Far terrain heightfield ring merged into a single mesh to keep draw calls low.
 - F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, memory estimates, and GPU timing when supported.
+- First-person held item view with proper scale (~75% larger) and closer to camera.
+- Damage flash overlay (red screen vignette on hit).
+- Continuous mining while holding mouse1 — chains into next block when current one breaks.
+- Oak doors — two-tall openable blocks with right-click toggle, door state persistence, and planks-based recipe (6 planks → 3 doors).
 
 ## Important Implementation Notes
 
@@ -103,6 +111,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Wildlife movement uses loaded chunk blocks for ground and obstacle collision; avoid falling back to generated height only for gameplay collision.
 - Health state (`src/player/health.ts`) tracks HP, fall distance, death, and respawn. `reconcile()` handles per-frame fall damage and hearts DOM display. Hearts are 8×8 canvas-drawn pixel sprites (full red with white border, half, empty outline) rendered at 2× nearest-neighbour scale.
 - Caves are generated in `src/terrain.ts` via `isCaveBlock`: 3D value noise caverns (scale 64), worm tunnels (crossed noise, narrow 0.51–0.58 band), surface entrances (scale 14, near-surface), and large chambers (scale 72).
+- Oak doors use two block IDs (`OakDoor`=closed solid, `OakDoorOpen`=open non-solid) plus `DoorSystem` (`src/world/doorSystem.ts`) for orientation tracking. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
 - Place preview rebuilds the BoxGeometry UVs per selected block via `atlasBoxGeometry`, mapping each face to the correct atlas tile using `tileForBlockFace`.
 - Console commands are defined in `src/ui/console.ts`. The `give` command resolves item IDs via `itemDefs` fuzzy matching.
 - Existing IndexedDB saves can make old chunks appear near spawn after generator changes.
@@ -115,11 +124,19 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - When completing a milestone or adding a substantial feature, update the "Current Features", "Good Next Tasks", and project roadmap as needed.
 - If implementation details change in a way future agents must know, document them here before finishing the task.
 
+## Known Bugs / UX Issues
+
+- Held block/tool can clip behind nearby solid terrain when the player stands next to a wall.
+- Damage overlay duration (300ms) could be tuned to feel more substantial.
+- Animal hit animation is missing (no flinch/pushback).
+- Birch logs lack orientation variants.
+- Oak door open state renders as invisible (air block) — no visual door panel when open.
+
 ## Good Next Tasks
 
-- Add rotateable/variant blocks (log orientation, etc.).
-- Add doors or simple slabs/stairs.
-- Add chest block and small container UI.
-- Add basic food items and eating.
+- Add slabs/stairs — variable-height blocks with stair collision shapes.
+- Add birch log orientation variants (matching LogX/LogZ pattern).
 - Separate transparent render paths for glass/water if richer translucency becomes necessary.
 - Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
+- Add more surface features: rocks, shoreline improvements.
+- Add door open visual (thin panel rendering instead of invisible when open).

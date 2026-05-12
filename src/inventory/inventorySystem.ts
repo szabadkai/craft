@@ -2,6 +2,7 @@ import { blockColor } from '../blocks';
 import { Block } from '../types';
 import {
   defaultInventoryCounts,
+  foodValueFor,
   HeldItem,
   heldItemFor,
   Item,
@@ -41,7 +42,7 @@ type InventoryCallbacks = {
 
 export class InventorySystem {
   private inventorySlots: InventorySlot[] = createInventorySlotsFromCounts(defaultInventoryCounts);
-  private selectedHotbarIndex = 0;
+  private hotbarIndex = 0;
   private category: (typeof itemDefs)[number]['category'] = 'Blocks';
   private open = false;
 
@@ -62,6 +63,10 @@ export class InventorySystem {
 
   get hotbarSize(): number {
     return HOTBAR_SLOT_COUNT;
+  }
+
+  get selectedHotbarIndex(): number {
+    return this.hotbarIndex;
   }
 
   setOpen(open: boolean): void {
@@ -143,7 +148,7 @@ export class InventorySystem {
     if (!slot || amount <= 0) return 0;
     const consumed = Math.min(slot.count, amount);
     const remaining = slot.count - consumed;
-    this.inventorySlots[this.selectedHotbarIndex] =
+    this.inventorySlots[this.hotbarIndex] =
       remaining > 0 ? { ...slot, count: remaining } : null;
     this.commitInventoryChange();
     this.callbacks.rebuildHeldItem();
@@ -157,8 +162,8 @@ export class InventorySystem {
     const maxDurability = maxDurabilityFor(tool.item);
     if (!slot || maxDurability === null) return false;
     const durability = Math.max(0, (slot.durability ?? maxDurability) - amount);
-    if (durability <= 0) this.inventorySlots[this.selectedHotbarIndex] = null;
-    else this.inventorySlots[this.selectedHotbarIndex] = { ...slot, durability };
+    if (durability <= 0) this.inventorySlots[this.hotbarIndex] = null;
+    else this.inventorySlots[this.hotbarIndex] = { ...slot, durability };
     this.commitInventoryChange();
     this.callbacks.rebuildHeldItem();
     return true;
@@ -166,7 +171,7 @@ export class InventorySystem {
 
   selectHotbarSlot(index: number): void {
     if (index < 0 || index >= HOTBAR_SLOT_COUNT) return;
-    this.selectedHotbarIndex = index;
+    this.hotbarIndex = index;
     this.paintHotbar();
     this.callbacks.rebuildHeldItem();
   }
@@ -181,7 +186,7 @@ export class InventorySystem {
 
   resetInventory(): void {
     this.inventorySlots = createInventorySlotsFromCounts(defaultInventoryCounts);
-    this.selectedHotbarIndex = 0;
+    this.hotbarIndex = 0;
     this.paintHotbar();
     this.paintInventory();
     this.paintOverlay();
@@ -198,7 +203,7 @@ export class InventorySystem {
   applyHotbar(saved: Item[]): void {
     if (this.inventorySlots.slice(0, HOTBAR_SLOT_COUNT).some((slot) => slot)) return;
     saved.slice(0, HOTBAR_SLOT_COUNT).forEach((item, index) => {
-      if (!heldItemFor(item) || this.itemCount(item) <= 0) return;
+      if ((!heldItemFor(item) && foodValueFor(item) <= 0) || this.itemCount(item) <= 0) return;
       const source = this.inventorySlots.findIndex(
         (slot, slotIndex) => slotIndex >= HOTBAR_SLOT_COUNT && slot?.item === item,
       );
@@ -223,7 +228,7 @@ export class InventorySystem {
       const inventorySlot = this.inventorySlots[index];
       const entry = inventorySlot ? heldItemFor(inventorySlot.item) : null;
       const slot = document.createElement('button');
-      slot.className = `slot${index === this.selectedHotbarIndex ? ' active' : ''}`;
+      slot.className = `slot${index === this.hotbarIndex ? ' active' : ''}`;
       slot.type = 'button';
       slot.title = inventorySlot ? this.slotLabel(inventorySlot) : 'Empty';
       slot.addEventListener('click', () => this.selectHotbarSlot(index));
@@ -237,6 +242,8 @@ export class InventorySystem {
           entry.tool === 'stick'
             ? 'linear-gradient(135deg, transparent 35%, #8b5a2b 36%, #8b5a2b 64%, transparent 65%)'
             : 'linear-gradient(135deg, #7a4a23 0 35%, #c2c7c4 36% 68%, transparent 69%)';
+      } else if (inventorySlot && foodValueFor(inventorySlot.item) > 0) {
+        swatch.style.background = itemSwatch(inventorySlot.item);
       } else {
         swatch.classList.add('empty');
       }
@@ -259,7 +266,7 @@ export class InventorySystem {
     this.inventorySlots.forEach((inventorySlot, index) => {
       const slot = document.createElement('button');
       slot.className = `inventory-slot${index < HOTBAR_SLOT_COUNT ? ' quick' : ''}${
-        index === this.selectedHotbarIndex ? ' selected' : ''
+        index === this.hotbarIndex ? ' selected' : ''
       }${inventorySlot ? '' : ' empty'}`;
       slot.type = 'button';
       slot.title = inventorySlot ? `${this.slotLabel(inventorySlot)} (${index + 1})` : 'Empty';
@@ -284,7 +291,7 @@ export class InventorySystem {
     const { inventoryOverlayEl, inventoryTabsEl, inventoryGridLargeEl } = this.elements;
     inventoryOverlayEl.classList.toggle('hidden', !this.open);
     inventoryTabsEl.innerHTML = '';
-    for (const category of ['Blocks', 'Materials', 'Tools'] as const) {
+    for (const category of ['Blocks', 'Materials', 'Tools', 'Food'] as const) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = category === this.category ? 'active' : '';
@@ -302,7 +309,7 @@ export class InventorySystem {
       const slot = document.createElement('button');
       slot.className = `inventory-large-slot${count > 0 ? '' : ' empty'}`;
       slot.type = 'button';
-      slot.disabled = count <= 0 || heldItemFor(def.id) === null;
+      slot.disabled = count <= 0 || (heldItemFor(def.id) === null && foodValueFor(def.id) <= 0);
       slot.title = def.label;
       slot.addEventListener('click', () => this.moveItemToSelectedHotbar(def.id, true));
 
@@ -321,17 +328,17 @@ export class InventorySystem {
   }
 
   private moveItemToSelectedHotbar(item: Item, repaintOverlay = false): void {
-    if (!heldItemFor(item)) return;
+    if (!heldItemFor(item) && foodValueFor(item) <= 0) return;
     const source = this.inventorySlots.findIndex(
-      (slot, index) => index !== this.selectedHotbarIndex && slot?.item === item,
+      (slot, index) => index !== this.hotbarIndex && slot?.item === item,
     );
     if (source < 0) return;
     this.swapWithSelectedHotbar(source, repaintOverlay);
   }
 
   private swapWithSelectedHotbar(index: number, repaintOverlay = false): void {
-    if (index === this.selectedHotbarIndex) return;
-    this.swapSlots(this.selectedHotbarIndex, index);
+    if (index === this.hotbarIndex) return;
+    this.swapSlots(this.hotbarIndex, index);
     this.paintHotbar();
     this.paintInventory();
     this.callbacks.rebuildHeldItem();
@@ -427,7 +434,7 @@ export class InventorySystem {
   }
 
   private selectedHotbarSlot(): InventorySlot {
-    return this.inventorySlots[this.selectedHotbarIndex];
+    return this.inventorySlots[this.hotbarIndex];
   }
 
   private commitInventoryChange(saveHotbar = false): void {

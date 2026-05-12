@@ -37,7 +37,8 @@ export class BlockRaycaster {
     let normalZ = 0;
 
     while (distance <= maxDistance) {
-      if (isSolid(this.getBlock(x, y, z))) {
+      const block = this.getBlock(x, y, z);
+      if (block === Block.OakDoor || block === Block.OakDoorOpen || isSolid(block)) {
         return {
           block: new THREE.Vector3(x, y, z),
           normal: new THREE.Vector3(normalX, normalY, normalZ),

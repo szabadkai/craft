@@ -13,6 +13,7 @@ const FURNACE_RECIPES: FurnaceRecipe[] = [
   { input: 'gold_ore', output: 'gold_ingot', cookTimeMs: 4000 },
   { input: 'sand', output: 'glass', cookTimeMs: 3200 },
   { input: 'clay', output: 'brick', cookTimeMs: 3200 },
+  { input: 'raw_meat', output: 'cooked_meat', cookTimeMs: 3000 },
 ];
 
 const FUEL_BURN_MS: Partial<Record<Item, number>> = {

@@ -285,6 +285,7 @@ export function createTerrainAtlas(): THREE.CanvasTexture {
   drawTile(context, Tile.BerryBush, '#3e7d34', '#c22d39', 'berries');
   drawTile(context, Tile.Water, '#2f76b8', '#b7d9ef', 'water');
   drawTile(context, Tile.Chest, '#8b5e3c', '#d4a05a', 'chest');
+  drawTile(context, Tile.DoorOak, '#a6753b', '#6d4424', 'door');
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
@@ -519,6 +520,20 @@ function drawTile(
     context.fillRect(x + 7, y, 2, 1);
     context.fillStyle = '#6b4226';
     context.fillRect(x + 7, y + 1, 2, 1);
+    context.globalAlpha = 1;
+  } else if (pattern === 'door') {
+    // planks base
+    context.globalAlpha = 0.6;
+    context.fillRect(x, y + 5, 16, 1);
+    context.fillRect(x, y + 11, 16, 1);
+    // horizontal cross panel
+    context.fillStyle = accent;
+    context.globalAlpha = 0.85;
+    context.fillRect(x + 2, y + 3, 12, 2);
+    context.fillRect(x + 2, y + 11, 12, 2);
+    // vertical stiles
+    context.fillRect(x + 2, y, 2, 16);
+    context.fillRect(x + 12, y, 2, 16);
     context.globalAlpha = 1;
   }
   context.globalAlpha = 1;

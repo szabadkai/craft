@@ -109,7 +109,8 @@ export class PlayerController {
     for (let y = minY; y <= maxY; y++) {
       for (let z = minZ; z <= maxZ; z++) {
         for (let x = minX; x <= maxX; x++) {
-          if (isSolid(this.getBlock(x, y, z))) return true;
+          const block = this.getBlock(x, y, z);
+          if (block === Block.OakDoor || isSolid(block)) return true;
         }
       }
     }

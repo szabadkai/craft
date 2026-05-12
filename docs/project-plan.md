@@ -64,13 +64,13 @@ Tasks:
 - Add a debug/settings panel. Done for start-screen world save tools.
 - Add a clear-world button for IndexedDB saves. Done for saved chunks, inventory, and legacy hotbar state.
 - [x] Add render distance controls.
-- Add basic performance counters:
+- [x] Add basic performance counters:
   - visible chunks
   - queued chunks
   - triangle count
   - worker queue length
   - frame timing and GPU timing where supported
-- Document persistence format.
+- [ ] Document persistence format.
 
 Exit criteria:
 
@@ -111,19 +111,20 @@ Goal: make building feel intentional and useful.
 
 Tasks:
 
-- Add rotateable/variant blocks where useful.
-- Add better placement validation.
+- [x] Add rotateable/variant blocks (log orientation).
+- [x] Add better placement validation.
 - [x] Add block preview using actual block material/texture.
 - [x] Add glass placement.
-- Add doors or simple slabs/stairs.
-- Add chest block and small container UI.
+- [x] Add chest block and small container UI.
 - [x] Add creative/debug item grant controls for testing.
+- [x] Add doors (two-tall openable, right-click toggle).
+- [ ] Add slabs/stairs.
 
 Exit criteria:
 
 - Building is predictable.
 - Several crafted/placeable blocks have distinct purposes.
-- Container interaction exists.
+- [x] Container interaction exists.
 
 ### Milestone 4: Survival Lite
 
@@ -136,9 +137,12 @@ Tasks:
 - [x] Add iron pickaxe.
 - [x] Add health.
 - [x] Add fall damage.
-- Add basic food items.
-- Add simple hostile or environmental threat later.
-- Add day/night cycle only after lighting strategy is clear.
+- [x] Add basic food items and eating.
+- [x] Add sticks drop from leaves (~22%).
+- [x] Add continuous mining (hold M1 chains into next block).
+- [x] Add damage flash overlay on hit.
+- [ ] Add simple hostile or environmental threat later.
+- [ ] Add day/night cycle only after lighting strategy is clear.
 
 Exit criteria:
 
@@ -155,15 +159,17 @@ Tasks:
 - Improve water rendering with a separated transparent/reflection pass if the current shader-only water becomes limiting.
 - Add lakes and shoreline improvements.
 - [x] Add caves using 3D noise.
-- Add richer tree variants.
-- Add more surface features:
-  - rocks
+- [x] Add richer tree variants (oak, birch).
+- [x] Add more surface features:
   - mushrooms
   - berry bushes
   - cactus
   - pumpkins
-- Add biome transitions and local color variation.
-- Add basic wildlife only if it remains cheap.
+  - flowers (red, yellow, blue)
+  - tall grass
+- [ ] Add surface rocks.
+- [ ] Add biome transitions and local color variation.
+- [x] Add basic wildlife (deer, boar, birds).
 
 Exit criteria:
 
@@ -194,9 +200,12 @@ Exit criteria:
 
 ## Near-Term Recommended Order
 
-1. Add chest block and container UI.
-2. Add basic food items and eating.
-3. Add rotateable/variant blocks.
+1. ✅ Add chest block and container UI.
+2. ✅ Add basic food items and eating.
+3. ✅ Add rotateable/variant blocks (log orientation).
+4. ✅ Add doors (two-tall openable, right-click toggle).
+5. Add slabs/stairs.
+6. Add birch log orientation variants.
 
 ## Current Priority
 

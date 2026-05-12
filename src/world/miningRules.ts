@@ -20,6 +20,8 @@ export function blockHardness(block: Block, tool: MiningTool): number {
     case Block.BirchLeaves:
       return 180 / speed;
     case Block.Log:
+    case Block.LogX:
+    case Block.LogZ:
     case Block.BirchLog:
     case Block.Planks:
     case Block.CraftingTable:
@@ -37,6 +39,9 @@ export function blockHardness(block: Block, tool: MiningTool): number {
     case Block.MossyCobblestone:
     case Block.Brick:
       return 1300 / speed;
+    case Block.OakDoor:
+    case Block.OakDoorOpen:
+      return 520 / speed;
     case Block.IronOre:
     case Block.GoldOre:
       return 1700 / speed;
@@ -66,7 +71,8 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
       return toolTier(tool) >= 3 ? { item: 'diamond', count: 1 } : null;
     case Block.Leaves:
     case Block.BirchLeaves:
-    case Block.Glass:
+      if (Math.random() < 0.08) return { item: 'apple', count: 1 };
+      if (Math.random() < 0.22) return { item: 'sticks', count: 1 };
       return null;
     case Block.Sand:
       return { item: 'sand', count: 1 };
@@ -77,6 +83,8 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
     case Block.Brick:
       return { item: 'brick', count: 1 };
     case Block.Log:
+    case Block.LogX:
+    case Block.LogZ:
       return { item: 'wood', count: 1 };
     case Block.BirchLog:
       return { item: 'birch_wood', count: 1 };
@@ -106,6 +114,9 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
       return { item: 'furnace', count: 1 };
     case Block.Torch:
       return { item: 'torch', count: 1 };
+    case Block.OakDoor:
+    case Block.OakDoorOpen:
+      return { item: 'oak_door', count: 1 };
     default:
       return null;
   }

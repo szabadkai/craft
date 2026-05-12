@@ -131,10 +131,63 @@ export class ChunkWorldSystem {
     chunk.blocks[blockIndex(mod(wx, CHUNK_SIZE), y, mod(wz, CHUNK_SIZE))] = block;
     this.scheduleChunkSave(key);
     this.remesh(cx, cz);
-    if (mod(wx, CHUNK_SIZE) === 0) this.remesh(cx - 1, cz);
-    if (mod(wx, CHUNK_SIZE) === CHUNK_SIZE - 1) this.remesh(cx + 1, cz);
-    if (mod(wz, CHUNK_SIZE) === 0) this.remesh(cx, cz - 1);
-    if (mod(wz, CHUNK_SIZE) === CHUNK_SIZE - 1) this.remesh(cx, cz + 1);
+    this.remeshNeighbours(wx, wz);
+  }
+
+  /** Place multiple blocks at once, applying all changes before triggering a single remesh per chunk. */
+  setBlocks(
+    entries: { wx: number; y: number; wz: number; block: Block }[],
+  ): void {
+    if (entries.length === 0) return;
+    // Group entries by chunk
+    const chunkGroups = new Map<ChunkKey, { cx: number; cz: number; items: { wx: number; y: number; wz: number; block: Block }[] }>();
+    for (const entry of entries) {
+      if (entry.y < 0 || entry.y >= WORLD_HEIGHT) continue;
+      const cx = divFloor(entry.wx, CHUNK_SIZE);
+      const cz = divFloor(entry.wz, CHUNK_SIZE);
+      const key = chunkKey(cx, cz);
+      if (!this.chunks.has(key)) continue;
+      let group = chunkGroups.get(key);
+      if (!group) { group = { cx, cz, items: [] }; chunkGroups.set(key, group); }
+      group.items.push(entry);
+    }
+    // Apply all block mutations first, then remesh each chunk once
+    for (const [key, group] of chunkGroups) {
+      const chunk = this.chunks.get(key);
+      if (!chunk) continue;
+      for (const e of group.items) {
+        chunk.blocks[blockIndex(mod(e.wx, CHUNK_SIZE), e.y, mod(e.wz, CHUNK_SIZE))] = e.block;
+      }
+      this.scheduleChunkSave(key);
+      // Force a single remesh — capture the full state with both blocks
+      if (!this.dirty.has(key)) {
+        this.dirty.add(key);
+        const copy = new Uint16Array(chunk.blocks);
+        this.postChunkJob(
+          { type: 'remesh', cx: group.cx, cz: group.cz, seed: this.options.getSeed(), blocks: copy },
+          [copy.buffer],
+        );
+      }
+    }
+    // Remesh neighbour chunks for blocks on chunk edges
+    for (const [, group] of chunkGroups) {
+      for (const e of group.items) {
+        if (mod(e.wx, CHUNK_SIZE) === 0) this.remesh(group.cx - 1, group.cz);
+        if (mod(e.wx, CHUNK_SIZE) === CHUNK_SIZE - 1) this.remesh(group.cx + 1, group.cz);
+        if (mod(e.wz, CHUNK_SIZE) === 0) this.remesh(group.cx, group.cz - 1);
+        if (mod(e.wz, CHUNK_SIZE) === CHUNK_SIZE - 1) this.remesh(group.cx, group.cz + 1);
+      }
+    }
+  }
+
+  private remeshNeighbours(wx: number, wz: number): ChunkKey | null {
+    const cx = divFloor(wx, CHUNK_SIZE);
+    const cz = divFloor(wz, CHUNK_SIZE);
+    if (mod(wx, CHUNK_SIZE) === 0) { this.remesh(cx - 1, cz); return chunkKey(cx - 1, cz); }
+    if (mod(wx, CHUNK_SIZE) === CHUNK_SIZE - 1) { this.remesh(cx + 1, cz); return chunkKey(cx + 1, cz); }
+    if (mod(wz, CHUNK_SIZE) === 0) { this.remesh(cx, cz - 1); return chunkKey(cx, cz - 1); }
+    if (mod(wz, CHUNK_SIZE) === CHUNK_SIZE - 1) { this.remesh(cx, cz + 1); return chunkKey(cx, cz + 1); }
+    return null;
   }
 
   updateChunkSet(frame: number): void {

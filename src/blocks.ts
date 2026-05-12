@@ -26,6 +26,8 @@ export const solidBlocks = new Set<Block>([
   Block.Pumpkin,
   Block.CraftingTable,
   Block.Furnace,
+  Block.LogX,
+  Block.LogZ,
 ]);
 
 export const selectableBlocks = [
@@ -42,6 +44,9 @@ export const selectableBlocks = [
   Block.Pumpkin,
   Block.CraftingTable,
   Block.Chest,
+  Block.LogX,
+  Block.LogZ,
+  Block.OakDoor,
 ] as const;
 
 export function isSolid(block: Block): boolean {
@@ -114,8 +119,14 @@ export function blockColor(block: Block): [number, number, number] {
       return [0.58, 0.36, 0.18];
     case Block.Furnace:
       return [0.32, 0.33, 0.34];
+    case Block.LogX:
+    case Block.LogZ:
+      return [0.47, 0.29, 0.13];
     case Block.Torch:
       return [1.0, 0.78, 0.25];
+    case Block.OakDoor:
+    case Block.OakDoorOpen:
+      return [0.64, 0.45, 0.24];
     default:
       return [1, 1, 1];
   }

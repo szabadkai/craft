@@ -4,6 +4,8 @@ import { Item } from '../inventory/items';
 import type { InventorySnapshot } from '../inventory/inventorySystem';
 import { ChunkKey } from '../types';
 
+export type DoorSnapshot = Record<string, 'x' | 'z'>;
+
 const CHUNK_STORAGE_VERSION = 3;
 
 export class WorldStore {
@@ -72,6 +74,15 @@ export class WorldStore {
     await this.saveState(this.chestStateKey(), chests);
   }
 
+  async loadDoors(): Promise<Record<string, 'x' | 'z'> | null> {
+    const value = await this.loadState<Record<string, 'x' | 'z'>>(this.doorStateKey());
+    return value ?? null;
+  }
+
+  async saveDoors(doors: Record<string, 'x' | 'z'>): Promise<void> {
+    await this.saveState(this.doorStateKey(), doors);
+  }
+
   async clearCurrentWorld(): Promise<void> {
     const db = await this.open();
     await Promise.all([
@@ -80,6 +91,7 @@ export class WorldStore {
       this.deleteState(db, 'hotbar'),
       this.deleteState(db, this.furnaceStateKey()),
       this.deleteState(db, this.chestStateKey()),
+      this.deleteState(db, this.doorStateKey()),
     ]);
   }
 
@@ -97,6 +109,10 @@ export class WorldStore {
 
   private chestStateKey(): string {
     return `chests:${this.getSeed()}`;
+  }
+
+  private doorStateKey(): string {
+    return `doors:${this.getSeed()}`;
   }
 
   private async loadState<T>(key: string): Promise<T | undefined> {

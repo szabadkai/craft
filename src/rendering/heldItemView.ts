@@ -13,7 +13,7 @@ export class HeldItemView {
   };
 
   constructor(camera: THREE.Camera) {
-    this.handRoot.position.set(0.5, -0.52, -1.08);
+    this.handRoot.position.set(0.42, -0.48, -0.72);
     this.handRoot.rotation.set(-0.16, -0.22, -0.14);
     this.handRoot.add(this.heldRoot);
     camera.add(this.handRoot);
@@ -48,7 +48,7 @@ export class HeldItemView {
 
   update(now: number): void {
     const bob = Math.sin(now * 0.004) * 0.012;
-    this.handRoot.position.set(0.5, -0.52 + bob, -1.08);
+    this.handRoot.position.set(0.42, -0.48 + bob, -0.72);
     this.handRoot.rotation.set(-0.16, -0.22, -0.14);
 
     const t = Math.min(
@@ -60,7 +60,7 @@ export class HeldItemView {
       const strike = this.handState.swingKind === 'mine' ? Math.sin(t * Math.PI * 1.7) : swing;
       this.handRoot.position.x += swing * -0.1;
       this.handRoot.position.y += swing * -0.16;
-      this.handRoot.position.z += swing * -0.16;
+      this.handRoot.position.z += swing * -0.14;
       this.handRoot.rotation.x += strike * -0.85;
       this.handRoot.rotation.y += swing * 0.22;
       this.handRoot.rotation.z += swing * -0.38;
@@ -72,7 +72,7 @@ function makeHeldBlock(block: Block): THREE.Group {
   const group = new THREE.Group();
   const [r, g, b] = blockColor(block);
   const material = new THREE.MeshLambertMaterial({ color: new THREE.Color(r, g, b) });
-  const cube = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), material);
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), material);
   cube.rotation.set(0.2, 0.55, -0.16);
   cube.position.set(0, 0, 0);
   group.add(cube);
@@ -82,7 +82,7 @@ function makeHeldBlock(block: Block): THREE.Group {
 function makeStick(): THREE.Group {
   const group = new THREE.Group();
   const material = new THREE.MeshLambertMaterial({ color: 0x8a572b });
-  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.58, 0.06), material);
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.72, 0.10), material);
   shaft.rotation.set(0.36, 0, -0.52);
   shaft.position.set(0.02, 0, 0);
   group.add(shaft);
@@ -92,29 +92,29 @@ function makeStick(): THREE.Group {
 function makePickaxe(tool: 'wood_pickaxe' | 'stone_pickaxe' | 'iron_pickaxe'): THREE.Group {
   const group = new THREE.Group();
   const handle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.06, 0.64, 0.06),
+    new THREE.BoxGeometry(0.10, 0.80, 0.10),
     new THREE.MeshLambertMaterial({ color: 0x8a572b }),
   );
   handle.rotation.set(0.34, 0, -0.55);
-  handle.position.set(0.02, -0.06, 0);
+  handle.position.set(0.02, -0.08, 0);
   group.add(handle);
 
   const headColor =
     tool === 'iron_pickaxe' ? 0xd6d8db : tool === 'stone_pickaxe' ? 0x9b9d98 : 0x9a6835;
   const headMaterial = new THREE.MeshLambertMaterial({ color: headColor });
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.09), headMaterial);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.12, 0.12), headMaterial);
   head.rotation.set(0.34, 0, -0.55);
-  head.position.set(-0.09, 0.22, 0);
+  head.position.set(-0.10, 0.28, 0);
   group.add(head);
 
-  const tipA = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.08), headMaterial.clone());
+  const tipA = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.10, 0.11), headMaterial.clone());
   tipA.rotation.set(0.34, 0, -0.9);
-  tipA.position.set(-0.3, 0.29, 0);
+  tipA.position.set(-0.38, 0.38, 0);
   group.add(tipA);
 
-  const tipB = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.08), headMaterial.clone());
+  const tipB = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.10, 0.11), headMaterial.clone());
   tipB.rotation.set(0.34, 0, -0.2);
-  tipB.position.set(0.12, 0.16, 0);
+  tipB.position.set(0.14, 0.20, 0);
   group.add(tipB);
   return group;
 }

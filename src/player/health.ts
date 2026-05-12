@@ -23,10 +23,12 @@ export function createHealth(
   let wasOnGround = false;
 
   let heartsEl: HTMLElement | null = null;
+  let damageOverlayEl: HTMLElement | null = null;
   let lastHeartsText = '';
 
-  function mount(el: HTMLElement): void {
+  function mount(el: HTMLElement, damageOverlay?: HTMLElement): void {
     heartsEl = el;
+    damageOverlayEl = damageOverlay ?? null;
     lastHeartsText = '';
   }
 
@@ -46,6 +48,9 @@ export function createHealth(
       }
       const flashing = now - state.lastDamageTime < 300;
       heartsEl.classList.toggle('damage-flash', flashing);
+      if (damageOverlayEl) {
+        damageOverlayEl.classList.toggle('flash', flashing);
+      }
     }
   }
 
