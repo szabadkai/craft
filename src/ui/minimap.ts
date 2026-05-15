@@ -2,9 +2,9 @@ import { biomeAt, terrainHeight, WATER_LEVEL } from '../terrain';
 
 export type Waypoint = { name: string; x: number; z: number; color: string };
 
-const SIZE = 140;
+const SIZE = 70;
 const HALF = SIZE / 2;
-const SCALE = 2;
+const SCALE = 4;
 
 const BIOME_COLORS: Record<string, string> = {
   plains: '#5a8f3c',
@@ -53,7 +53,7 @@ export class MinimapSystem {
 
   constructor() {
     this.container = document.createElement('div');
-    this.container.className = 'minimap';
+    this.container.className = 'minimap hidden';
 
     this.canvas = document.createElement('canvas');
     this.canvas.width = SIZE;
@@ -62,6 +62,14 @@ export class MinimapSystem {
 
     this.ctx = this.canvas.getContext('2d')!;
     document.body.appendChild(this.container);
+  }
+
+  show(): void {
+    this.container.classList.remove('hidden');
+  }
+
+  hide(): void {
+    this.container.classList.add('hidden');
   }
 
   setSeed(seed: number): void {
@@ -154,25 +162,18 @@ export class MinimapSystem {
     for (const wp of this.waypoints) {
       const dx = (wp.x - Math.floor(px)) / SCALE + HALF;
       const dz = (wp.z - Math.floor(pz)) / SCALE + HALF;
-      if (dx < -4 || dx > SIZE + 4 || dz < -4 || dz > SIZE + 4) continue;
+      if (dx < -2 || dx > SIZE + 2 || dz < -2 || dz > SIZE + 2) continue;
 
       ctx.fillStyle = wp.color;
-      ctx.beginPath();
-      ctx.arc(dx, dz, 3.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(Math.floor(dx) - 1, Math.floor(dz) - 1, 3, 3);
 
-      ctx.fillStyle = '#000000';
-      ctx.beginPath();
-      ctx.arc(dx, dz, 3.5, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.font = '600 9px system-ui, sans-serif';
+      ctx.font = '600 5px system-ui, sans-serif';
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 1.5;
       ctx.textAlign = 'center';
-      ctx.strokeText(wp.name, dx, dz - 6);
-      ctx.fillText(wp.name, dx, dz - 6);
+      ctx.strokeText(wp.name, dx, dz - 3);
+      ctx.fillText(wp.name, dx, dz - 3);
       ctx.lineWidth = 1;
     }
 
@@ -182,15 +183,15 @@ export class MinimapSystem {
 
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(0, -6);
-    ctx.lineTo(-4, 5);
-    ctx.lineTo(0, 2);
-    ctx.lineTo(4, 5);
+    ctx.moveTo(0, -3);
+    ctx.lineTo(-2, 3);
+    ctx.lineTo(0, 1);
+    ctx.lineTo(2, 3);
     ctx.closePath();
     ctx.fill();
 
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.5;
     ctx.stroke();
 
     ctx.restore();

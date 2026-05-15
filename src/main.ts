@@ -60,7 +60,7 @@ const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
 const savedSeedText = localStorage.getItem('craft-seed');
-const defaultSeedText = savedSeedText && savedSeedText !== '18441' ? savedSeedText : '4';
+const defaultSeedText = savedSeedText ? savedSeedText : randomSeedText();
 let seed = seedFromString(defaultSeedText);
 
 const airFogNear = getFogNear();
@@ -434,6 +434,7 @@ function updateLoadingState(): void {
   chunkWorld.settlePlayerAtLoadedSpawn(() => playerController.syncCamera());
   worldReady = true;
   loadingScreenEl.classList.add('hidden');
+  minimap.show();
 }
 
 function getBlock(wx: number, y: number, wz: number): Block {

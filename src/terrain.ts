@@ -40,11 +40,45 @@ function valueNoise(x: number, z: number, scale: number, seed: number): number {
 
 export function terrainHeight(x: number, z: number, seed: number): number {
   const biome = biomeAt(x, z, seed);
-  const broad = valueNoise(x, z, 96, seed) * (biome === 'hills' ? 42 : 30);
-  const mid = valueNoise(x + 2000, z - 900, 32, seed) * (biome === 'hills' ? 20 : 13);
-  const fine = valueNoise(x - 800, z + 1400, 13, seed) * 5;
-  const base = biome === 'beach' ? 18 : biome === 'dry' ? 20 : 22;
-  return Math.max(8, Math.min(WORLD_HEIGHT - 8, Math.floor(base + broad + mid + fine)));
+
+  // Continentalness: large-scale landform shape (-1 to 1)
+  const cont = valueNoise(x, z, 320, seed + 51) * 2 - 1;
+  // Erosion: controls how rugged vs flat the terrain is (0 to 1, high = flat)
+  const erosion = valueNoise(x + 5000, z - 3000, 240, seed + 61);
+
+  // Detail noise octaves (centered around 0)
+  const broad = (valueNoise(x, z, 96, seed) - 0.5) * 2;
+  const mid = (valueNoise(x + 2000, z - 900, 32, seed) - 0.5) * 2;
+  const fine = (valueNoise(x - 800, z + 1400, 13, seed) - 0.5) * 2;
+
+  // Amplitude depends on biome and erosion
+  let broadAmp: number, midAmp: number;
+  if (biome === 'hills') {
+    broadAmp = 30;
+    midAmp = 15;
+  } else if (biome === 'plains' || biome === 'dry') {
+    broadAmp = 10;
+    midAmp = 5;
+  } else {
+    broadAmp = 18;
+    midAmp = 9;
+  }
+
+  // High erosion flattens the terrain further
+  const flatness = erosion * erosion;
+  broadAmp *= (1 - flatness * 0.6);
+  midAmp *= (1 - flatness * 0.6);
+  const fineAmp = 3 * (1 - flatness * 0.5);
+
+  // Continentalness shifts the base elevation
+  // Positive cont → highlands/plateaus, negative cont → valleys/lowlands
+  const contShift = cont > 0
+    ? cont * cont * 28
+    : -(cont * cont) * 10;
+
+  const base = 38;
+  const h = base + contShift + broad * broadAmp + mid * midAmp + fine * fineAmp;
+  return Math.max(8, Math.min(WORLD_HEIGHT - 8, Math.floor(h)));
 }
 
 function valueNoise3D(x: number, y: number, z: number, scale: number, seed: number): number {
@@ -137,19 +171,21 @@ export function biomeAt(x: number, z: number, seed: number): Biome {
   const temp = valueNoise(x - 1400, z + 2600, 220, seed + 211);
   const rough = valueNoise(x + 700, z + 700, 150, seed + 221);
   const h = terrainHeightBase(x, z, seed);
-  if (h < 26) return 'beach';
-  if (temp < 0.28 && h > 32) return 'snow';
-  if (rough > 0.68 && h > 38) return 'hills';
+  if (h < 30) return 'beach';
+  if (temp < 0.28 && h > 40) return 'snow';
+  if (rough > 0.65 && h > 44) return 'hills';
   if (moisture > 0.62) return 'forest';
   if (temp > 0.68 && moisture < 0.44) return 'dry';
   return 'plains';
 }
 
 function terrainHeightBase(x: number, z: number, seed: number): number {
-  const broad = valueNoise(x, z, 96, seed) * 34;
-  const mid = valueNoise(x + 2000, z - 900, 32, seed) * 15;
-  const fine = valueNoise(x - 800, z + 1400, 13, seed) * 5;
-  return Math.floor(22 + broad + mid + fine);
+  const cont = valueNoise(x, z, 320, seed + 51) * 2 - 1;
+  const broad = (valueNoise(x, z, 96, seed) - 0.5) * 2;
+  const mid = (valueNoise(x + 2000, z - 900, 32, seed) - 0.5) * 2;
+  const fine = (valueNoise(x - 800, z + 1400, 13, seed) - 0.5) * 2;
+  const contShift = cont > 0 ? cont * cont * 28 : -(cont * cont) * 10;
+  return Math.floor(38 + contShift + broad * 18 + mid * 9 + fine * 3);
 }
 
 function surfaceBlockAt(x: number, z: number, h: number, seed: number): Block {
