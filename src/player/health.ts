@@ -10,6 +10,8 @@ export type HealthSystem = ReturnType<typeof createHealth>;
 export function createHealth(
   getSpawnY: () => number,
   onRespawn: (spawnY: number) => void,
+  onDamage?: (amount: number) => void,
+  onDeath?: () => void,
 ) {
   const state: HealthState = {
     hp: 20,
@@ -59,8 +61,10 @@ export function createHealth(
     if (state.isDead || amount <= 0) return;
     state.hp = Math.max(0, state.hp - amount);
     state.lastDamageTime = performance.now();
+    onDamage?.(amount);
     if (state.hp <= 0) {
       state.isDead = true;
+      onDeath?.();
     }
   }
 

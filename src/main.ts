@@ -50,6 +50,10 @@ import { WildlifeSystem } from './world/wildlife';
 import { HostileSystem } from './world/hostileMobs';
 import { createHud } from './ui/hud';
 import { findDrySpawn } from './game/helpers';
+import { createAudioEngine } from './audio/audioEngine';
+import { createSfxSystem, blockMaterial } from './audio/sfx';
+import { createMusicSystem } from './audio/music';
+import { createAmbientSystem } from './audio/ambient';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
@@ -96,6 +100,11 @@ transparentMaterial.depthWrite = true; // glass and leaves occlude geometry behi
 const decoMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.999);
 const dayNight = new DayNightCycle();
 
+const audioEngine = createAudioEngine();
+const sfx = createSfxSystem(audioEngine.ctx, audioEngine.sfxGain);
+const music = createMusicSystem(audioEngine.ctx, audioEngine.musicGain);
+const ambient = createAmbientSystem(audioEngine.ctx, audioEngine.ambientGain);
+
 const hostile: HostileSystem = new HostileSystem(
   scene,
   () => seed,
@@ -105,6 +114,8 @@ const hostile: HostileSystem = new HostileSystem(
     itemPickups.spawn('raw_meat', count, position);
   },
   () => dayNight.timeOfDay,
+  () => sfx.mobHit(),
+  () => sfx.mobDeath(),
 );
 hostile.setPlayerDamageCallback((amount) => health.damage(amount));
 const wildlife: WildlifeSystem = new WildlifeSystem(
@@ -115,6 +126,8 @@ const wildlife: WildlifeSystem = new WildlifeSystem(
     const count = kind === 'deer' || kind === 'boar' ? 1 + Math.floor(Math.random() * 2) : 1;
     itemPickups.spawn('raw_meat', count, position);
   },
+  () => sfx.mobHit(),
+  () => sfx.mobDeath(),
 );
 const worldStore = new WorldStore(() => seed);
 
@@ -195,6 +208,13 @@ const {
 sensitivityInputEl.value = String(mouseSensitivity);
 const { renderDistanceInputEl, renderDistanceValueEl } = hud;
 renderDistanceInputEl.value = String(getDetailRadius());
+const { sfxVolumeInputEl, sfxVolumeValueEl, musicVolumeInputEl, musicVolumeValueEl } = hud;
+const savedSfxVol = localStorage.getItem('craft-audio-sfx-vol');
+const savedMusicVol = localStorage.getItem('craft-audio-music-vol');
+sfxVolumeInputEl.value = String(Math.round((savedSfxVol ? parseFloat(savedSfxVol) : 1) * 100));
+sfxVolumeValueEl.textContent = `${sfxVolumeInputEl.value}%`;
+musicVolumeInputEl.value = String(Math.round((savedMusicVol ? parseFloat(savedMusicVol) : 0.5) * 100));
+musicVolumeValueEl.textContent = `${musicVolumeInputEl.value}%`;
 const diagnostics = new DiagnosticsSystem(renderer, diagnosticsEl, summarizeWorldDiagnostics);
 const chunkWorld = new ChunkWorldSystem({
   scene,
@@ -225,7 +245,7 @@ const inventorySystem = new InventorySystem(
     rebuildHeldItem: () => rebuildHeldItem(),
   },
 );
-const itemPickups = new ItemPickupSystem(scene, (item, amount) => inventorySystem.addItem(item, amount));
+const itemPickups = new ItemPickupSystem(scene, (item, amount) => inventorySystem.addItem(item, amount), () => sfx.itemPickup());
 const chestSystem = new ChestSystem(
   inventorySystem,
   { chestOverlayEl, chestGridEl, chestInventoryEl },
@@ -267,6 +287,7 @@ const interactionSystem = new BlockInteractionSystem(
   (wx, y, wz, block) => {
     if (block === Block.Furnace) furnaceSystem.removeAt({ x: wx, y, z: wz });
     if (block === Block.Chest) chestSystem.removeAt({ x: wx, y, z: wz });
+    sfx.blockBreak(blockMaterial(block));
   },
   doorSystem,
   (entries) => chunkWorld.setBlocks(entries),
@@ -289,6 +310,13 @@ function rebuildHeldItem(): void {
 
 function triggerHandSwing(kind: 'mine' | 'place'): void {
   heldItemView.triggerSwing(kind);
+  if (kind === 'mine') {
+    const hit = blockRaycaster.raycast();
+    if (hit) {
+      const b = getBlock(hit.block.x, hit.block.y, hit.block.z);
+      sfx.miningTick(blockMaterial(b));
+    }
+  }
 }
 
 function updateHand(now: number): void {
@@ -308,6 +336,8 @@ function updateSeedPreview(): void {
 }
 
 function startWorld(seedText: string): void {
+  audioEngine.resume();
+  music.play();
   const normalizedSeedText = seedText.trim() || '0';
   seed = seedFromString(normalizedSeedText);
   localStorage.setItem('craft-seed', normalizedSeedText);
@@ -390,14 +420,20 @@ const health = createHealth(
     player.position.set(8, spawnY, 8);
     player.velocity.set(0, 0, 0);
   },
+  () => sfx.playerHurt(),
+  () => sfx.playerDeath(),
 );
 health.mount(heartsEl, damageOverlayEl);
 
-const eatingSystem = new EatingSystem(health, inventorySystem, eatingBarEl, eatingBarFillEl);
+const eatingSystem = new EatingSystem(health, inventorySystem, eatingBarEl, eatingBarFillEl, () => sfx.eating(), () => sfx.eatComplete());
 
 let last = performance.now();
 let submergeFactor = 0;
 let caveFactor = 0;
+let prevOnGround = false;
+let prevInWater = false;
+let lastFootstepTime = 0;
+const lastFootstepPos = new THREE.Vector3();
 
 function applyRenderDistanceInternal(): void {
   applyRenderDistance(scene, camera, farTerrain, player, seed, submergeFactor, caveFactor);
@@ -427,6 +463,32 @@ function tick(now: number): void {
     chestSystem.tick();
     furnaceSystem.tick(dt);
     eatingSystem.tick(now);
+
+    // Audio: footsteps, jump/land, water transitions
+    if (player.onGround && !prevOnGround) {
+      const fallSpeed = Math.abs(player.velocity.y);
+      sfx.land(fallSpeed > 6);
+    }
+    if (!player.onGround && prevOnGround && player.velocity.y > 0) {
+      sfx.jump();
+    }
+    if (player.inWater && !prevInWater) sfx.splash();
+    if (player.onGround && !player.inWater) {
+      const hDist = Math.hypot(player.position.x - lastFootstepPos.x, player.position.z - lastFootstepPos.z);
+      if (hDist > 1.6 && now - lastFootstepTime > 300) {
+        const bx = Math.floor(player.position.x);
+        const by = Math.floor(player.position.y) - 1;
+        const bz = Math.floor(player.position.z);
+        sfx.footstep(blockMaterial(getBlock(bx, by, bz)));
+        lastFootstepTime = now;
+        lastFootstepPos.copy(player.position);
+      }
+    }
+    prevOnGround = player.onGround;
+    prevInWater = player.inWater;
+
+    ambient.tick(dt, submergeFactor, caveFactor, furnaceSystem.isOpen && furnaceSystem.isBurning);
+    music.tick(dt);
   }
   sky.position.copy(camera.position);
   dayNight.update(dt); dayNight.applyToLights(hemi, sun, sky.material as THREE.ShaderMaterial); dayNight.applyToTerrainMaterials(chunkMaterial, fadeMaterial, waterMaterial, transparentMaterial, decoMaterial); dayNight.applyToScene(scene);
@@ -476,12 +538,17 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'KeyE') {
     event.preventDefault();
     eatingSystem.cancel();
-    if (furnaceSystem.isOpen) { furnaceSystem.close(); return; }
-    if (chestSystem.isOpen) { chestSystem.close(); return; }
+    if (furnaceSystem.isOpen) { furnaceSystem.close(); sfx.chestClose(); return; }
+    if (chestSystem.isOpen) { chestSystem.close(); sfx.chestClose(); return; }
     const inventoryOpen = inventorySystem.toggleOpen();
+    sfx.uiClick();
     interactionSystem.stopMining();
     if (inventoryOpen && document.pointerLockElement === renderer.domElement)
       document.exitPointerLock();
+    return;
+  }
+  if (event.code === 'KeyM' && !inventorySystem.isOpen) {
+    audioEngine.toggleMute();
     return;
   }
   if (event.code === 'Escape') {
@@ -496,12 +563,14 @@ document.addEventListener('keydown', (event) => {
   if (slot >= 0 && slot < inventorySystem.hotbarSize) {
     eatingSystem.cancel();
     inventorySystem.selectHotbarSlot(slot);
+    sfx.hotbarSelect();
   }
 });
 
 document.addEventListener('keyup', (event) => keys.delete(event.code));
 
 renderer.domElement.addEventListener('click', () => {
+  audioEngine.resume();
   if (!worldReady || inventorySystem.isOpen) return;
   if (!mouse.locked) {
     renderer.domElement.requestPointerLock().catch(() => {
@@ -558,7 +627,9 @@ document.addEventListener('mousedown', (event) => {
     const b = getBlock(hit.block.x, hit.block.y, hit.block.z);
     // Door toggle
     if (b === Block.OakDoor || b === Block.OakDoorOpen) {
+      const opening = b === Block.OakDoor;
       doorSystem.toggle(hit.block.x, hit.block.y, hit.block.z, getBlock, (entries) => chunkWorld.setBlocks(entries));
+      sfx.doorToggle(opening);
       return;
     }
     if (b === Block.Furnace || b === Block.Chest) {
@@ -566,10 +637,12 @@ document.addEventListener('mousedown', (event) => {
       interactionSystem.stopMining();
       const p = { x: hit.block.x, y: hit.block.y, z: hit.block.z };
       (b === Block.Furnace ? furnaceSystem : chestSystem).openAt(p);
+      sfx.chestOpen();
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
       return;
     }
     interactionSystem.place(hit);
+    sfx.blockPlace();
   }
 });
 
@@ -608,6 +681,18 @@ renderDistanceInputEl.addEventListener('input', () => {
   renderDistanceValueEl.textContent = formatRenderDistance(value);
   setDetailRadius(value);
   applyRenderDistanceInternal();
+});
+
+sfxVolumeInputEl.addEventListener('input', () => {
+  const v = Number(sfxVolumeInputEl.value) / 100;
+  audioEngine.setSfxVolume(v);
+  sfxVolumeValueEl.textContent = `${sfxVolumeInputEl.value}%`;
+});
+
+musicVolumeInputEl.addEventListener('input', () => {
+  const v = Number(musicVolumeInputEl.value) / 100;
+  audioEngine.setMusicVolume(v);
+  musicVolumeValueEl.textContent = `${musicVolumeInputEl.value}%`;
 });
 
 randomSeedEl.addEventListener('click', () => {

@@ -34,6 +34,10 @@ export type HudElements = {
   sensitivityValueEl: HTMLElement;
   renderDistanceInputEl: HTMLInputElement;
   renderDistanceValueEl: HTMLElement;
+  sfxVolumeInputEl: HTMLInputElement;
+  sfxVolumeValueEl: HTMLElement;
+  musicVolumeInputEl: HTMLInputElement;
+  musicVolumeValueEl: HTMLElement;
   waterOverlayEl: HTMLDivElement;
   damageOverlayEl: HTMLDivElement;
   eatingBarEl: HTMLDivElement;
@@ -84,6 +88,30 @@ export function createHud(
             max="12"
             step="2"
             value="8"
+          />
+        </label>
+        <label class="sensitivity-field" for="sfx-volume-input">
+          <span>Sound effects</span>
+          <output id="sfx-volume-value" for="sfx-volume-input">100%</output>
+          <input
+            id="sfx-volume-input"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value="100"
+          />
+        </label>
+        <label class="sensitivity-field" for="music-volume-input">
+          <span>Music</span>
+          <output id="music-volume-value" for="music-volume-input">50%</output>
+          <input
+            id="music-volume-input"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value="50"
           />
         </label>
         <div class="seed-presets" aria-label="Seed presets">
@@ -211,6 +239,10 @@ export function createHud(
     sensitivityValueEl: root.querySelector<HTMLElement>('#sensitivity-value')!,
     renderDistanceInputEl: root.querySelector<HTMLInputElement>('#render-distance-input')!,
     renderDistanceValueEl: root.querySelector<HTMLElement>('#render-distance-value')!,
+    sfxVolumeInputEl: root.querySelector<HTMLInputElement>('#sfx-volume-input')!,
+    sfxVolumeValueEl: root.querySelector<HTMLElement>('#sfx-volume-value')!,
+    musicVolumeInputEl: root.querySelector<HTMLInputElement>('#music-volume-input')!,
+    musicVolumeValueEl: root.querySelector<HTMLElement>('#music-volume-value')!,
     waterOverlayEl: root.querySelector<HTMLDivElement>('.water-overlay')!,
     damageOverlayEl: root.querySelector<HTMLDivElement>('.damage-overlay')!,
     eatingBarEl: root.querySelector<HTMLDivElement>('.eating-bar')!,

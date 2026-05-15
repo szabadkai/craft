@@ -40,6 +40,8 @@ export class HostileSystem {
     private readonly getBlock: (wx: number, y: number, wz: number) => Block,
     private readonly onDrop: (position: THREE.Vector3, kind: HostileKind) => void,
     private readonly getTimeOfDay: () => number = () => 0,
+    private readonly onMobHit?: () => void,
+    private readonly onMobDeath?: () => void,
   ) {}
 
   private isNight(): boolean {
@@ -123,12 +125,13 @@ export class HostileSystem {
   hit(mob: Hostile, now: number): void {
     mob.health -= 1;
     mob.hurtUntil = now + 280;
-    // Push back
     mob.verticalVelocity = 2.2;
+    this.onMobHit?.();
     if (mob.health <= 0) {
       const dropPos = mob.root.position.clone();
       dropPos.y += 0.05;
       this.onDrop(dropPos, mob.kind);
+      this.onMobDeath?.();
       this.removeMob(mob);
     }
   }

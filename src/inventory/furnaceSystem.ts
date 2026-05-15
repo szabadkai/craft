@@ -59,6 +59,12 @@ export class FurnaceSystem {
     return this.openFurnace !== null;
   }
 
+  get isBurning(): boolean {
+    if (!this.openFurnace) return false;
+    const state = this.furnaces.get(this.openFurnace.key);
+    return state !== undefined && state.burnRemainingMs > 0;
+  }
+
   load(snapshot: Record<string, FurnaceSnapshot> | null): void {
     this.furnaces.clear();
     if (!snapshot) {

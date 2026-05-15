@@ -43,6 +43,8 @@ export class WildlifeSystem {
     private readonly getSeed: () => number,
     private readonly getBlock: (wx: number, y: number, wz: number) => Block,
     private readonly onDrop: (position: THREE.Vector3, kind: WildlifeKind) => void,
+    private readonly onAnimalHit?: () => void,
+    private readonly onAnimalDeath?: () => void,
   ) {}
 
   spawnForChunk(cx: number, cz: number): void {
@@ -169,10 +171,12 @@ export class WildlifeSystem {
     animal.root.position.x += pushX;
     animal.root.position.z += pushZ;
     animal.verticalVelocity += 2.2;
+    this.onAnimalHit?.();
     if (animal.health > 0) return;
     const dropPos = animal.root.position.clone();
     dropPos.y += 0.05;
     this.onDrop(dropPos, animal.kind);
+    this.onAnimalDeath?.();
     this.removeAnimal(animal);
   }
 

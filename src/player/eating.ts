@@ -16,6 +16,8 @@ export class EatingSystem {
     private readonly inventory: InventorySystem,
     private readonly barEl: HTMLDivElement,
     private readonly barFillEl: HTMLDivElement,
+    private readonly onStart?: () => void,
+    private readonly onComplete?: () => void,
   ) {}
 
   get isEating(): boolean {
@@ -38,6 +40,7 @@ export class EatingSystem {
     this.state = { item: slot.item, startedAt: performance.now(), healAmount };
     this.barEl.classList.remove('hidden');
     this.barFillEl.style.width = '0%';
+    this.onStart?.();
     return true;
   }
 
@@ -70,6 +73,7 @@ export class EatingSystem {
     if (progress >= 1) {
       this.health.heal(this.state.healAmount);
       this.inventory.consumeSelectedItem(1);
+      this.onComplete?.();
       this.cancel();
     }
   }

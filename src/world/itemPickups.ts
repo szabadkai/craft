@@ -22,6 +22,7 @@ export class ItemPickupSystem {
   constructor(
     private readonly scene: THREE.Scene,
     private readonly addToInventory: (item: Item, amount: number) => number,
+    private readonly onPickup?: () => void,
   ) {}
 
   spawn(item: Item | null, count: number, position: THREE.Vector3): void {
@@ -68,6 +69,7 @@ export class ItemPickupSystem {
       if (pickup.mesh.position.distanceTo(playerPosition) > PICKUP_RADIUS) continue;
       const accepted = this.addToInventory(pickup.item, pickup.count);
       pickup.count -= accepted;
+      if (accepted > 0) this.onPickup?.();
       if (pickup.count <= 0) this.removeAt(index);
     }
   }
