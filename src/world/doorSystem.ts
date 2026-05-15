@@ -1,4 +1,4 @@
-import { Block } from '../types';
+import { Block, WORLD_HEIGHT } from '../types';
 
 export type DoorOrientation = 'x' | 'z';
 
@@ -58,7 +58,7 @@ export class DoorSystem {
     let lowest = wy;
     let highest = wy;
     while (lowest > 0 && isDoor(getBlock(wx, lowest - 1, wz))) lowest--;
-    while (highest < 95 && isDoor(getBlock(wx, highest + 1, wz))) highest++;
+    while (highest < WORLD_HEIGHT - 1 && isDoor(getBlock(wx, highest + 1, wz))) highest++;
 
     const entries: BlockEntry[] = [];
     for (let y = lowest; y <= highest; y++) {

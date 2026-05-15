@@ -1,5 +1,5 @@
 export const CHUNK_SIZE = 16;
-export const WORLD_HEIGHT = 96;
+export const WORLD_HEIGHT = 128;
 export const DETAIL_RADIUS = 8;
 export const PRELOAD_RADIUS = 10;
 export const FAR_RADIUS = 42;

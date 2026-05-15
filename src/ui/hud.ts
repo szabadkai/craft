@@ -38,6 +38,7 @@ export type HudElements = {
   sfxVolumeValueEl: HTMLElement;
   musicVolumeInputEl: HTMLInputElement;
   musicVolumeValueEl: HTMLElement;
+  sandboxInputEl: HTMLInputElement;
   waterOverlayEl: HTMLDivElement;
   damageOverlayEl: HTMLDivElement;
   eatingBarEl: HTMLDivElement;
@@ -113,6 +114,11 @@ export function createHud(
             step="5"
             value="50"
           />
+        </label>
+        <label class="sandbox-field" for="sandbox-input">
+          <input id="sandbox-input" type="checkbox" />
+          <span>Sandbox mode</span>
+          <span class="sandbox-hint">Disables hostile mobs</span>
         </label>
         <div class="seed-presets" aria-label="Seed presets">
           <button type="button" data-seed-preset="4">Spawn</button>
@@ -243,6 +249,7 @@ export function createHud(
     sfxVolumeValueEl: root.querySelector<HTMLElement>('#sfx-volume-value')!,
     musicVolumeInputEl: root.querySelector<HTMLInputElement>('#music-volume-input')!,
     musicVolumeValueEl: root.querySelector<HTMLElement>('#music-volume-value')!,
+    sandboxInputEl: root.querySelector<HTMLInputElement>('#sandbox-input')!,
     waterOverlayEl: root.querySelector<HTMLDivElement>('.water-overlay')!,
     damageOverlayEl: root.querySelector<HTMLDivElement>('.damage-overlay')!,
     eatingBarEl: root.querySelector<HTMLDivElement>('.eating-bar')!,

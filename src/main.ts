@@ -54,6 +54,7 @@ import { createAudioEngine } from './audio/audioEngine';
 import { createSfxSystem, blockMaterial } from './audio/sfx';
 import { createMusicSystem } from './audio/music';
 import { createAmbientSystem } from './audio/ambient';
+import { loadSandboxMode, saveSandboxMode } from './player/sandboxMode';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
@@ -215,6 +216,9 @@ sfxVolumeInputEl.value = String(Math.round((savedSfxVol ? parseFloat(savedSfxVol
 sfxVolumeValueEl.textContent = `${sfxVolumeInputEl.value}%`;
 musicVolumeInputEl.value = String(Math.round((savedMusicVol ? parseFloat(savedMusicVol) : 0.5) * 100));
 musicVolumeValueEl.textContent = `${musicVolumeInputEl.value}%`;
+const { sandboxInputEl } = hud;
+let sandboxMode = loadSandboxMode();
+sandboxInputEl.checked = sandboxMode;
 const diagnostics = new DiagnosticsSystem(renderer, diagnosticsEl, summarizeWorldDiagnostics);
 const chunkWorld = new ChunkWorldSystem({
   scene,
@@ -496,8 +500,10 @@ function tick(now: number): void {
   updateHand(now);
   if (worldReady) {
     wildlife.update(dt, now);
-    hostile.update(dt, now, player.position);
-    hostile.spawnNear(player.position, now);
+    if (!sandboxMode) {
+      hostile.update(dt, now, player.position);
+      hostile.spawnNear(player.position, now);
+    }
     interactionSystem.updateHighlight();
     interactionSystem.updateMining(now);
   } else {
@@ -693,6 +699,11 @@ musicVolumeInputEl.addEventListener('input', () => {
   const v = Number(musicVolumeInputEl.value) / 100;
   audioEngine.setMusicVolume(v);
   musicVolumeValueEl.textContent = `${musicVolumeInputEl.value}%`;
+});
+
+sandboxInputEl.addEventListener('change', () => {
+  sandboxMode = sandboxInputEl.checked;
+  saveSandboxMode(sandboxMode);
 });
 
 randomSeedEl.addEventListener('click', () => {

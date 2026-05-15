@@ -151,6 +151,35 @@ canvas {
   accent-color: #9fdb8c;
 }
 
+.sandbox-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  cursor: pointer;
+}
+
+.sandbox-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #9fdb8c;
+  cursor: pointer;
+}
+
+.sandbox-field span {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sandbox-field .sandbox-hint {
+  color: rgba(255, 255, 255, 0.36);
+  font-weight: 400;
+  text-transform: none;
+  font-size: 11px;
+}
+
 .seed-presets {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
