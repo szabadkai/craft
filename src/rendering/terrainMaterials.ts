@@ -292,6 +292,15 @@ export function createTerrainAtlas(): THREE.CanvasTexture {
   drawTile(context, Tile.Water, '#2f76b8', '#b7d9ef', 'water');
   drawTile(context, Tile.Chest, '#8b5e3c', '#d4a05a', 'chest');
   drawTile(context, Tile.DoorOak, '#a6753b', '#6d4424', 'door');
+  drawTile(context, Tile.Amethyst, '#7b3e9e', '#4a1f6e', 'amethyst');
+  drawTile(context, Tile.AmethystCluster, '#9e5ec0', '#c38ee0', 'amethystCluster');
+  drawTile(context, Tile.MossBlock, '#4a7a3a', '#2d5c22', 'mossBlock');
+  drawTile(context, Tile.GlowBerry, '#3e7d34', '#e8c83a', 'glowBerry');
+  drawTile(context, Tile.Lava, '#d45a0a', '#f2a030', 'lava');
+  drawTile(context, Tile.Basalt, '#3a3840', '#252328', 'basalt');
+  drawTile(context, Tile.MossyStoneBrick, '#6a7268', '#3a5c30', 'mossyStoneBrick');
+  drawTile(context, Tile.IronBars, '#8a8a8a', '#4a4a4a', 'ironBars');
+  drawTile(context, Tile.Spawner, '#2a3a2a', '#1a2a1a', 'spawner');
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
@@ -528,19 +537,122 @@ function drawTile(
     context.fillRect(x + 7, y + 1, 2, 1);
     context.globalAlpha = 1;
   } else if (pattern === 'door') {
-    // planks base
     context.globalAlpha = 0.6;
     context.fillRect(x, y + 5, 16, 1);
     context.fillRect(x, y + 11, 16, 1);
-    // horizontal cross panel
     context.fillStyle = accent;
     context.globalAlpha = 0.85;
     context.fillRect(x + 2, y + 3, 12, 2);
     context.fillRect(x + 2, y + 11, 12, 2);
-    // vertical stiles
     context.fillRect(x + 2, y, 2, 16);
     context.fillRect(x + 12, y, 2, 16);
     context.globalAlpha = 1;
+  } else if (pattern === 'amethyst') {
+    context.globalAlpha = 0.5;
+    for (let i = 0; i < 12; i++) {
+      const px = Math.floor(rand(i) * 14);
+      const py = Math.floor(rand(i + 20) * 14);
+      context.fillRect(x + 1 + px, y + 1 + py, 2, 2);
+    }
+    context.globalAlpha = 0.3;
+    context.fillStyle = '#c08ee0';
+    for (let i = 0; i < 6; i++) {
+      context.fillRect(x + Math.floor(rand(i + 40) * 16), y + Math.floor(rand(i + 60) * 16), 1, 1);
+    }
+  } else if (pattern === 'amethystCluster') {
+    context.clearRect(x, y, 16, 16);
+    context.globalAlpha = 1;
+    context.fillStyle = base;
+    context.fillRect(x + 3, y + 6, 2, 10);
+    context.fillRect(x + 7, y + 3, 2, 13);
+    context.fillRect(x + 11, y + 5, 2, 11);
+    context.fillStyle = accent;
+    context.fillRect(x + 2, y + 4, 4, 3);
+    context.fillRect(x + 6, y + 1, 4, 3);
+    context.fillRect(x + 10, y + 3, 4, 3);
+  } else if (pattern === 'mossBlock') {
+    context.globalAlpha = 0.4;
+    for (let i = 0; i < 40; i++) {
+      context.fillRect(x + Math.floor(rand(i) * 16), y + Math.floor(rand(i + 30) * 16), 1 + Math.floor(rand(i + 60) * 2), 1);
+    }
+    context.globalAlpha = 0.25;
+    context.fillStyle = '#6aaa52';
+    for (let i = 0; i < 8; i++) {
+      context.fillRect(x + Math.floor(rand(i + 80) * 16), y + Math.floor(rand(i + 90) * 16), 2, 2);
+    }
+  } else if (pattern === 'glowBerry') {
+    context.clearRect(x, y, 16, 16);
+    context.globalAlpha = 1;
+    context.fillStyle = base;
+    context.fillRect(x + 5, y + 2, 6, 8);
+    context.fillRect(x + 3, y + 4, 10, 4);
+    context.fillStyle = accent;
+    context.fillRect(x + 6, y + 5, 2, 2);
+    context.fillRect(x + 9, y + 4, 2, 2);
+    context.fillStyle = '#f0e060';
+    context.globalAlpha = 0.7;
+    context.fillRect(x + 7, y + 9, 2, 4);
+  } else if (pattern === 'lava') {
+    context.globalAlpha = 0.7;
+    for (let i = 0; i < 6; i++) {
+      const lx = Math.floor(rand(i) * 10);
+      const ly = Math.floor(rand(i + 20) * 10);
+      context.fillRect(x + lx, y + ly, 4 + Math.floor(rand(i + 40) * 4), 3);
+    }
+    context.globalAlpha = 0.4;
+    context.fillStyle = '#ff6020';
+    for (let i = 0; i < 10; i++) {
+      context.fillRect(x + Math.floor(rand(i + 60) * 16), y + Math.floor(rand(i + 80) * 16), 2, 1);
+    }
+  } else if (pattern === 'basalt') {
+    context.globalAlpha = 0.45;
+    for (let i = 0; i < 5; i++) {
+      const bx = Math.floor(rand(i) * 12);
+      context.fillRect(x + bx, y, 2, 16);
+    }
+    context.globalAlpha = 0.2;
+    context.fillStyle = '#504e58';
+    for (let i = 0; i < 8; i++) {
+      context.fillRect(x + Math.floor(rand(i + 30) * 16), y + Math.floor(rand(i + 50) * 16), 1, 1);
+    }
+  } else if (pattern === 'mossyStoneBrick') {
+    context.globalAlpha = 0.55;
+    context.fillRect(x, y + 4, 16, 1);
+    context.fillRect(x, y + 9, 16, 1);
+    context.fillRect(x, y + 14, 16, 1);
+    context.fillRect(x + 5, y, 1, 5);
+    context.fillRect(x + 11, y + 5, 1, 5);
+    context.fillRect(x + 3, y + 10, 1, 5);
+    context.fillStyle = accent;
+    context.globalAlpha = 0.6;
+    context.fillRect(x + 1, y + 1, 4, 3);
+    context.fillRect(x + 8, y + 5, 5, 3);
+    context.fillRect(x + 1, y + 10, 4, 4);
+    context.fillRect(x + 12, y + 11, 3, 3);
+  } else if (pattern === 'ironBars') {
+    context.clearRect(x, y, 16, 16);
+    context.globalAlpha = 1;
+    context.fillStyle = base;
+    context.fillRect(x + 3, y, 2, 16);
+    context.fillRect(x + 7, y, 2, 16);
+    context.fillRect(x + 11, y, 2, 16);
+    context.fillStyle = accent;
+    context.fillRect(x, y + 2, 16, 1);
+    context.fillRect(x, y + 7, 16, 1);
+    context.fillRect(x, y + 12, 16, 1);
+  } else if (pattern === 'spawner') {
+    context.globalAlpha = 0.5;
+    context.strokeStyle = accent;
+    context.strokeRect(x + 1, y + 1, 14, 14);
+    context.strokeRect(x + 4, y + 4, 8, 8);
+    context.globalAlpha = 0.7;
+    context.fillStyle = '#4a6a4a';
+    context.fillRect(x + 6, y + 6, 4, 4);
+    context.globalAlpha = 0.3;
+    for (let i = 0; i < 8; i++) {
+      context.fillStyle = '#3a5a3a';
+      context.fillRect(x + Math.floor(rand(i) * 16), y + Math.floor(rand(i + 20) * 16), 1, 1);
+    }
   }
   context.globalAlpha = 1;
 }

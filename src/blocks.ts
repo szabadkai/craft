@@ -34,6 +34,11 @@ export const solidBlocks = new Set<Block>([
   Block.OakSlabTop,
   Block.CobblestoneSlab,
   Block.CobblestoneSlabTop,
+  Block.Amethyst,
+  Block.MossBlock,
+  Block.Basalt,
+  Block.MossyStoneBrick,
+  Block.Spawner,
 ]);
 
 export const selectableBlocks = [
@@ -160,6 +165,24 @@ export function blockColor(block: Block): [number, number, number] {
     case Block.OakDoor:
     case Block.OakDoorOpen:
       return [0.64, 0.45, 0.24];
+    case Block.Amethyst:
+      return [0.55, 0.32, 0.72];
+    case Block.AmethystCluster:
+      return [0.68, 0.45, 0.82];
+    case Block.MossBlock:
+      return [0.28, 0.52, 0.22];
+    case Block.GlowBerry:
+      return [0.85, 0.72, 0.18];
+    case Block.Lava:
+      return [0.92, 0.42, 0.08];
+    case Block.Basalt:
+      return [0.25, 0.24, 0.26];
+    case Block.MossyStoneBrick:
+      return [0.38, 0.44, 0.34];
+    case Block.IronBars:
+      return [0.52, 0.52, 0.52];
+    case Block.Spawner:
+      return [0.22, 0.28, 0.22];
     default:
       return [1, 1, 1];
   }

@@ -193,7 +193,7 @@ export function buildChunkMesh(
           const neighbor = getBlock(p[0] + face.n[0], p[1] + face.n[1], p[2] + face.n[2]);
           const index = u + v * uSize;
           mask[index] =
-            block !== Block.Air && block !== Block.Water && block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves && !isDecoration(block) && !isSlab(block) && !isStair(block) && !occludesFace(block, neighbor)
+            block !== Block.Air && block !== Block.Water && block !== Block.Lava && block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves && block !== Block.IronBars && !isDecoration(block) && !isSlab(block) && !isStair(block) && !occludesFace(block, neighbor)
               ? { block, tile: tileForBlockFace(block, face.n), shade: face.shade }
               : null;
         }
@@ -250,7 +250,7 @@ export function buildChunkMesh(
     for (let z = 0; z < CHUNK_SIZE; z++) {
       for (let x = 0; x < CHUNK_SIZE; x++) {
         const block = getBlock(x, y, z);
-        if (block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves) continue;
+        if (block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves && block !== Block.IronBars) continue;
         for (const face of faces) {
           const neighbor = getBlock(x + face.n[0], y + face.n[1], z + face.n[2]);
           if (neighbor !== Block.Air && neighbor !== Block.Water && !isDecoration(neighbor) && neighbor !== Block.OakDoorOpen) continue;
@@ -272,6 +272,20 @@ export function buildChunkMesh(
           const neighbor = getBlock(nx, ny, nz);
           if (neighbor === Block.Water || isSolid(neighbor)) continue;
           emitWaterBlockFace(cx, cz, x, y, z, face, waterPositions, waterNormals, waterIndices);
+        }
+      }
+    }
+  }
+
+  // Emit lava faces (bright emissive, non-greedy)
+  for (let y = 0; y < WORLD_HEIGHT; y++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        if (getBlock(x, y, z) !== Block.Lava) continue;
+        for (const face of faces) {
+          const neighbor = getBlock(x + face.n[0], y + face.n[1], z + face.n[2]);
+          if (neighbor === Block.Lava || isSolid(neighbor)) continue;
+          emitTransparentFace(cx, cz, x, y, z, Block.Lava, face, transparentPositions, transparentNormals, transparentColors, transparentUvs, transparentAtlas, transparentIndices);
         }
       }
     }
@@ -346,7 +360,9 @@ function isDecoration(block: Block): boolean {
     block === Block.BlueFlower ||
     block === Block.Mushroom ||
     block === Block.BerryBush ||
-    block === Block.OakDoorOpen
+    block === Block.OakDoorOpen ||
+    block === Block.AmethystCluster ||
+    block === Block.GlowBerry
   );
 }
 

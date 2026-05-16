@@ -1043,6 +1043,70 @@ canvas {
   background: rgba(160, 20, 20, 0.35);
 }
 
+/* death screen */
+.death-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(120, 10, 10, 0.62);
+  animation: death-fade-in 0.8s ease forwards;
+}
+
+@keyframes death-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.death-screen.hidden {
+  display: none;
+}
+
+.death-window {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.death-window h2 {
+  font-family: inherit;
+  font-size: 48px;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  margin: 0;
+}
+
+.death-window .death-message {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 1px 1px 0 #000;
+}
+
+.death-respawn {
+  margin-top: 12px;
+  padding: 8px 40px;
+  font-family: inherit;
+  font-size: 18px;
+  color: #fff;
+  background: rgba(60, 60, 60, 0.75);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  text-shadow: 1px 1px 0 #000;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.death-respawn:hover {
+  background: rgba(80, 80, 80, 0.9);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.death-respawn:active {
+  background: rgba(40, 40, 40, 0.9);
+}
+
 .eating-bar {
   position: absolute;
   left: 50%;

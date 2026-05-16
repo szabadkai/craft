@@ -9,22 +9,28 @@ export function findDrySpawn(
 ): { x: number; y: number; z: number } {
   let best = { x: originX, z: originZ, h: terrainHeight(originX, originZ, seed) };
   let bestScore = Number.POSITIVE_INFINITY;
-  for (let radius = 0; radius <= 48; radius += 2) {
-    for (let dz = -radius; dz <= radius; dz += 2) {
-      for (let dx = -radius; dx <= radius; dx += 2) {
+
+  // Spiral outward up to 256 blocks, sampling every 4 blocks
+  const step = 4;
+  const maxRadius = 256;
+  for (let radius = 0; radius <= maxRadius; radius += step) {
+    for (let dz = -radius; dz <= radius; dz += step) {
+      for (let dx = -radius; dx <= radius; dx += step) {
         if (Math.abs(dx) !== radius && Math.abs(dz) !== radius) continue;
         const x = originX + dx;
         const z = originZ + dz;
         const h = terrainHeight(x, z, seed);
         if (h <= WATER_LEVEL + 1) continue;
-        const score = dx * dx + dz * dz + Math.abs(h - WATER_LEVEL - 5) * 6;
+        const dist = dx * dx + dz * dz;
+        const score = dist + Math.abs(h - WATER_LEVEL - 5) * 6;
         if (score < bestScore) {
           best = { x, z, h };
           bestScore = score;
         }
       }
     }
-    if (bestScore < Number.POSITIVE_INFINITY) break;
+    // Once we've found land and checked 2 more rings for a better spot, stop
+    if (bestScore < Number.POSITIVE_INFINITY && radius >= step * 2) break;
   }
   return {
     x: best.x + 0.5,

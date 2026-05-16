@@ -65,6 +65,22 @@ export function blockHardness(block: Block, tool: MiningTool): number {
       return 1700 / speed;
     case Block.DiamondOre:
       return 2200 / speed;
+    case Block.Amethyst:
+      return 1300 / speed;
+    case Block.AmethystCluster:
+      return 400 / speed;
+    case Block.MossBlock:
+      return 260 / speed;
+    case Block.GlowBerry:
+      return 180 / speed;
+    case Block.Basalt:
+      return 1500 / speed;
+    case Block.MossyStoneBrick:
+      return 1300 / speed;
+    case Block.IronBars:
+      return 1000 / speed;
+    case Block.Spawner:
+      return 2500 / speed;
     default:
       return 450 / speed;
   }
@@ -154,6 +170,22 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
     case Block.OakDoor:
     case Block.OakDoorOpen:
       return { item: 'oak_door', count: 1 };
+    case Block.Amethyst:
+      return toolTier(tool) >= 2 ? { item: 'amethyst', count: 1 } : null;
+    case Block.AmethystCluster:
+      return { item: 'amethyst_cluster', count: 1 };
+    case Block.MossBlock:
+      return { item: 'moss_block', count: 1 };
+    case Block.GlowBerry:
+      return { item: 'glow_berry', count: 1 };
+    case Block.Basalt:
+      return toolTier(tool) >= 1 ? { item: 'basalt', count: 1 } : null;
+    case Block.MossyStoneBrick:
+      return toolTier(tool) >= 1 ? { item: 'mossy_stone_brick', count: 1 } : null;
+    case Block.IronBars:
+      return toolTier(tool) >= 1 ? { item: 'iron_bars', count: 1 } : null;
+    case Block.Spawner:
+      return null;
     default:
       return null;
   }
@@ -173,6 +205,11 @@ export function damagesTool(block: Block, tool: MiningTool): boolean {
     case Block.Cobblestone:
     case Block.MossyCobblestone:
     case Block.Brick:
+    case Block.Amethyst:
+    case Block.Basalt:
+    case Block.MossyStoneBrick:
+    case Block.IronBars:
+    case Block.Spawner:
       return true;
     default:
       return false;
@@ -191,6 +228,11 @@ function miningSpeedMultiplier(block: Block, tool: MiningTool): number {
     case Block.CobblestoneSlabTop:
     case Block.MossyCobblestone:
     case Block.Brick:
+    case Block.Amethyst:
+    case Block.Basalt:
+    case Block.MossyStoneBrick:
+    case Block.IronBars:
+    case Block.Spawner:
       return tier >= 3 ? 3.35 : tier === 2 ? 2.5 : tier === 1 ? 1.8 : 1;
     case Block.IronOre:
     case Block.GoldOre:

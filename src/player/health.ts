@@ -1,8 +1,11 @@
+export type DeathCause = 'fall' | 'mob' | 'lava' | 'unknown';
+
 export type HealthState = {
   hp: number;
   maxHp: number;
   isDead: boolean;
   lastDamageTime: number;
+  deathCause: DeathCause;
 };
 
 export type HealthSystem = ReturnType<typeof createHealth>;
@@ -18,11 +21,13 @@ export function createHealth(
     maxHp: 20,
     isDead: false,
     lastDamageTime: -Infinity,
+    deathCause: 'unknown',
   };
 
   let lastGroundY = 0;
   let airborneStartY: number | null = null;
   let wasOnGround = false;
+  let wasInWater = false;
 
   let heartsEl: HTMLElement | null = null;
   let damageOverlayEl: HTMLElement | null = null;
@@ -34,13 +39,18 @@ export function createHealth(
     lastHeartsText = '';
   }
 
-  function reconcile(onGround: boolean, y: number, now: number): void {
-    const fallDamage = updateFallTracking(onGround, y);
-    if (fallDamage > 0) damage(fallDamage);
-    if (state.isDead) {
-      const spawnY = getSpawnY();
-      onRespawn(spawnY);
-      respawn(spawnY);
+  function triggerRespawn(): void {
+    if (!state.isDead) return;
+    const spawnY = getSpawnY();
+    onRespawn(spawnY);
+    respawn(spawnY);
+  }
+
+  function reconcile(onGround: boolean, y: number, now: number, inWater?: boolean): void {
+    const fallDamage = updateFallTracking(onGround, y, inWater ?? false);
+    if (fallDamage > 0) {
+      state.deathCause = 'fall';
+      damage(fallDamage);
     }
     if (heartsEl) {
       const html = buildHeartSpans(state.hp, state.maxHp);
@@ -68,6 +78,11 @@ export function createHealth(
     }
   }
 
+  function damageFrom(amount: number, cause: DeathCause): void {
+    state.deathCause = cause;
+    damage(amount);
+  }
+
   function heal(amount: number): void {
     if (state.isDead || amount <= 0) return;
     state.hp = Math.min(state.maxHp, state.hp + amount);
@@ -81,9 +96,13 @@ export function createHealth(
     wasOnGround = true;
   }
 
-  /** Call every frame. Returns fall damage to apply (0 if none). */
-  function updateFallTracking(onGround: boolean, y: number): number {
+  function updateFallTracking(onGround: boolean, y: number, inWater: boolean): number {
     if (state.isDead) return 0;
+
+    if (inWater && !wasInWater) {
+      airborneStartY = null;
+    }
+    wasInWater = inWater;
 
     if (onGround && !wasOnGround && airborneStartY !== null) {
       const fallDistance = airborneStartY - y;
@@ -110,7 +129,7 @@ export function createHealth(
     return { ...state };
   }
 
-  return { state, damage, heal, mount, reconcile, snapshot };
+  return { state, damage, damageFrom, heal, mount, reconcile, triggerRespawn, snapshot };
 }
 
 function createHeartSprites(): { full: string; empty: string } {

@@ -43,6 +43,9 @@ export type HudElements = {
   damageOverlayEl: HTMLDivElement;
   eatingBarEl: HTMLDivElement;
   eatingBarFillEl: HTMLDivElement;
+  deathScreenEl: HTMLDivElement;
+  deathMessageEl: HTMLSpanElement;
+  respawnBtnEl: HTMLButtonElement;
 };
 
 export function createHud(
@@ -190,6 +193,13 @@ export function createHud(
     </div>
     <div class="water-overlay"></div>
     <div class="damage-overlay"></div>
+    <div class="death-screen hidden">
+      <div class="death-window">
+        <h2>You Died!</h2>
+        <span class="death-message"></span>
+        <button type="button" class="death-respawn">Respawn</button>
+      </div>
+    </div>
     <div class="eating-bar hidden">
       <div class="eating-bar-fill"></div>
     </div>
@@ -254,5 +264,8 @@ export function createHud(
     damageOverlayEl: root.querySelector<HTMLDivElement>('.damage-overlay')!,
     eatingBarEl: root.querySelector<HTMLDivElement>('.eating-bar')!,
     eatingBarFillEl: root.querySelector<HTMLDivElement>('.eating-bar-fill')!,
+    deathScreenEl: root.querySelector<HTMLDivElement>('.death-screen')!,
+    deathMessageEl: root.querySelector<HTMLSpanElement>('.death-message')!,
+    respawnBtnEl: root.querySelector<HTMLButtonElement>('.death-respawn')!,
   };
 }

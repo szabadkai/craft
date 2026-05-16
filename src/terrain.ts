@@ -1,6 +1,8 @@
-import { Block, CHUNK_SIZE, WORLD_HEIGHT } from './types';
+import { isSolid } from './blocks';
+import { Block, CHUNK_SIZE, WORLD_HEIGHT, blockIndex } from './types';
 
 type Biome = 'plains' | 'forest' | 'hills' | 'beach' | 'snow' | 'dry';
+type UndergroundBiome = 'crystal' | 'lush' | 'lava' | 'none';
 
 export const WATER_LEVEL = 42;
 
@@ -144,6 +146,38 @@ function isCaveBlock(wx: number, y: number, wz: number, h: number, seed: number)
   return false;
 }
 
+function undergroundBiomeAt(x: number, y: number, z: number, seed: number): UndergroundBiome {
+  const v = valueNoise3D(x + 1000, y * 0.8, z - 1000, 80, seed + 601);
+  const t = valueNoise3D(x - 2000, y * 0.6, z + 2000, 100, seed + 611);
+  if (y < 20 && t > 0.55) return 'lava';
+  if (v > 0.62) return 'crystal';
+  if (v < 0.32 && y < 50) return 'lush';
+  return 'none';
+}
+
+function isCaveWall(wx: number, y: number, wz: number, h: number, seed: number): boolean {
+  if (!isCaveBlock(wx, y, wz, h, seed)) return false;
+  for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]] as const) {
+    const nx = wx + dx, ny = y + dy, nz = wz + dz;
+    if (ny < 5 || ny >= h - 4) continue;
+    if (!isCaveBlock(nx, ny, nz, terrainHeight(nx, nz, seed), seed)) return true;
+  }
+  return false;
+}
+
+function undergroundStoneBlock(x: number, y: number, z: number, seed: number): Block {
+  const ub = undergroundBiomeAt(x, y, z, seed);
+  const detail = hash3(x, y, z, seed + 701);
+  if (ub === 'crystal') {
+    if (detail > 0.92) return Block.Amethyst;
+  } else if (ub === 'lush') {
+    if (detail > 0.88) return Block.MossBlock;
+  } else if (ub === 'lava') {
+    if (detail > 0.85) return Block.Basalt;
+  }
+  return Block.Stone;
+}
+
 export function generatedBlockAt(x: number, y: number, z: number, seed: number): Block {
   if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
   const h = terrainHeight(x, z, seed);
@@ -163,7 +197,7 @@ export function generatedBlockAt(x: number, y: number, z: number, seed: number):
   if (y < 22 && deepOre > 0.74 && deepOre < 0.765) return Block.GoldOre;
   if (y < 14 && ore > 0.735 && ore < 0.748) return Block.DiamondOre;
   if (valueNoise(x + y * 3, z - y * 2, 18, seed + 91) > 0.86) return Block.Gravel;
-  return Block.Stone;
+  return undergroundStoneBlock(x, y, z, seed);
 }
 
 export function biomeAt(x: number, z: number, seed: number): Biome {
@@ -240,10 +274,222 @@ export function makeChunkBlocks(cx: number, cz: number, seed: number): Uint16Arr
       }
     }
   }
+  addUndergroundFeatures(blocks, cx, cz, seed);
   addTrees(blocks, cx, cz, seed);
   addSurfaceDetails(blocks, cx, cz, seed);
   addLakes(blocks, cx, cz, seed);
+  settleWater(blocks);
   return blocks;
+}
+
+function idx(x: number, z: number, y: number): number {
+  return x + CHUNK_SIZE * (z + CHUNK_SIZE * y);
+}
+
+function settleWater(blocks: Uint16Array): void {
+  const MAX_SPREAD = 4;
+  let changed = true;
+  let passes = 0;
+  while (changed && passes < 60) {
+    changed = false;
+    passes++;
+
+    // Gravity: move water down into air
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      for (let z = 0; z < CHUNK_SIZE; z++) {
+        for (let y = 1; y < WORLD_HEIGHT; y++) {
+          const i = idx(x, z, y);
+          if (blocks[i] !== Block.Water) continue;
+          const below = idx(x, z, y - 1);
+          if (blocks[below] === Block.Air) {
+            blocks[below] = Block.Water;
+            blocks[i] = Block.Air;
+            changed = true;
+          }
+        }
+      }
+    }
+
+    // Horizontal spread: water flows sideways if it has support below
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      for (let z = 0; z < CHUNK_SIZE; z++) {
+        for (let y = 1; y < WORLD_HEIGHT; y++) {
+          const i = idx(x, z, y);
+          if (blocks[i] !== Block.Water) continue;
+          const belowBlock = blocks[idx(x, z, y - 1)];
+          if (!isSolid(belowBlock) && belowBlock !== Block.Water) continue;
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            const nx = x + dx;
+            const nz = z + dz;
+            if (nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+            const ni = idx(nx, nz, y);
+            if (blocks[ni] !== Block.Air) continue;
+            const nBelow = blocks[idx(nx, nz, y - 1)];
+            if (nBelow === Block.Air) {
+              blocks[ni] = Block.Water;
+              changed = true;
+            } else if (isSolid(nBelow) || nBelow === Block.Water) {
+              let dist = 1;
+              let tooFar = false;
+              let cx2 = nx, cz2 = nz;
+              for (let s = 1; s < MAX_SPREAD; s++) {
+                cx2 += dx;
+                cz2 += dz;
+                if (cx2 < 0 || cx2 >= CHUNK_SIZE || cz2 < 0 || cz2 >= CHUNK_SIZE) break;
+                if (blocks[idx(cx2, cz2, y)] === Block.Water) { tooFar = true; break; }
+                if (blocks[idx(cx2, cz2, y)] !== Block.Air) break;
+                dist++;
+              }
+              if (!tooFar && dist <= MAX_SPREAD) {
+                blocks[ni] = Block.Water;
+                changed = true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function addUndergroundFeatures(blocks: Uint16Array, cx: number, cz: number, seed: number): void {
+  for (let y = 5; y < 60; y++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const i = blockIndex(x, y, z);
+        const block = blocks[i] as Block;
+        const wx = cx * CHUNK_SIZE + x;
+        const wz = cz * CHUNK_SIZE + z;
+
+        if (block === Block.Air) {
+          const ub = undergroundBiomeAt(wx, y, wz, seed);
+          const below = y > 0 ? (blocks[blockIndex(x, y - 1, z)] as Block) : Block.Stone;
+          const above = y < WORLD_HEIGHT - 1 ? (blocks[blockIndex(x, y + 1, z)] as Block) : Block.Stone;
+          const detail = hash3(wx, y, wz, seed + 721);
+
+          if (ub === 'crystal') {
+            if (above === Block.Stone || above === Block.Amethyst) {
+              if (detail > 0.88) blocks[i] = Block.AmethystCluster;
+            }
+          } else if (ub === 'lush') {
+            if (below === Block.Stone || below === Block.MossBlock) {
+              if (detail > 0.82) blocks[i] = Block.GlowBerry;
+            }
+          } else if (ub === 'lava') {
+            if (below !== Block.Air && below !== Block.Lava && detail > 0.7 && y < 14) {
+              blocks[i] = Block.Lava;
+            }
+          }
+          continue;
+        }
+      }
+    }
+  }
+
+  addMineshafts(blocks, cx, cz, seed);
+  addDungeons(blocks, cx, cz, seed);
+}
+
+function isMineshaftCorridor(wx: number, y: number, wz: number, seed: number): boolean {
+  if (y < 20 || y > 40) return false;
+  const gridX = Math.floor(wx / 5);
+  const gridZ = Math.floor(wz / 5);
+  const localX = ((wx % 5) + 5) % 5;
+  const localZ = ((wz % 5) + 5) % 5;
+  const hX = hash2(gridX, y * 3 + 1, seed + 801);
+  const hZ = hash2(gridZ + 5000, y * 3 + 1, seed + 811);
+  const isXCorridor = hX > 0.72 && (localZ === 2 || localZ === 3);
+  const isZCorridor = hZ > 0.72 && (localX === 2 || localX === 3);
+  return isXCorridor || isZCorridor;
+}
+
+function addMineshafts(blocks: Uint16Array, cx: number, cz: number, seed: number): void {
+  for (let y = 20; y <= 40; y++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const wx = cx * CHUNK_SIZE + x;
+        const wz = cz * CHUNK_SIZE + z;
+        if (!isMineshaftCorridor(wx, y, wz, seed)) continue;
+        const h = terrainHeight(wx, wz, seed);
+        if (y >= h - 4) continue;
+        const i = blockIndex(x, y, z);
+        const block = blocks[i] as Block;
+        if (block === Block.Air || block === Block.Water || block === Block.Lava) continue;
+
+        // Carve 3-tall corridor
+        for (let dy = 0; dy < 3 && y + dy < WORLD_HEIGHT; dy++) {
+          const ci = blockIndex(x, y + dy, z);
+          const cb = blocks[ci] as Block;
+          if (cb !== Block.Air && cb !== Block.Water && cb !== Block.Lava) {
+            blocks[ci] = Block.Air;
+          }
+        }
+
+        // Support pillars: oak logs at intersections every 5 blocks
+        const localX = ((wx % 5) + 5) % 5;
+        const localZ = ((wz % 5) + 5) % 5;
+        if (localX === 2 && localZ === 2) {
+          for (let dy = 0; dy < 3 && y + dy < WORLD_HEIGHT; dy++) {
+            blocks[blockIndex(x, y + dy, z)] = Block.Log;
+          }
+          if (y + 3 < WORLD_HEIGHT) {
+            blocks[blockIndex(x, y + 3, z)] = Block.Planks;
+          }
+        }
+
+        // Rails: planks floor at intervals
+        if (hash3(wx, y, wz, seed + 831) > 0.75) {
+          blocks[blockIndex(x, y, z)] = Block.Planks;
+        }
+      }
+    }
+  }
+}
+
+function dungeonCenter(wx: number, wz: number, seed: number): { cx: number; cz: number; y: number } | null {
+  const gx = Math.floor(wx / 48);
+  const gz = Math.floor(wz / 48);
+  const h = hash2(gx, gz, seed + 901);
+  if (h > 0.12) return null;
+  const offX = Math.floor(hash2(gx + 100, gz, seed + 911) * 40);
+  const offZ = Math.floor(hash2(gx, gz + 100, seed + 921) * 40);
+  const dy = 18 + Math.floor(hash2(gx + 200, gz + 200, seed + 931) * 20);
+  return { cx: gx * 48 + offX, cz: gz * 48 + offZ, y: dy };
+}
+
+function addDungeons(blocks: Uint16Array, cx: number, cz: number, seed: number): void {
+  for (let dgx = -1; dgx <= 1; dgx++) {
+    for (let dgz = -1; dgz <= 1; dgz++) {
+      const probe = dungeonCenter(cx * CHUNK_SIZE + 8 + dgx * 48, cz * CHUNK_SIZE + 8 + dgz * 48, seed);
+      if (!probe) continue;
+      const { cx: dcx, cz: dcz, y: dy } = probe;
+
+      for (let dx = -2; dx <= 2; dx++) {
+        for (let dz = -2; dz <= 2; dz++) {
+          for (let ddy = 0; ddy < 5; ddy++) {
+            const wx = dcx + dx;
+            const wz = dcz + dz;
+            const wy = dy + ddy;
+            const lx = wx - cx * CHUNK_SIZE;
+            const lz = wz - cz * CHUNK_SIZE;
+            if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
+            if (wy < 1 || wy >= WORLD_HEIGHT - 1) continue;
+
+            const i = blockIndex(lx, wy, lz);
+            const isWall = Math.abs(dx) === 2 || Math.abs(dz) === 2 || ddy === 0 || ddy === 4;
+
+            if (isWall) {
+              blocks[i] = Block.MossyStoneBrick;
+            } else if (dx === 0 && dz === 0 && ddy === 1) {
+              blocks[i] = Block.Spawner;
+            } else {
+              blocks[i] = Block.Air;
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 function addTrees(blocks: Uint16Array, cx: number, cz: number, seed: number): void {

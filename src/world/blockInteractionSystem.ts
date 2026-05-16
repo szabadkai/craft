@@ -129,7 +129,30 @@ export class BlockInteractionSystem {
       this.doorSystem.toggle(hit.block.x, hit.block.y, hit.block.z, this.getBlock, this.setBlocks);
       return 'handled';
     }
+    if (block === Block.Spawner) {
+      this.lootSpawner(hit.block.x, hit.block.y, hit.block.z);
+      return 'handled';
+    }
     return 'pass';
+  }
+
+  private lootSpawner(wx: number, y: number, wz: number): void {
+    const pos = new THREE.Vector3(wx + 0.5, y + 0.65, wz + 0.5);
+    const roll = Math.random();
+    if (roll < 0.25) {
+      this.spawnItemDrop('iron_ingot', 1 + Math.floor(Math.random() * 2), pos);
+    } else if (roll < 0.45) {
+      this.spawnItemDrop('gold_ingot', 1, pos);
+    } else if (roll < 0.55) {
+      this.spawnItemDrop('diamond', 1, pos);
+    } else if (roll < 0.72) {
+      this.spawnItemDrop('coal', 2 + Math.floor(Math.random() * 3), pos);
+    } else if (roll < 0.85) {
+      this.spawnItemDrop('iron_pickaxe', 1, pos);
+    } else {
+      this.spawnItemDrop('apple', 2 + Math.floor(Math.random() * 2), pos);
+    }
+    this.setBlock(wx, y, wz, Block.MossyStoneBrick);
   }
 
   place(hit: BlockHit): void {

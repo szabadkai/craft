@@ -58,6 +58,15 @@ export enum Block {
   CobblestoneStairsS = 50,
   CobblestoneStairsE = 51,
   CobblestoneStairsW = 52,
+  Amethyst = 53,
+  AmethystCluster = 54,
+  MossBlock = 55,
+  GlowBerry = 56,
+  Lava = 57,
+  Basalt = 58,
+  MossyStoneBrick = 59,
+  IronBars = 60,
+  Spawner = 61,
 }
 
 export type ChunkKey = `${number},${number}`;

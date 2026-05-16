@@ -119,7 +119,7 @@ const hostile: HostileSystem = new HostileSystem(
   () => sfx.mobHit(),
   () => sfx.mobDeath(),
 );
-hostile.setPlayerDamageCallback((amount) => health.damage(amount));
+hostile.setPlayerDamageCallback((amount) => health.damageFrom(amount, 'mob'));
 const wildlife: WildlifeSystem = new WildlifeSystem(
   scene,
   () => seed,
@@ -147,6 +147,7 @@ const player = {
   pitch: 0,
   onGround: false,
   inWater: false,
+  waterDepth: 0,
   width: 0.64,
   height: 1.8,
   eye: 1.62,
@@ -206,6 +207,9 @@ const {
   waterOverlayEl,
   damageOverlayEl,
   heartsEl,
+  deathScreenEl,
+  deathMessageEl,
+  respawnBtnEl,
 } = hud;
 sensitivityInputEl.value = String(mouseSensitivity);
 const { renderDistanceInputEl, renderDistanceValueEl } = hud;
@@ -449,6 +453,24 @@ function fadeChunks(now: number): void {
   chunkWorld.fadeChunks(now);
 }
 
+const deathMessages: Record<string, string> = {
+  fall: 'You fell from a high place.',
+  mob: 'You were slain by a hostile creature.',
+  lava: 'You tried to swim in lava.',
+  unknown: 'You died.',
+};
+
+function showDeathScreen(): void {
+  const cause = health.state.deathCause;
+  deathMessageEl.textContent = deathMessages[cause] ?? deathMessages.unknown;
+  deathScreenEl.classList.remove('hidden');
+  if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+}
+
+function hideDeathScreen(): void {
+  deathScreenEl.classList.add('hidden');
+}
+
 const health = createHealth(
   () => terrainHeight(Math.floor(player.position.x), Math.floor(player.position.z), seed) + 2,
   (spawnY) => {
@@ -456,9 +478,15 @@ const health = createHealth(
     player.velocity.set(0, 0, 0);
   },
   () => sfx.playerHurt(),
-  () => sfx.playerDeath(),
+  () => { sfx.playerDeath(); showDeathScreen(); },
 );
 health.mount(heartsEl, damageOverlayEl);
+
+respawnBtnEl.addEventListener('click', () => {
+  health.triggerRespawn();
+  hideDeathScreen();
+  renderer.domElement.requestPointerLock().catch(() => {});
+});
 
 const eatingSystem = new EatingSystem(health, inventorySystem, eatingBarEl, eatingBarFillEl, () => sfx.eating(), () => sfx.eatComplete());
 
@@ -468,6 +496,7 @@ let caveFactor = 0;
 let prevOnGround = false;
 let prevInWater = false;
 let lastFootstepTime = 0;
+let lastLavaDamageTime = 0;
 const lastFootstepPos = new THREE.Vector3();
 
 function applyRenderDistanceInternal(): void {
@@ -487,9 +516,18 @@ function tick(now: number): void {
   if (worldStarted) chunkWorld.updateChunkSet(frame);
   chunkWorld.flushRequests();
   updateLoadingState();
-  if (worldReady) {
+  if (worldReady && !health.state.isDead) {
     playerController.update(dt);
-    health.reconcile(player.onGround, player.position.y, now);
+    health.reconcile(player.onGround, player.position.y, now, player.inWater);
+    // Lava damage: check if feet or body are in lava
+    const feetBlock = getBlock(Math.floor(player.position.x), Math.floor(player.position.y), Math.floor(player.position.z));
+    const bodyBlock = getBlock(Math.floor(player.position.x), Math.floor(player.position.y + 1), Math.floor(player.position.z));
+    if (feetBlock === Block.Lava || bodyBlock === Block.Lava) {
+      if (now - lastLavaDamageTime > 500) {
+        health.damageFrom(4, 'lava');
+        lastLavaDamageTime = now;
+      }
+    }
     const cf = updateCaveFactor(dt, worldReady, player, getBlock, seed);
     if (!isNaN(cf)) caveFactor += (cf - caveFactor) * Math.min(1, dt * 4);
     if (caveFactor < 0.002) caveFactor = 0;
@@ -609,7 +647,7 @@ document.addEventListener('keyup', (event) => keys.delete(event.code));
 
 renderer.domElement.addEventListener('click', () => {
   audioEngine.resume();
-  if (!worldReady || inventorySystem.isOpen) return;
+  if (!worldReady || inventorySystem.isOpen || health.state.isDead) return;
   if (!mouse.locked) {
     renderer.domElement.requestPointerLock().catch(() => {
       mouse.locked = false;
@@ -623,7 +661,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 document.addEventListener('mousemove', (event) => {
-  if (!worldReady || !mouse.locked) return;
+  if (!worldReady || !mouse.locked || health.state.isDead) return;
   const sensitivity = BASE_MOUSE_RADIANS_PER_PIXEL * mouseSensitivity;
   player.yaw -= event.movementX * sensitivity;
   player.pitch -= event.movementY * sensitivity;

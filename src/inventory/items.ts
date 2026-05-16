@@ -43,7 +43,14 @@ export type Item =
   | 'oak_slab'
   | 'cobblestone_slab'
   | 'oak_stairs'
-  | 'cobblestone_stairs';
+  | 'cobblestone_stairs'
+  | 'amethyst'
+  | 'amethyst_cluster'
+  | 'moss_block'
+  | 'glow_berry'
+  | 'basalt'
+  | 'mossy_stone_brick'
+  | 'iron_bars';
 
 export type Recipe = {
   name: string;
@@ -114,6 +121,13 @@ export const defaultInventoryCounts: Record<Item, number> = {
   cobblestone_slab: 0,
   oak_stairs: 0,
   cobblestone_stairs: 0,
+  amethyst: 0,
+  amethyst_cluster: 0,
+  moss_block: 0,
+  glow_berry: 0,
+  basalt: 0,
+  mossy_stone_brick: 0,
+  iron_bars: 0,
 };
 
 export const recipes: Recipe[] = [
@@ -196,6 +210,13 @@ export const itemDefs: ItemDef[] = [
   { id: 'cobblestone_slab', label: 'Cobble Slab', category: 'Blocks', block: Block.CobblestoneSlab },
   { id: 'oak_stairs', label: 'Oak Stairs', category: 'Blocks', block: Block.OakStairsN },
   { id: 'cobblestone_stairs', label: 'Cobble Stairs', category: 'Blocks', block: Block.CobblestoneStairsN },
+  { id: 'amethyst', label: 'Amethyst', category: 'Blocks', block: Block.Amethyst },
+  { id: 'amethyst_cluster', label: 'Amethyst Cluster', category: 'Blocks', block: Block.AmethystCluster },
+  { id: 'moss_block', label: 'Moss Block', category: 'Blocks', block: Block.MossBlock },
+  { id: 'glow_berry', label: 'Glow Berry', category: 'Blocks', block: Block.GlowBerry },
+  { id: 'basalt', label: 'Basalt', category: 'Blocks', block: Block.Basalt },
+  { id: 'mossy_stone_brick', label: 'Mossy Brick', category: 'Blocks', block: Block.MossyStoneBrick },
+  { id: 'iron_bars', label: 'Iron Bars', category: 'Blocks', block: Block.IronBars },
 ];
 
 export function blockToItem(block: Block): Item | null {
@@ -282,6 +303,20 @@ export function blockToItem(block: Block): Item | null {
     case Block.CobblestoneStairsE:
     case Block.CobblestoneStairsW:
       return 'cobblestone_stairs';
+    case Block.Amethyst:
+      return 'amethyst';
+    case Block.AmethystCluster:
+      return 'amethyst_cluster';
+    case Block.MossBlock:
+      return 'moss_block';
+    case Block.GlowBerry:
+      return 'glow_berry';
+    case Block.Basalt:
+      return 'basalt';
+    case Block.MossyStoneBrick:
+      return 'mossy_stone_brick';
+    case Block.IronBars:
+      return 'iron_bars';
     default:
       return null;
   }

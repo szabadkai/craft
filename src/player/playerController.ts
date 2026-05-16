@@ -42,6 +42,7 @@ export type PlayerState = {
   pitch: number;
   onGround: boolean;
   inWater: boolean;
+  waterDepth: number;
   width: number;
   height: number;
   eye: number;
@@ -75,31 +76,45 @@ export class PlayerController {
       return;
     }
 
-    this.state.inWater = this.isBodyInWater();
-    const inWater = this.state.inWater;
+    const prevDepth = this.state.waterDepth;
+    this.state.waterDepth = this.computeWaterDepth();
+    this.state.inWater = this.state.waterDepth > 0;
+    const depth = this.state.waterDepth;
 
+    // Water entry: dampen downward velocity on impact
+    if (prevDepth === 0 && depth > 0 && this.state.velocity.y < -3.5) {
+      this.state.velocity.y = -3.5;
+    }
+
+    // Horizontal movement — depth-scaled speed
     const forward = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'));
     const strafe = Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA'));
-    const speed = inWater ? (this.keys.has('ShiftLeft') ? 3.6 : 2.8) : (this.keys.has('ShiftLeft') ? 8.5 : 5.2);
+    const landSpeed = this.keys.has('ShiftLeft') ? 8.5 : 5.2;
+    const swimSpeed = this.keys.has('ShiftLeft') ? 3.6 : 2.8;
+    const speed = landSpeed + (swimSpeed - landSpeed) * depth;
     const sin = Math.sin(this.state.yaw);
     const cos = Math.cos(this.state.yaw);
     const wishX = (strafe * cos - forward * sin) * speed;
     const wishZ = (-forward * cos - strafe * sin) * speed;
-    this.state.velocity.x += (wishX - this.state.velocity.x) * Math.min(1, dt * (inWater ? 6 : 12));
-    this.state.velocity.z += (wishZ - this.state.velocity.z) * Math.min(1, dt * (inWater ? 6 : 12));
+    const accel = 12 - 6 * depth;
+    this.state.velocity.x += (wishX - this.state.velocity.x) * Math.min(1, dt * accel);
+    this.state.velocity.z += (wishZ - this.state.velocity.z) * Math.min(1, dt * accel);
 
-    if (inWater) {
-      // reduced gravity, buoyancy
+    if (depth > 0) {
       this.state.velocity.y -= 6 * dt;
+      // Continuous drag scales with submersion
+      this.state.velocity.y *= 1 - 8 * depth * dt;
+
       if (this.keys.has('Space')) {
         this.state.velocity.y = Math.min(this.state.velocity.y + 14 * dt, 5.5);
-      }
-      if (this.keys.has('ShiftLeft')) {
+      } else if (this.keys.has('ShiftLeft')) {
         this.state.velocity.y = Math.max(this.state.velocity.y - 10 * dt, -5.0);
-      }
-      // gentle float to surface when idle
-      if (!this.keys.has('Space') && !this.keys.has('ShiftLeft')) {
-        this.state.velocity.y += (0.35 - this.state.velocity.y) * Math.min(1, dt * 1.2);
+      } else if (depth < 0.6) {
+        // Surface float: gently hold player at water line
+        this.state.velocity.y += (0.8 - this.state.velocity.y) * Math.min(1, dt * 2.5);
+      } else {
+        // Deep water idle: gentle rise toward surface
+        this.state.velocity.y += (0.5 - this.state.velocity.y) * Math.min(1, dt * 1.5);
       }
     } else {
       this.state.velocity.y -= 22 * dt;
@@ -116,19 +131,17 @@ export class PlayerController {
     this.syncCamera();
   }
 
-  private isBodyInWater(): boolean {
-    const feetY = Math.floor(this.state.position.y);
-    const headY = Math.floor(this.state.position.y + this.state.height);
-    const cx = Math.floor(this.state.position.x);
-    const cz = Math.floor(this.state.position.z);
-    for (let y = feetY; y <= headY; y++) {
-      for (let z = cz - 1; z <= cz + 1; z++) {
-        for (let x = cx - 1; x <= cx + 1; x++) {
-          if (this.getBlock(x, y, z) === Block.Water) return true;
-        }
-      }
+  private computeWaterDepth(): number {
+    const px = Math.floor(this.state.position.x);
+    const pz = Math.floor(this.state.position.z);
+    const feetY = this.state.position.y;
+    const h = this.state.height;
+    const samples = [feetY, feetY + h * 0.33, feetY + h * 0.66, feetY + h];
+    let count = 0;
+    for (const sy of samples) {
+      if (this.getBlock(px, Math.floor(sy), pz) === Block.Water) count++;
     }
-    return false;
+    return count / samples.length;
   }
 
   collides(position: THREE.Vector3): boolean {
