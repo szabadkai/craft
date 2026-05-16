@@ -173,7 +173,7 @@ export class BlockInteractionSystem {
     }
 
     const place = hit.block.clone().add(hit.normal);
-    if (this.getBlock(place.x, place.y, place.z) !== Block.Air || this.wouldIntersectPlayer(place))
+    if (!this.canReplaceForPlacement(place.x, place.y, place.z) || this.wouldIntersectPlayer(place))
       return;
 
     // Orient logs based on placement face normal
@@ -197,7 +197,7 @@ export class BlockInteractionSystem {
     // Handle door placement (two-tall)
     if (block === Block.OakDoor) {
       const below = this.getBlock(place.x, place.y - 1, place.z);
-      if (!isSolid(below) || this.getBlock(place.x, place.y + 1, place.z) !== Block.Air) return;
+      if (!isSolid(below) || !this.canReplaceForPlacement(place.x, place.y + 1, place.z)) return;
       if (this.wouldIntersectPlayer(new THREE.Vector3(place.x, place.y + 1, place.z))) return;
       const orientation: 'x' | 'z' = Math.abs(hit.normal.x) > 0 ? 'z' : 'x';
       this.doorSystem.place(place.x, place.y, place.z, orientation, this.setBlocks);
@@ -311,7 +311,7 @@ export class BlockInteractionSystem {
     if (item && this.inventory.itemCount(item) <= 0) return;
 
     const place = hit.block.clone().add(hit.normal);
-    if (this.getBlock(place.x, place.y, place.z) !== Block.Air) return;
+    if (!this.canReplaceForPlacement(place.x, place.y, place.z)) return;
     if (this.wouldIntersectPlayer(place)) return;
 
     // Orient log preview based on placement face normal
@@ -332,7 +332,7 @@ export class BlockInteractionSystem {
     // For doors, also check space above and solid below
     if (block === Block.OakDoor) {
       const below = this.getBlock(place.x, place.y - 1, place.z);
-      if (!isSolid(below) || this.getBlock(place.x, place.y + 1, place.z) !== Block.Air) return;
+      if (!isSolid(below) || !this.canReplaceForPlacement(place.x, place.y + 1, place.z)) return;
       if (this.wouldIntersectPlayer(new THREE.Vector3(place.x, place.y + 1, place.z))) return;
     }
     if (this.previewBlock !== previewBlock) {
@@ -361,6 +361,11 @@ export class BlockInteractionSystem {
       block.z < maxZ &&
       block.z + 1 > minZ
     );
+  }
+
+  private canReplaceForPlacement(wx: number, y: number, wz: number): boolean {
+    const block = this.getBlock(wx, y, wz);
+    return block === Block.Air || block === Block.Water;
   }
 
   private currentMiningTool(): MiningTool {

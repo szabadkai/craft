@@ -71,7 +71,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Warm original-style sky, fog, water, atlas colors, and pixel hotbar styling.
 - Day/night cycle with dynamic sun position, sky dome colors, terrain and water shader lighting, directional/ambient light colors and intensities, scene fog, and background — all transitioning smoothly over a ~20-minute real-time 24k-tick cycle.
 - Biomes: plains, forest, hills, beach, snow, dry.
-- Static water fills low terrain basins up to the shared terrain water level.
+- Natural reservoir water seeds low ocean basins and inland depressions, then settles from those sources instead of filling a fixed world-height layer.
 - Surface details: flowers, tall grass, trees.
 - Ores: coal, iron, copper, gold, diamond.
 - Rotatable log orientation: logs placed horizontally align with clicked face.
@@ -88,7 +88,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Recipe-card crafting UI with output and requirement visibility.
 - Health system: 20 HP, pixel-art hearts (top-left HUD), fall damage (>3 blocks), death, and respawn at surface.
 - Food items (apple, raw meat, cooked meat) with eating system (progress bar, HP healing, consumption via right-click).
-- Caves with 3D-noise caverns, worm tunnels, surface entrances, and large chambers.
+- Caves with restrained 3D-noise caverns, narrower worm tunnels, rarer surface entrances, and occasional large chambers.
 - Place preview now uses the terrain atlas texture with per-face tile mapping so the ghost block matches the placed block's actual appearance.
 - Console command system (`` ` `` key) with `give <item> [count]`, `items`, `help`, `clear`, tab completion.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
@@ -138,10 +138,12 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Slab blocks use four block IDs per material pair: `OakSlab` (bottom half), `OakSlabTop` (top half), `CobblestoneSlab`, `CobblestoneSlabTop`. Slabs render as half-height individual geometry (non-greedy, like water faces) via `emitSlabFace` in `src/mesh.ts`. Collision is half-height AABB in `PlayerController.collides()`. Placement: top face → bottom slab, bottom face → top slab, side face → bottom slab. Crafted from 3 planks → 6 oak slabs, 3 cobblestone → 6 cobblestone slabs.
 - Stair blocks use eight block IDs (4 directions × 2 materials): OakStairsN/S/E/W and CobblestoneStairsN/S/E/W. Stairs render individually (non-greedy) via `emitStairFaces` in `src/mesh.ts`. Collision is stepped: bottom half (full 1×1), upper half (half-block in stair direction). Direction is determined by player's yaw at placement time. Stair blocks are NOT in `solidBlocks` — they have custom collision checks in `PlayerController.collides()`. Crafted from 6 planks → 4 oak stairs, 6 cobblestone → 4 cobblestone stairs.
 - Hostile mobs (cave spiders) are managed by `HostileSystem` (`src/world/hostileMobs.ts`). They spawn in caves when the player is deep underground (>8 blocks below surface), walk toward the player within 18 blocks, deal 2 HP damage on contact (500ms cooldown), have 3 HP, and drop raw meat when killed. Hit detection competes with wildlife/block raycasting (closest target wins).
-- Surface rocks generate in `addSurfaceDetails` in `src/terrain.ts` as cobblestone outcrops. Frequency varies by biome: common on hills (10%), occasional on plains/snow (4-7%), rare in forest (3%). Rocks can be 1-2 blocks tall. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
+- Surface rocks generate in `addSurfaceDetails` in `src/terrain.ts` as sparse cobblestone outcrops. Rocks use a low-frequency patch mask plus 5x5 cell anchoring, so even rocky areas leave quiet ground between features. Surface grass, flowers, pumpkins, cactus, and dry gravel also use patch masks instead of independent per-block sprinkling. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
 - Place preview rebuilds the BoxGeometry UVs per selected block via `atlasBoxGeometry`, mapping each face to the correct atlas tile using `tileForBlockFace`.
+- Block placement can replace water cells, making submerged/underground water sources pluggable with normal blocks. Terrain generation seeds finite reservoir water in `addOceanReservoirs`/`addLakes`, but does not run a generation-time settling simulation; full-block water creates visual columns/sheets when moved through carved terrain without level metadata. `OCEAN_SURFACE_Y` is a terrain/rendering target derived from `TERRAIN_BASE_ELEVATION`, not a global underground fill rule. Ocean reservoir columns are continuous for surface terrain at or below `OCEAN_SURFACE_Y` so shorelines remain attached to the waterbody. Runtime water flow is source-connected via `WaterFlowSystem` after mining opens a path and uses a per-event `WaterSupply` cap as the hook for future persistent lake/spring/ocean budgets.
 - Console commands are defined in `src/ui/console.ts`. The `give` command resolves item IDs via `itemDefs` fuzzy matching.
 - Existing IndexedDB saves can make old chunks appear near spawn after generator changes.
+- Chunk storage version is bumped after major generator density changes so saved terrain does not mask the new quieter generation.
 - ESLint enforces a 650 effective-line cap for TypeScript files. Run `npm run lint` regularly during refactors and split modules along durable system boundaries before files approach the cap.
 - Refactors should prefer hierarchical ownership such as `rendering/*`, `world/*`, `inventory/*`, or `player/*`; avoid scattering small lateral helper files without a clear parent system.
 
@@ -162,4 +164,5 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Add more hostile mob variants (surface zombies, skeletons).
 - Improve stair auto-step (player automatically steps up when walking into stairs from the low side).
 - Improve water rendering with reflections or wave-based vertex displacement on far water.
+- Persist water source budgets and add evaporation/condensation loops that recharge lakes, springs, and rain-fed pools.
 - Add restone/mechanism blocks for more complex building.

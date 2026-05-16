@@ -81,6 +81,15 @@ export function blockHardness(block: Block, tool: MiningTool): number {
       return 1000 / speed;
     case Block.Spawner:
       return 2500 / speed;
+    case Block.Mycelium:
+      return 260 / speed;
+    case Block.MushroomStem:
+      return 400 / speed;
+    case Block.MushroomCapRed:
+    case Block.MushroomCapBrown:
+      return 300 / speed;
+    case Block.Obsidian:
+      return 9000 / speed;
     default:
       return 450 / speed;
   }
@@ -186,6 +195,16 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
       return toolTier(tool) >= 1 ? { item: 'iron_bars', count: 1 } : null;
     case Block.Spawner:
       return null;
+    case Block.Mycelium:
+      return { item: 'mycelium', count: 1 };
+    case Block.MushroomStem:
+      return { item: 'mushroom_stem', count: 1 };
+    case Block.MushroomCapRed:
+      return { item: 'mushroom_cap_red', count: 1 };
+    case Block.MushroomCapBrown:
+      return { item: 'mushroom_cap_brown', count: 1 };
+    case Block.Obsidian:
+      return toolTier(tool) >= 3 ? { item: 'obsidian', count: 1 } : null;
     default:
       return null;
   }
@@ -210,6 +229,7 @@ export function damagesTool(block: Block, tool: MiningTool): boolean {
     case Block.MossyStoneBrick:
     case Block.IronBars:
     case Block.Spawner:
+    case Block.Obsidian:
       return true;
     default:
       return false;
@@ -233,6 +253,7 @@ function miningSpeedMultiplier(block: Block, tool: MiningTool): number {
     case Block.MossyStoneBrick:
     case Block.IronBars:
     case Block.Spawner:
+    case Block.Obsidian:
       return tier >= 3 ? 3.35 : tier === 2 ? 2.5 : tier === 1 ? 1.8 : 1;
     case Block.IronOre:
     case Block.GoldOre:

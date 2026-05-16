@@ -1,4 +1,4 @@
-import { biomeAt, terrainHeight, WATER_LEVEL } from '../terrain';
+import { biomeAt, reservoirWaterSurfaceAt, terrainHeight } from '../terrain';
 
 export type Waypoint = { name: string; x: number; z: number; color: string };
 
@@ -123,8 +123,9 @@ export class MinimapSystem {
         const h = terrainHeight(wx, wz, this.seed);
         const i = (py * SIZE + px) * 4;
 
-        if (h <= WATER_LEVEL) {
-          const depth = Math.max(0, WATER_LEVEL - h);
+        const waterSurface = reservoirWaterSurfaceAt(wx, wz, this.seed);
+        if (waterSurface !== null && waterSurface > h) {
+          const depth = Math.max(0, waterSurface - h);
           const darkening = Math.max(0.5, 1 - depth * 0.03);
           data[i] = 51 * darkening;
           data[i + 1] = 102 * darkening;

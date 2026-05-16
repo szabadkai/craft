@@ -7,6 +7,7 @@ import { Block } from '../types';
  */
 
 const MAX_HORIZONTAL_SPREAD = 5;
+const DEFAULT_EVENT_SUPPLY_BLOCKS = 48;
 
 const NEIGHBORS_6 = [
   [1, 0, 0],
@@ -25,6 +26,10 @@ const NEIGHBORS_4_HORIZONTAL = [
 ];
 
 type Vec3 = { x: number; y: number; z: number };
+export type WaterSupply = {
+  sourceId: string;
+  availableBlocks: number;
+};
 
 export class WaterFlowSystem {
   /**
@@ -35,6 +40,7 @@ export class WaterFlowSystem {
   static flow(
     pos: Vec3,
     getBlock: (wx: number, y: number, wz: number) => Block,
+    supply: WaterSupply = { sourceId: 'adjacent-water', availableBlocks: DEFAULT_EVENT_SUPPLY_BLOCKS },
   ): Vec3[] {
     const result: Vec3[] = [];
     const visited = new Set<string>();
@@ -66,6 +72,7 @@ export class WaterFlowSystem {
         const bKey = keyOf(below.x, below.y, below.z);
         if (!visited.has(bKey)) {
           visited.add(bKey);
+          if (!consumeSupply(supply, result)) return result;
           result.push(below);
           // Water that flowed down becomes a new source
           queue.push(below);
@@ -79,7 +86,6 @@ export class WaterFlowSystem {
         const hz = src.z + dz;
         // Check horizontal distance from original water source at this Y
         if (pos.y < src.y) continue; // don't flow upward
-
         const spread = Math.max(Math.abs(hx - pos.x), Math.abs(hz - pos.z));
         if (spread > MAX_HORIZONTAL_SPREAD) continue;
 
@@ -92,6 +98,7 @@ export class WaterFlowSystem {
           const belowTarget = getBlock(target.x, target.y - 1, target.z);
           if (belowTarget === Block.Air) continue; // will be handled by down-flow from source
 
+          if (!consumeSupply(supply, result)) return result;
           visited.add(tKey);
           result.push(target);
           queue.push(target);
@@ -105,4 +112,8 @@ export class WaterFlowSystem {
 
 function keyOf(x: number, y: number, z: number): string {
   return `${x},${y},${z}`;
+}
+
+function consumeSupply(supply: WaterSupply, result: Vec3[]): boolean {
+  return result.length < supply.availableBlocks;
 }

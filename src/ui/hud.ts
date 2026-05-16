@@ -1,7 +1,5 @@
 export type HudElements = {
   root: HTMLDivElement;
-  panelEl: HTMLDivElement;
-  statsEl: HTMLDivElement;
   diagnosticsEl: HTMLDivElement;
   hotbarEl: HTMLDivElement;
   inventoryEl: HTMLDivElement;
@@ -123,11 +121,6 @@ export function createHud(
           <span>Sandbox mode</span>
           <span class="sandbox-hint">Disables hostile mobs</span>
         </label>
-        <div class="seed-presets" aria-label="Seed presets">
-          <button type="button" data-seed-preset="4">Spawn</button>
-          <button type="button" data-seed-preset="30">Forest</button>
-          <button type="button" data-seed-preset="cold copper">Snow</button>
-        </div>
         <div class="seed-actions">
           <button class="secondary" type="button" id="random-seed">Randomize</button>
           <button class="primary" type="submit">Generate</button>
@@ -150,11 +143,6 @@ export function createHud(
     </div>
     <div class="crosshair"></div>
     <div class="hearts"></div>
-    <div class="panel">
-      <b>Craft</b>
-      <span>Click to play. E inventory. F3 diagnostics.</span>
-      <div id="stats"></div>
-    </div>
     <div class="diagnostics hidden" id="diagnostics"></div>
     <div class="hotbar"></div>
     <div class="inventory-overlay hidden">
@@ -221,8 +209,6 @@ export function createHud(
 
   return {
     root,
-    panelEl: root.querySelector<HTMLDivElement>('.panel')!,
-    statsEl: root.querySelector<HTMLDivElement>('#stats')!,
     diagnosticsEl: root.querySelector<HTMLDivElement>('#diagnostics')!,
     hotbarEl: root.querySelector<HTMLDivElement>('.hotbar')!,
     inventoryEl: root.querySelector<HTMLDivElement>('.inventory')!,

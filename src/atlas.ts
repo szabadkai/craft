@@ -2,7 +2,7 @@ import { Block } from './types';
 
 export const ATLAS_TILE_SIZE = 16;
 export const ATLAS_COLUMNS = 4;
-export const ATLAS_ROWS = 12;
+export const ATLAS_ROWS = 13;
 
 export const enum Tile {
   GrassTop = 0,
@@ -52,6 +52,11 @@ export const enum Tile {
   MossyStoneBrick = 44,
   IronBars = 45,
   Spawner = 46,
+  Mycelium = 47,
+  MushroomStem = 48,
+  MushroomCapRed = 49,
+  MushroomCapBrown = 50,
+  Obsidian = 51,
 }
 
 export function tileForBlockFace(block: Block, normal: [number, number, number]): Tile {
@@ -155,6 +160,16 @@ export function tileForBlockFace(block: Block, normal: [number, number, number])
       return Tile.IronBars;
     case Block.Spawner:
       return Tile.Spawner;
+    case Block.Mycelium:
+      return Tile.Mycelium;
+    case Block.MushroomStem:
+      return Tile.MushroomStem;
+    case Block.MushroomCapRed:
+      return Tile.MushroomCapRed;
+    case Block.MushroomCapBrown:
+      return Tile.MushroomCapBrown;
+    case Block.Obsidian:
+      return Tile.Obsidian;
     case Block.OakSlab:
     case Block.OakSlabTop:
       return Tile.Planks;

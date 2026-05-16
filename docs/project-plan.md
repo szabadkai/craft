@@ -20,8 +20,8 @@ The prototype currently supports:
 - Far terrain heightfield ring merged into a single mesh for low draw-call overhead.
 - Biome-driven terrain generation.
 - Snow, forest, plains, hills, beach, and dry areas.
-- Static water fills terrain basins up to the shared water level, with spawn selection avoiding submerged starts.
-- Trees, flowers, tall grass, ores, and surface variation.
+- Natural reservoir water seeds ocean basins and inland depressions, then settles from those sources instead of filling a fixed height layer.
+- Trees, flowers, tall grass, ores, and surface variation, with patch-based density masks that leave quieter land between feature clusters.
 - Block breaking with crack animation.
 - Block placement with placement preview.
 - Held item/tool visuals.
@@ -160,6 +160,7 @@ Tasks:
 
 - Improve water rendering with a separated transparent/reflection pass if the current shader-only water becomes limiting.
 - Add lakes and shoreline improvements.
+- [x] Reduce terrain busyness with sparse surface detail masks, rarer rocks, restrained cave carving, and lower underground decoration density.
 - [x] Add caves using 3D noise.
 - [x] Add richer tree variants (oak, birch).
 - [x] Add more surface features:
@@ -178,7 +179,7 @@ Exit criteria:
 
 - World has visible variety across biomes.
 - Caves and ores create exploration goals.
-- Water exists as a stable non-flowing first pass.
+- Terrain water comes from source reservoirs without generation-time fluid settling, and mined openings use source-connected flow with a bounded supply hook.
 
 ### Milestone 6: Rendering And Performance
 
@@ -213,7 +214,7 @@ Exit criteria:
 4. ✅ Add doors (two-tall openable, right-click toggle).
 5. ✅ Add slabs (half-height blocks, oak and cobblestone variants).
 6. ✅ Add birch log orientation variants (BirchLogX/BirchLogZ).
-7. ✅ Add surface rocks (cobblestone outcrops, biome-weighted).
+7. ✅ Add sparse surface rocks (cobblestone outcrops, biome-weighted and patch-masked).
 8. ✅ Add door open visual (thin panel rendering).
 9. ✅ Add stairs (stepped blocks, directional placement).
 10. ✅ Add hostile mobs (cave spiders).

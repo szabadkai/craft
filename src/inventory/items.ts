@@ -50,7 +50,12 @@ export type Item =
   | 'glow_berry'
   | 'basalt'
   | 'mossy_stone_brick'
-  | 'iron_bars';
+  | 'iron_bars'
+  | 'mycelium'
+  | 'mushroom_stem'
+  | 'mushroom_cap_red'
+  | 'mushroom_cap_brown'
+  | 'obsidian';
 
 export type Recipe = {
   name: string;
@@ -128,6 +133,11 @@ export const defaultInventoryCounts: Record<Item, number> = {
   basalt: 0,
   mossy_stone_brick: 0,
   iron_bars: 0,
+  mycelium: 0,
+  mushroom_stem: 0,
+  mushroom_cap_red: 0,
+  mushroom_cap_brown: 0,
+  obsidian: 0,
 };
 
 export const recipes: Recipe[] = [
@@ -217,6 +227,11 @@ export const itemDefs: ItemDef[] = [
   { id: 'basalt', label: 'Basalt', category: 'Blocks', block: Block.Basalt },
   { id: 'mossy_stone_brick', label: 'Mossy Brick', category: 'Blocks', block: Block.MossyStoneBrick },
   { id: 'iron_bars', label: 'Iron Bars', category: 'Blocks', block: Block.IronBars },
+  { id: 'mycelium', label: 'Mycelium', category: 'Blocks', block: Block.Mycelium },
+  { id: 'mushroom_stem', label: 'Shroom Stem', category: 'Blocks', block: Block.MushroomStem },
+  { id: 'mushroom_cap_red', label: 'Red Cap', category: 'Blocks', block: Block.MushroomCapRed },
+  { id: 'mushroom_cap_brown', label: 'Brown Cap', category: 'Blocks', block: Block.MushroomCapBrown },
+  { id: 'obsidian', label: 'Obsidian', category: 'Blocks', block: Block.Obsidian },
 ];
 
 export function blockToItem(block: Block): Item | null {
@@ -317,6 +332,16 @@ export function blockToItem(block: Block): Item | null {
       return 'mossy_stone_brick';
     case Block.IronBars:
       return 'iron_bars';
+    case Block.Mycelium:
+      return 'mycelium';
+    case Block.MushroomStem:
+      return 'mushroom_stem';
+    case Block.MushroomCapRed:
+      return 'mushroom_cap_red';
+    case Block.MushroomCapBrown:
+      return 'mushroom_cap_brown';
+    case Block.Obsidian:
+      return 'obsidian';
     default:
       return null;
   }

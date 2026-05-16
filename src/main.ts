@@ -25,7 +25,7 @@ import {
   setDetailRadius,
 } from './player/renderDistance';
 import { WorldStore } from './persistence/worldStore';
-import { terrainHeight, WATER_LEVEL } from './terrain';
+import { terrainHeight, OCEAN_SURFACE_Y } from './terrain';
 import { DiagnosticsSystem, DiagnosticsSummary } from './rendering/diagnostics';
 import { FarTerrainSystem } from './rendering/farTerrain';
 import { HeldItemView } from './rendering/heldItemView';
@@ -44,7 +44,7 @@ import { BlockInteractionSystem } from './world/blockInteractionSystem';
 import { BlockRaycaster } from './world/blockRaycaster';
 import { ChunkWorldSystem } from './world/chunkWorldSystem';
 import { ItemPickupSystem } from './world/itemPickups';
-import { itemDefs, foodValueFor } from './inventory/items';
+import { itemDefs } from './inventory/items';
 import { randomSeedText, seedFromString } from './world/seed';
 import { WildlifeSystem } from './world/wildlife';
 import { HostileSystem } from './world/hostileMobs';
@@ -55,7 +55,10 @@ import { createSfxSystem, blockMaterial } from './audio/sfx';
 import { createMusicSystem } from './audio/music';
 import { createAmbientSystem } from './audio/ambient';
 import { loadSandboxMode, saveSandboxMode } from './player/sandboxMode';
+import { setupInputHandlers } from './game/inputHandler';
 import { MinimapSystem } from './ui/minimap';
+import { PauseMenu } from './ui/pauseMenu';
+import { TouchControls, isTouchDevice } from './ui/touchControls';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
@@ -78,8 +81,9 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(8, 76, 8);
 scene.add(camera);
 
+const isMobile = isTouchDevice();
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile ? 1.5 : 1.7));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -96,7 +100,7 @@ scene.add(sky);
 const terrainAtlas = createTerrainAtlas();
 const chunkMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 1);
 const fadeMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.72);
-const waterMaterial = createWaterMaterial(scene.fog, WATER_LEVEL);
+const waterMaterial = createWaterMaterial(scene.fog, OCEAN_SURFACE_Y);
 const transparentMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.999);
 transparentMaterial.depthWrite = true; // glass and leaves occlude geometry behind them
 const decoMaterial = createTerrainMaterial(terrainAtlas, scene.fog, 0.999);
@@ -156,12 +160,13 @@ const player = {
 const keys = new Set<string>();
 const mouse = { locked: false };
 let mouseSensitivity = loadMouseSensitivity();
+let gamePaused = false;
 const playerController = new PlayerController(
   player,
   camera,
   keys,
   getBlock,
-  () => inventorySystem.isOpen,
+  () => gamePaused,
 );
 const heldItemView = new HeldItemView(camera);
 const hud = createHud(
@@ -171,8 +176,6 @@ const hud = createHud(
 );
 const {
   root: hudRoot,
-  panelEl,
-  statsEl,
   diagnosticsEl,
   hotbarEl,
   inventoryEl,
@@ -341,6 +344,60 @@ const consoleSystem = new ConsoleSystem(consoleCommands);
 inventorySystem.init();
 rebuildHeldItem();
 
+const pauseMenu = new PauseMenu(
+  {
+    onResume: () => {
+      if (!isMobile && worldReady) {
+        renderer.domElement.requestPointerLock().catch(() => {});
+      }
+    },
+    onSensitivityChange: (value) => {
+      mouseSensitivity = clampMouseSensitivity(value);
+      const label = formatMouseSensitivity(mouseSensitivity);
+      pauseMenu.sensitivityValueEl.textContent = label;
+      sensitivityInputEl.value = String(mouseSensitivity);
+      sensitivityValueEl.textContent = label;
+      saveMouseSensitivity(mouseSensitivity);
+    },
+    onRenderDistanceChange: (value) => {
+      const clamped = clampDetailRadius(value);
+      const label = formatRenderDistance(clamped);
+      pauseMenu.renderDistanceValueEl.textContent = label;
+      renderDistanceInputEl.value = String(clamped);
+      renderDistanceValueEl.textContent = label;
+      setDetailRadius(clamped);
+      applyRenderDistanceInternal();
+    },
+    onSfxVolumeChange: (value) => {
+      audioEngine.setSfxVolume(value / 100);
+      pauseMenu.sfxVolumeValueEl.textContent = `${value}%`;
+      sfxVolumeInputEl.value = String(value);
+      sfxVolumeValueEl.textContent = `${value}%`;
+    },
+    onMusicVolumeChange: (value) => {
+      audioEngine.setMusicVolume(value / 100);
+      pauseMenu.musicVolumeValueEl.textContent = `${value}%`;
+      musicVolumeInputEl.value = String(value);
+      musicVolumeValueEl.textContent = `${value}%`;
+    },
+    onSandboxChange: (checked) => {
+      sandboxMode = checked;
+      saveSandboxMode(sandboxMode);
+      sandboxInputEl.checked = checked;
+    },
+  },
+  {
+    sensitivityLabel: formatMouseSensitivity(mouseSensitivity),
+    sensitivityValue: mouseSensitivity,
+    renderDistanceLabel: formatRenderDistance(getDetailRadius()),
+    renderDistanceValue: getDetailRadius(),
+    sfxVolume: Math.round((savedSfxVol ? parseFloat(savedSfxVol) : 1) * 100),
+    musicVolume: Math.round((savedMusicVol ? parseFloat(savedMusicVol) : 0.5) * 100),
+    sandbox: sandboxMode,
+  },
+);
+
+
 function rebuildHeldItem(): void {
   heldItemView.rebuild(inventorySystem.selectedEntry());
 }
@@ -439,6 +496,11 @@ function updateLoadingState(): void {
   worldReady = true;
   loadingScreenEl.classList.add('hidden');
   minimap.show();
+  if (isMobile) {
+    mouse.locked = true;
+    touchControls?.show();
+    pauseMenu.showButton();
+  }
 }
 
 function getBlock(wx: number, y: number, wz: number): Block {
@@ -460,14 +522,19 @@ const deathMessages: Record<string, string> = {
   unknown: 'You died.',
 };
 
+let deathScreenShownAt = -Infinity;
+
 function showDeathScreen(): void {
   const cause = health.state.deathCause;
   deathMessageEl.textContent = deathMessages[cause] ?? deathMessages.unknown;
+  deathScreenShownAt = performance.now();
+  respawnBtnEl.disabled = false;
   deathScreenEl.classList.remove('hidden');
   if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
 }
 
 function hideDeathScreen(): void {
+  deathScreenShownAt = -Infinity;
   deathScreenEl.classList.add('hidden');
 }
 
@@ -483,6 +550,7 @@ const health = createHealth(
 health.mount(heartsEl, damageOverlayEl);
 
 respawnBtnEl.addEventListener('click', () => {
+  if (performance.now() - deathScreenShownAt < 250) return;
   health.triggerRespawn();
   hideDeathScreen();
   renderer.domElement.requestPointerLock().catch(() => {});
@@ -506,11 +574,63 @@ function applyRenderDistanceInternal(): void {
   farTerrain.rebuild(pcx, pcz, seed, getFarRadius());
 }
 
+const inputState = {
+  keys,
+  mouse,
+  get mouseSensitivity() { return mouseSensitivity; },
+  set mouseSensitivity(v: number) { mouseSensitivity = v; },
+  get sandboxMode() { return sandboxMode; },
+  set sandboxMode(v: boolean) { sandboxMode = v; },
+  get worldStarted() { return worldStarted; },
+  get worldReady() { return worldReady; },
+  isMobile,
+};
+
+const { handlePrimaryAction, handleSecondaryAction } = setupInputHandlers(
+  inputState,
+  {
+    renderer, player, camera, inventorySystem, furnaceSystem, chestSystem,
+    interactionSystem, blockRaycaster, wildlife, hostile, doorSystem,
+    chunkWorld, eatingSystem, consoleSystem, diagnostics, pauseMenu,
+    audioEngine, sfx, health, getBlock, triggerHandSwing,
+  },
+  {
+    sensitivityInputEl, sensitivityValueEl,
+    renderDistanceInputEl, renderDistanceValueEl,
+    sfxVolumeInputEl, sfxVolumeValueEl,
+    musicVolumeInputEl, musicVolumeValueEl,
+    sandboxInputEl, inventoryOverlayEl, furnaceOverlayEl, chestOverlayEl,
+  },
+  applyRenderDistanceInternal,
+);
+
+let touchControls: TouchControls | null = null;
+if (isMobile) {
+  touchControls = new TouchControls(keys, player, () => mouseSensitivity, {
+    onMineStart: () => {
+      if (!worldReady || inventorySystem.isOpen || furnaceSystem.isOpen || chestSystem.isOpen) return;
+      handlePrimaryAction();
+    },
+    onMineStop: () => {
+      interactionSystem.stopMining();
+      eatingSystem.cancel();
+    },
+    onPlace: () => {
+      if (!worldReady || inventorySystem.isOpen || furnaceSystem.isOpen || chestSystem.isOpen) return;
+      handleSecondaryAction();
+    },
+    onPlaceStop: () => {
+      eatingSystem.cancel();
+    },
+  });
+}
+
 function tick(now: number): void {
   const frameStartedAt = performance.now();
   const frameMs = now - last;
   diagnostics.pollGpuTimer();
   frame++;
+  gamePaused = inventorySystem.isOpen || pauseMenu.isOpen || furnaceSystem.isOpen || chestSystem.isOpen;
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (worldStarted) chunkWorld.updateChunkSet(frame);
@@ -580,7 +700,6 @@ function tick(now: number): void {
   }
   fadeChunks(now);
   if (worldReady) minimap.update(player.position.x, player.position.z, player.yaw);
-  statsEl.textContent = `Seed ${seed} / chunks ${chunkWorld.loadedChunkCount}`;
   const renderStartedAt = performance.now();
   diagnostics.beginGpuTimer();
   renderer.render(scene, camera);
@@ -594,142 +713,6 @@ function tick(now: number): void {
   diagnostics.updateOverlay(frameEndedAt);
   requestAnimationFrame(tick);
 }
-
-document.addEventListener('keydown', (event) => {
-  if (event.code === 'F3') {
-    event.preventDefault();
-    diagnostics.setOpen(!diagnostics.isOpen);
-    return;
-  }
-  if (event.code === 'Backquote') {
-    event.preventDefault();
-    consoleSystem.toggle();
-    interactionSystem.stopMining();
-    if (consoleSystem.isOpen && document.pointerLockElement === renderer.domElement)
-      document.exitPointerLock();
-    return;
-  }
-  if (consoleSystem.isOpen) return;
-  if (!worldStarted && event.code !== 'Tab') return;
-  if (event.code === 'KeyE') {
-    event.preventDefault();
-    eatingSystem.cancel();
-    if (furnaceSystem.isOpen) { furnaceSystem.close(); sfx.chestClose(); return; }
-    if (chestSystem.isOpen) { chestSystem.close(); sfx.chestClose(); return; }
-    const inventoryOpen = inventorySystem.toggleOpen();
-    sfx.uiClick();
-    interactionSystem.stopMining();
-    if (inventoryOpen && document.pointerLockElement === renderer.domElement)
-      document.exitPointerLock();
-    return;
-  }
-  if (event.code === 'KeyM' && !inventorySystem.isOpen) {
-    audioEngine.toggleMute();
-    return;
-  }
-  if (event.code === 'Escape') {
-    if (consoleSystem.isOpen) { consoleSystem.toggle(); return; }
-    if (furnaceSystem.isOpen) { furnaceSystem.close(); return; }
-    if (chestSystem.isOpen) { chestSystem.close(); return; }
-    if (inventorySystem.isOpen) { inventorySystem.setOpen(false); return; }
-  }
-  if (furnaceSystem.isOpen && event.code !== 'Tab') return;
-  keys.add(event.code);
-  const slot = Number(event.key) - 1;
-  if (slot >= 0 && slot < inventorySystem.hotbarSize) {
-    eatingSystem.cancel();
-    inventorySystem.selectHotbarSlot(slot);
-    sfx.hotbarSelect();
-  }
-});
-
-document.addEventListener('keyup', (event) => keys.delete(event.code));
-
-renderer.domElement.addEventListener('click', () => {
-  audioEngine.resume();
-  if (!worldReady || inventorySystem.isOpen || health.state.isDead) return;
-  if (!mouse.locked) {
-    renderer.domElement.requestPointerLock().catch(() => {
-      mouse.locked = false;
-    });
-  }
-});
-
-document.addEventListener('pointerlockchange', () => {
-  mouse.locked = document.pointerLockElement === renderer.domElement;
-  panelEl.classList.toggle('minimized', mouse.locked);
-});
-
-document.addEventListener('mousemove', (event) => {
-  if (!worldReady || !mouse.locked || health.state.isDead) return;
-  const sensitivity = BASE_MOUSE_RADIANS_PER_PIXEL * mouseSensitivity;
-  player.yaw -= event.movementX * sensitivity;
-  player.pitch -= event.movementY * sensitivity;
-  player.pitch = Math.max(-Math.PI / 2 + 0.02, Math.min(Math.PI / 2 - 0.02, player.pitch));
-});
-
-document.addEventListener('mousedown', (event) => {
-  if (!worldReady || !mouse.locked || inventorySystem.isOpen || furnaceSystem.isOpen || chestSystem.isOpen) return;
-  const hit = blockRaycaster.raycast();
-  if (event.button === 0) {
-    const animalHit = wildlife.raycast(camera);
-    const hostileHit = hostile.raycast(camera);
-    const animalDist = animalHit?.distance ?? Infinity;
-    const hostileDist = hostileHit?.distance ?? Infinity;
-    const blockDist = hit?.distance ?? Infinity;
-    const closestDist = Math.min(animalDist, hostileDist, blockDist);
-    if (closestDist < Infinity) {
-      if (animalDist === closestDist && animalHit) {
-        interactionSystem.stopMining();
-        wildlife.hit(animalHit.animal, performance.now());
-        triggerHandSwing('mine');
-        return;
-      }
-      if (hostileDist === closestDist && hostileHit) {
-        interactionSystem.stopMining();
-        hostile.hit(hostileHit.mob, performance.now());
-        triggerHandSwing('mine');
-        return;
-      }
-      if (hit) interactionSystem.startMining(hit);
-    }
-  } else if (event.button === 2) {
-    const slot = inventorySystem.slotAt(inventorySystem.selectedHotbarIndex);
-    if (slot && foodValueFor(slot.item) > 0) {
-      eatingSystem.tryStart();
-      return;
-    }
-    if (!hit) return;
-    const b = getBlock(hit.block.x, hit.block.y, hit.block.z);
-    // Door toggle
-    if (b === Block.OakDoor || b === Block.OakDoorOpen) {
-      const opening = b === Block.OakDoor;
-      doorSystem.toggle(hit.block.x, hit.block.y, hit.block.z, getBlock, (entries) => chunkWorld.setBlocks(entries));
-      sfx.doorToggle(opening);
-      return;
-    }
-    if (b === Block.Furnace || b === Block.Chest) {
-      inventorySystem.setOpen(false);
-      interactionSystem.stopMining();
-      const p = { x: hit.block.x, y: hit.block.y, z: hit.block.z };
-      (b === Block.Furnace ? furnaceSystem : chestSystem).openAt(p);
-      sfx.chestOpen();
-      if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
-      return;
-    }
-    interactionSystem.place(hit);
-    sfx.blockPlace();
-  }
-});
-
-document.addEventListener('mouseup', (event) => {
-  if (event.button === 0) interactionSystem.stopMining();
-  if (event.button === 2) eatingSystem.cancel();
-});
-
-window.addEventListener('blur', () => interactionSystem.stopMining());
-
-document.addEventListener('contextmenu', (event) => event.preventDefault());
 
 startFormEl.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -746,52 +729,9 @@ clearWorldEl.addEventListener('click', () => {
   });
 });
 
-sensitivityInputEl.addEventListener('input', () => {
-  mouseSensitivity = clampMouseSensitivity(Number(sensitivityInputEl.value));
-  sensitivityValueEl.textContent = formatMouseSensitivity(mouseSensitivity);
-  saveMouseSensitivity(mouseSensitivity);
-});
-
-renderDistanceInputEl.addEventListener('input', () => {
-  const value = clampDetailRadius(Number(renderDistanceInputEl.value));
-  renderDistanceValueEl.textContent = formatRenderDistance(value);
-  setDetailRadius(value);
-  applyRenderDistanceInternal();
-});
-
-sfxVolumeInputEl.addEventListener('input', () => {
-  const v = Number(sfxVolumeInputEl.value) / 100;
-  audioEngine.setSfxVolume(v);
-  sfxVolumeValueEl.textContent = `${sfxVolumeInputEl.value}%`;
-});
-
-musicVolumeInputEl.addEventListener('input', () => {
-  const v = Number(musicVolumeInputEl.value) / 100;
-  audioEngine.setMusicVolume(v);
-  musicVolumeValueEl.textContent = `${musicVolumeInputEl.value}%`;
-});
-
-sandboxInputEl.addEventListener('change', () => {
-  sandboxMode = sandboxInputEl.checked;
-  saveSandboxMode(sandboxMode);
-});
-
 randomSeedEl.addEventListener('click', () => {
   seedInputEl.value = randomSeedText();
   updateSeedPreview();
-});
-
-hudRoot.querySelectorAll<HTMLButtonElement>('[data-seed-preset]').forEach((button) => {
-  button.addEventListener('click', () => {
-    seedInputEl.value = button.dataset.seedPreset ?? '';
-    updateSeedPreview();
-  });
-});
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 loadInventory().catch(console.error); loadHotbar().catch(console.error);

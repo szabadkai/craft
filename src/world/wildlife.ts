@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { isSolid } from '../blocks';
-import { biomeAt, generatedBlockAt, terrainHeight, WATER_LEVEL } from '../terrain';
+import { biomeAt, generatedBlockAt, terrainHeight, OCEAN_SURFACE_Y } from '../terrain';
 import { Block, CHUNK_SIZE, chunkKey, ChunkKey } from '../types';
+import { createMobPhysics, angleDelta, disposeMobMeshes, setHurtFlash, type MobPhysics } from './mobPhysics';
 
 type WildlifeKind = 'rabbit' | 'deer' | 'fox' | 'boar' | 'bird';
 
@@ -37,6 +37,7 @@ export class WildlifeSystem {
   private readonly ray = new THREE.Ray();
   private readonly rayBox = new THREE.Box3();
   private readonly rayHit = new THREE.Vector3();
+  private readonly physics: MobPhysics;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -45,7 +46,9 @@ export class WildlifeSystem {
     private readonly onDrop: (position: THREE.Vector3, kind: WildlifeKind) => void,
     private readonly onAnimalHit?: () => void,
     private readonly onAnimalDeath?: () => void,
-  ) {}
+  ) {
+    this.physics = createMobPhysics(getBlock);
+  }
 
   spawnForChunk(cx: number, cz: number): void {
     const key = chunkKey(cx, cz);
@@ -56,7 +59,7 @@ export class WildlifeSystem {
       const wx = cx * CHUNK_SIZE + 2 + this.hash(cx, cz, i * 5 + 3) * (CHUNK_SIZE - 4);
       const wz = cz * CHUNK_SIZE + 2 + this.hash(cx, cz, i * 5 + 4) * (CHUNK_SIZE - 4);
       const h = terrainHeight(wx, wz, this.getSeed());
-      if (h <= WATER_LEVEL) continue;
+      if (h <= OCEAN_SURFACE_Y) continue;
       const surface = generatedBlockAt(Math.floor(wx), h, Math.floor(wz), this.getSeed());
       if (surface !== Block.Grass && surface !== Block.Snow && surface !== Block.Sand) continue;
       const biome = biomeAt(wx, wz, this.getSeed());
@@ -125,13 +128,7 @@ export class WildlifeSystem {
     if (!animals) return;
     for (const animal of animals) {
       this.scene.remove(animal.root);
-      animal.root.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        mesh.geometry?.dispose();
-        const material = mesh.material;
-        if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-        else material?.dispose();
-      });
+      disposeMobMeshes(animal.root);
     }
     this.animalsByChunk.delete(key);
   }
@@ -207,12 +204,9 @@ export class WildlifeSystem {
             : 0.85 + Math.sin(t * 0.8) * 0.15;
         const speed = animal.speed * turnPenalty * idlePulse;
         if (animal.kind === 'bird') {
-          this.moveFlyingAnimal(
-            animal,
-            Math.sin(animal.heading) * speed * dt,
-            Math.cos(animal.heading) * speed * dt,
-          );
-          const ground = this.groundTopAt(animal.root.position, animal, 12);
+          this.physics.moveHorizontalAxis(animal, 'x', Math.sin(animal.heading) * speed * dt);
+          this.physics.moveHorizontalAxis(animal, 'z', Math.cos(animal.heading) * speed * dt);
+          const ground = this.physics.groundTopAt(animal, 12);
           const targetY =
             (ground ??
               terrainHeight(animal.root.position.x, animal.root.position.z, this.getSeed()) + 1) +
@@ -220,22 +214,15 @@ export class WildlifeSystem {
             Math.sin(t * 2.4) * 0.45;
           animal.root.position.y += (targetY - animal.root.position.y) * Math.min(1, dt * 2.8);
         } else {
-          this.moveGroundAnimal(
-            animal,
-            Math.sin(animal.heading) * speed * dt,
-            Math.cos(animal.heading) * speed * dt,
-            dt,
-            now,
-          );
+          const movedX = this.physics.moveHorizontalAxis(animal, 'x', Math.sin(animal.heading) * speed * dt);
+          const movedZ = this.physics.moveHorizontalAxis(animal, 'z', Math.cos(animal.heading) * speed * dt);
+          if (!movedX || !movedZ) animal.nextTargetAt = now;
+          if (!this.physics.settleOnGround(animal, 6)) {
+            this.physics.applyGravity(animal, dt);
+          }
         }
         animal.root.rotation.y = animal.heading;
-        animal.root.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          if (!mesh.material) return;
-          const material = mesh.material as THREE.MeshLambertMaterial;
-          if ('emissive' in material)
-            material.emissive.setHex(now < animal.hurtUntil ? 0x552222 : 0x000000);
-        });
+        setHurtFlash(animal.root, now < animal.hurtUntil);
 
         const stride = t * speed * 9;
         animal.legs.forEach((leg, index) => {
@@ -246,6 +233,10 @@ export class WildlifeSystem {
         });
       }
     }
+  }
+
+  clear(): void {
+    for (const [key] of this.animalsByChunk) this.removeForChunk(key);
   }
 
   private chooseTarget(animal: Wildlife, now: number): void {
@@ -268,106 +259,6 @@ export class WildlifeSystem {
       now + 2200 + this.hash(animal.target.x, animal.target.z, animal.phase) * 3600;
   }
 
-  private moveFlyingAnimal(animal: Wildlife, dx: number, dz: number): void {
-    this.moveHorizontalAxis(animal, 'x', dx);
-    this.moveHorizontalAxis(animal, 'z', dz);
-  }
-
-  private moveGroundAnimal(
-    animal: Wildlife,
-    dx: number,
-    dz: number,
-    dt: number,
-    now: number,
-  ): void {
-    const movedX = this.moveHorizontalAxis(animal, 'x', dx);
-    const movedZ = this.moveHorizontalAxis(animal, 'z', dz);
-    if (!movedX || !movedZ) animal.nextTargetAt = now;
-
-    const ground = this.groundTopAt(animal.root.position, animal, 6);
-    if (
-      ground !== null &&
-      animal.root.position.y - ground <= 0.12 &&
-      animal.verticalVelocity <= 0
-    ) {
-      animal.root.position.y = ground;
-      animal.verticalVelocity = 0;
-      return;
-    }
-
-    animal.verticalVelocity -= 18 * dt;
-    const next = animal.root.position.clone();
-    next.y += animal.verticalVelocity * dt;
-    if (this.collides(animal, next)) {
-      if (animal.verticalVelocity < 0) {
-        const landed = this.groundTopAt(animal.root.position, animal, 8);
-        if (landed !== null) animal.root.position.y = landed;
-      }
-      animal.verticalVelocity = 0;
-    } else {
-      animal.root.position.y = Math.max(0, next.y);
-    }
-  }
-
-  private moveHorizontalAxis(animal: Wildlife, axis: 'x' | 'z', amount: number): boolean {
-    if (amount === 0) return true;
-    const sign = Math.sign(amount);
-    let remaining = Math.abs(amount);
-    let moved = false;
-
-    while (remaining > 0.0001) {
-      const step = Math.min(remaining, 0.025);
-      const next = animal.root.position.clone();
-      next[axis] += step * sign;
-      if (this.collides(animal, next)) return moved;
-      animal.root.position.copy(next);
-      remaining -= step;
-      moved = true;
-    }
-
-    return true;
-  }
-
-  private collides(animal: Wildlife, position: THREE.Vector3): boolean {
-    const half = animal.width / 2;
-    const minX = Math.floor(position.x - half);
-    const maxX = Math.floor(position.x + half);
-    const minY = Math.floor(position.y + 0.04);
-    const maxY = Math.floor(position.y + animal.height);
-    const minZ = Math.floor(position.z - half);
-    const maxZ = Math.floor(position.z + half);
-    for (let y = minY; y <= maxY; y++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        for (let x = minX; x <= maxX; x++) {
-          if (isSolid(this.getBlock(x, y, z))) return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  private groundTopAt(
-    position: THREE.Vector3,
-    animal: Wildlife,
-    searchDepth: number,
-  ): number | null {
-    const half = animal.width / 2;
-    const minX = Math.floor(position.x - half);
-    const maxX = Math.floor(position.x + half);
-    const minZ = Math.floor(position.z - half);
-    const maxZ = Math.floor(position.z + half);
-    const startY = Math.floor(position.y + 0.15);
-    const minY = Math.max(0, startY - searchDepth);
-    for (let y = startY; y >= minY; y--) {
-      for (let z = minZ; z <= maxZ; z++) {
-        for (let x = minX; x <= maxX; x++) {
-          if (isSolid(this.getBlock(x, y - 1, z))) return y;
-        }
-      }
-    }
-    return null;
-  }
-
   private setAnimalBox(animal: Wildlife, box: THREE.Box3): THREE.Box3 {
     const half = animal.width / 2;
     const position = animal.root.position;
@@ -384,13 +275,7 @@ export class WildlifeSystem {
       if (index >= 0) animals.splice(index, 1);
     }
     this.scene.remove(animal.root);
-    animal.root.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      mesh.geometry?.dispose();
-      const material = mesh.material;
-      if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-      else material?.dispose();
-    });
+    disposeMobMeshes(animal.root);
   }
 
   private hash(x: number, z: number, salt: number): number {
@@ -497,6 +382,3 @@ function makeWildlifeMesh(kind: WildlifeKind): THREE.Group {
   return group;
 }
 
-function angleDelta(from: number, to: number): number {
-  return Math.atan2(Math.sin(to - from), Math.cos(to - from));
-}

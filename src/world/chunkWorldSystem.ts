@@ -373,6 +373,9 @@ export class ChunkWorldSystem {
   private handleWorkerMessage(event: MessageEvent<WorkerOut>): void {
     if (event.data.type === 'error') {
       console.error(event.data.message);
+      if (event.data.cx != null && event.data.cz != null) {
+        this.dirty.delete(chunkKey(event.data.cx, event.data.cz));
+      }
       return;
     }
     this.options.onChunkMessage();

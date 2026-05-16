@@ -67,6 +67,11 @@ export enum Block {
   MossyStoneBrick = 59,
   IronBars = 60,
   Spawner = 61,
+  Mycelium = 62,
+  MushroomStem = 63,
+  MushroomCapRed = 64,
+  MushroomCapBrown = 65,
+  Obsidian = 66,
 }
 
 export type ChunkKey = `${number},${number}`;
@@ -105,7 +110,7 @@ export type WorkerIn =
 
 export type WorkerOut =
   | { type: 'chunk'; payload: ChunkMeshPayload }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; cx?: number; cz?: number };
 
 export function chunkKey(cx: number, cz: number): ChunkKey {
   return `${cx},${cz}`;

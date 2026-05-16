@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { blockColor } from '../blocks';
-import { generatedBlockAt, terrainHeight, WATER_LEVEL } from '../terrain';
+import { generatedBlockAt, reservoirWaterSurfaceAt, terrainHeight } from '../terrain';
 import { getDetailRadius } from '../player/renderDistance';
 import { Block, CHUNK_SIZE } from '../types';
 
@@ -47,21 +47,36 @@ export class FarTerrainSystem {
     geo.computeBoundingSphere();
     this.group.add(new THREE.Mesh(geo, this.material));
 
-    // Far water plane at WATER_LEVEL
-    this.buildWater(pcx, pcz, farRadius);
+    this.buildWater(pcx, pcz, seed, farRadius);
   }
 
-  private buildWater(pcx: number, pcz: number, farRadius: number): void {
+  private buildWater(pcx: number, pcz: number, seed: number, farRadius: number): void {
     const halfSide = farRadius * CHUNK_SIZE;
-    const segments = Math.max(8, farRadius * 3);
-    const waterGeo = new THREE.PlaneGeometry(
-      halfSide * 2,
-      halfSide * 2,
-      segments,
-      segments,
-    );
-    waterGeo.rotateX(-Math.PI / 2);
-    waterGeo.translate(pcx * CHUNK_SIZE, WATER_LEVEL - 0.05, pcz * CHUNK_SIZE);
+    const step = 8;
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const minX = pcx * CHUNK_SIZE - halfSide;
+    const minZ = pcz * CHUNK_SIZE - halfSide;
+    const maxX = pcx * CHUNK_SIZE + halfSide;
+    const maxZ = pcz * CHUNK_SIZE + halfSide;
+
+    for (let z = minZ; z < maxZ; z += step) {
+      for (let x = minX; x < maxX; x += step) {
+        const y = reservoirWaterSurfaceAt(x + step * 0.5, z + step * 0.5, seed);
+        if (y === null) continue;
+        const base = positions.length / 3;
+        const wy = y - 0.05;
+        positions.push(x, wy, z, x + step, wy, z, x + step, wy, z + step, x, wy, z + step);
+        indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      }
+    }
+
+    if (positions.length === 0) return;
+    const waterGeo = new THREE.BufferGeometry();
+    waterGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    waterGeo.setIndex(indices);
+    waterGeo.computeVertexNormals();
+    waterGeo.computeBoundingSphere();
     this.waterMesh = new THREE.Mesh(waterGeo, this.waterMaterial);
     this.waterMesh.renderOrder = 1;
     this.group.add(this.waterMesh);

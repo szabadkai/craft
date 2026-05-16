@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { isSolid } from '../blocks';
-import { terrainHeight } from '../terrain';
-import { WATER_LEVEL } from '../terrain';
+import { terrainHeight, OCEAN_SURFACE_Y } from '../terrain';
 import { Block, WORLD_HEIGHT } from '../types';
+import { createMobPhysics, disposeMobMeshes, setHurtFlash, type MobPhysics } from './mobPhysics';
 
 type HostileKind = 'cave_spider' | 'zombie' | 'skeleton';
 
@@ -33,6 +33,7 @@ export class HostileSystem {
   private readonly rayHit = new THREE.Vector3();
   private readonly spawnTimer = { next: 0, cooldownMs: 8000 };
   private readonly MAX_MOBS = 12;
+  private readonly physics: MobPhysics;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -42,7 +43,9 @@ export class HostileSystem {
     private readonly getTimeOfDay: () => number = () => 0,
     private readonly onMobHit?: () => void,
     private readonly onMobDeath?: () => void,
-  ) {}
+  ) {
+    this.physics = createMobPhysics(getBlock);
+  }
 
   private isNight(): boolean {
     const tod = this.getTimeOfDay();
@@ -78,7 +81,7 @@ export class HostileSystem {
       if (isSurface) {
         wy = terrainHeight(wx, wz, seed);
         // Must be on solid ground above water
-        if (wy <= WATER_LEVEL || wy < 12 || wy >= WORLD_HEIGHT - 2) continue;
+        if (wy <= OCEAN_SURFACE_Y || wy < 12 || wy >= WORLD_HEIGHT - 2) continue;
         const groundBlock = this.getBlock(wx, wy - 1, wz);
         if (groundBlock !== Block.Grass && groundBlock !== Block.Sand && groundBlock !== Block.Snow) continue;
       } else {
@@ -152,37 +155,19 @@ export class HostileSystem {
         const speed = mob.speed * (dist3 < 4 ? 1.3 : 1.0);
         const mx = (dx / dist) * speed * dt;
         const mz = (dz / dist) * speed * dt;
-        this.moveHorizontal(mob, mx);
-        this.moveHorizontal(mob, mz, true);
+        this.physics.moveHorizontalAxis(mob, 'x', mx);
+        this.physics.moveHorizontalAxis(mob, 'z', mz);
         mob.root.rotation.y = Math.atan2(dx, dz);
 
-        // Simple vertical movement: try to reach player Y
         if (dy > 1.5) {
-          this.tryVerticalMove(mob, Math.min(dy, 4.0) * dt, dt);
+          this.tryVerticalMove(mob, Math.min(dy, 4.0) * dt);
         } else if (dy < -1.5) {
           mob.verticalVelocity -= 18 * dt;
         }
       }
 
-      // Gravity and ground detection
-      const ground = this.findGround(mob);
-      if (ground !== null && mob.root.position.y - ground <= 0.12 && mob.verticalVelocity <= 0) {
-        mob.root.position.y = ground;
-        mob.verticalVelocity = 0;
-      } else {
-        mob.verticalVelocity -= 18 * dt;
-        const nextY = mob.root.position.y + mob.verticalVelocity * dt;
-        const testPos = mob.root.position.clone();
-        testPos.y = nextY;
-        if (this.collidesAt(mob, testPos)) {
-          if (mob.verticalVelocity < 0) {
-            const landed = this.findGround(mob);
-            if (landed !== null) mob.root.position.y = landed;
-          }
-          mob.verticalVelocity = 0;
-        } else {
-          mob.root.position.y = Math.max(0, nextY);
-        }
+      if (!this.physics.settleOnGround(mob, 8)) {
+        this.physics.applyGravity(mob, dt);
       }
 
       // Damage player on contact
@@ -198,15 +183,7 @@ export class HostileSystem {
         continue;
       }
 
-      // Hurt flash
-      mob.root.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (!mesh.material) return;
-        const material = mesh.material as THREE.MeshLambertMaterial;
-        if ('emissive' in material) {
-          material.emissive.setHex(now < mob.hurtUntil ? 0x552222 : 0x000000);
-        }
-      });
+      setHurtFlash(mob.root, now < mob.hurtUntil);
 
       // Animations
       if (dist3 < aggroRange && dist > 0.15) {
@@ -231,71 +208,17 @@ export class HostileSystem {
     this._playerDamageCallback = cb;
   }
 
-  private moveHorizontal(mob: Hostile, amount: number, _axisZ = false): boolean {
-    if (Math.abs(amount) < 0.0001) return true;
-    const sign = Math.sign(amount);
-    let remaining = Math.abs(amount);
-    let moved = false;
-    while (remaining > 0.0001) {
-      const step = Math.min(remaining, 0.025);
-      const next = mob.root.position.clone();
-      const axis = _axisZ ? 'z' : 'x';
-      next[axis] += step * sign;
-      if (this.collidesAt(mob, next)) return moved;
-      mob.root.position.copy(next);
-      remaining -= step;
-      moved = true;
-    }
-    return true;
-  }
-
-  private tryVerticalMove(mob: Hostile, amount: number, _dt: number): void {
+  private tryVerticalMove(mob: Hostile, amount: number): void {
     if (amount <= 0) return;
-    const sign = 1;
     let remaining = amount;
     while (remaining > 0.0001) {
       const step = Math.min(remaining, 0.025);
       const next = mob.root.position.clone();
-      next.y += step * sign;
-      if (this.collidesAt(mob, next)) return;
+      next.y += step;
+      if (this.physics.collides(mob, next)) return;
       mob.root.position.copy(next);
       remaining -= step;
     }
-  }
-
-  private collidesAt(mob: Hostile, pos: THREE.Vector3): boolean {
-    const half = mob.width / 2;
-    const minX = Math.floor(pos.x - half);
-    const maxX = Math.floor(pos.x + half);
-    const minY = Math.floor(pos.y + 0.04);
-    const maxY = Math.floor(pos.y + mob.height);
-    const minZ = Math.floor(pos.z - half);
-    const maxZ = Math.floor(pos.z + half);
-    for (let y = minY; y <= maxY; y++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        for (let x = minX; x <= maxX; x++) {
-          if (isSolid(this.getBlock(x, y, z))) return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  private findGround(mob: Hostile): number | null {
-    const half = mob.width / 2;
-    const minX = Math.floor(mob.root.position.x - half);
-    const maxX = Math.floor(mob.root.position.x + half);
-    const minZ = Math.floor(mob.root.position.z - half);
-    const maxZ = Math.floor(mob.root.position.z + half);
-    const startY = Math.floor(mob.root.position.y + 0.15);
-    for (let y = startY; y >= Math.max(0, startY - 8); y--) {
-      for (let z = minZ; z <= maxZ; z++) {
-        for (let x = minX; x <= maxX; x++) {
-          if (isSolid(this.getBlock(x, y - 1, z))) return y;
-        }
-      }
-    }
-    return null;
   }
 
   private setMobBox(mob: Hostile, box: THREE.Box3): THREE.Box3 {
@@ -425,11 +348,7 @@ export class HostileSystem {
     const idx = this.mobs.indexOf(mob);
     if (idx >= 0) this.mobs.splice(idx, 1);
     this.scene.remove(mob.root);
-    mob.root.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      mesh.geometry?.dispose();
-      (mesh.material as THREE.Material)?.dispose();
-    });
+    disposeMobMeshes(mob.root);
   }
 
   clear(): void {

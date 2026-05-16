@@ -50,6 +50,8 @@ self.onmessage = (event: MessageEvent<WorkerIn>) => {
     const out: WorkerOut = {
       type: 'error',
       message: error instanceof Error ? error.message : String(error),
+      cx: event.data.cx,
+      cz: event.data.cz,
     };
     self.postMessage(out);
   }

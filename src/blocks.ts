@@ -39,6 +39,11 @@ export const solidBlocks = new Set<Block>([
   Block.Basalt,
   Block.MossyStoneBrick,
   Block.Spawner,
+  Block.Mycelium,
+  Block.MushroomStem,
+  Block.MushroomCapRed,
+  Block.MushroomCapBrown,
+  Block.Obsidian,
 ]);
 
 export const selectableBlocks = [
@@ -183,6 +188,16 @@ export function blockColor(block: Block): [number, number, number] {
       return [0.52, 0.52, 0.52];
     case Block.Spawner:
       return [0.22, 0.28, 0.22];
+    case Block.Mycelium:
+      return [0.52, 0.42, 0.55];
+    case Block.MushroomStem:
+      return [0.82, 0.78, 0.72];
+    case Block.MushroomCapRed:
+      return [0.72, 0.15, 0.12];
+    case Block.MushroomCapBrown:
+      return [0.52, 0.32, 0.18];
+    case Block.Obsidian:
+      return [0.12, 0.08, 0.16];
     default:
       return [1, 1, 1];
   }

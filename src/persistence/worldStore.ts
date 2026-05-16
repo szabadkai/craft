@@ -6,7 +6,7 @@ import { ChunkKey } from '../types';
 
 export type DoorSnapshot = Record<string, 'x' | 'z'>;
 
-const CHUNK_STORAGE_VERSION = 3;
+const CHUNK_STORAGE_VERSION = 4;
 
 export class WorldStore {
   private dbPromise: Promise<IDBDatabase> | null = null;

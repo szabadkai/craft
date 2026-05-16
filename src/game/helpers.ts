@@ -1,4 +1,4 @@
-import { terrainHeight, WATER_LEVEL } from '../terrain';
+import { terrainHeight, OCEAN_SURFACE_Y } from '../terrain';
 import { WORLD_HEIGHT } from '../types';
 
 export function findDrySpawn(
@@ -20,9 +20,9 @@ export function findDrySpawn(
         const x = originX + dx;
         const z = originZ + dz;
         const h = terrainHeight(x, z, seed);
-        if (h <= WATER_LEVEL + 1) continue;
+        if (h <= OCEAN_SURFACE_Y + 1) continue;
         const dist = dx * dx + dz * dz;
-        const score = dist + Math.abs(h - WATER_LEVEL - 5) * 6;
+        const score = dist + Math.abs(h - OCEAN_SURFACE_Y - 5) * 6;
         if (score < bestScore) {
           best = { x, z, h };
           bestScore = score;
