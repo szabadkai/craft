@@ -83,6 +83,22 @@ export class WorldStore {
     await this.saveState(this.doorStateKey(), doors);
   }
 
+  async hasSavedWorld(): Promise<boolean> {
+    const db = await this.open();
+    const prefix = this.storedChunkPrefix();
+    return new Promise((resolve) => {
+      const tx = db.transaction('chunks', 'readonly');
+      const request = tx.objectStore('chunks').openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return resolve(false);
+        if (typeof cursor.key === 'string' && cursor.key.startsWith(prefix)) return resolve(true);
+        cursor.continue();
+      };
+      request.onerror = () => resolve(false);
+    });
+  }
+
   async clearCurrentWorld(): Promise<void> {
     const db = await this.open();
     await Promise.all([

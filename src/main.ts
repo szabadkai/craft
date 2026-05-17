@@ -203,6 +203,7 @@ const {
   startFormEl,
   randomSeedEl,
   seedPreviewEl,
+  continueWorldEl,
   clearWorldEl,
   clearWorldStatusEl,
   sensitivityInputEl,
@@ -545,7 +546,16 @@ const health = createHealth(
     player.velocity.set(0, 0, 0);
   },
   () => sfx.playerHurt(),
-  () => { sfx.playerDeath(); showDeathScreen(); },
+  () => {
+    const slots = inventorySystem.snapshotInventory().slots;
+    for (const slot of slots) {
+      if (slot) itemPickups.spawn(slot.item, slot.count, player.position.clone());
+    }
+    inventorySystem.resetInventory();
+    saveInventory().catch(console.error);
+    sfx.playerDeath();
+    showDeathScreen();
+  },
 );
 health.mount(heartsEl, damageOverlayEl);
 
@@ -714,12 +724,25 @@ function tick(now: number): void {
   requestAnimationFrame(tick);
 }
 
+async function refreshContinueButton(): Promise<void> {
+  const hasSave = await worldStore.hasSavedWorld();
+  continueWorldEl.style.display = hasSave ? '' : 'none';
+}
+
 startFormEl.addEventListener('submit', (event) => {
   event.preventDefault();
   startWorld(seedInputEl.value);
 });
 
-seedInputEl.addEventListener('input', updateSeedPreview);
+continueWorldEl.addEventListener('click', () => {
+  startWorld(seedInputEl.value);
+});
+
+seedInputEl.addEventListener('input', () => {
+  updateSeedPreview();
+  seed = seedFromString(seedInputEl.value.trim() || '0');
+  refreshContinueButton().catch(console.error);
+});
 
 clearWorldEl.addEventListener('click', () => {
   clearSavedWorld().catch((error) => {
@@ -732,11 +755,14 @@ clearWorldEl.addEventListener('click', () => {
 randomSeedEl.addEventListener('click', () => {
   seedInputEl.value = randomSeedText();
   updateSeedPreview();
+  seed = seedFromString(seedInputEl.value.trim() || '0');
+  refreshContinueButton().catch(console.error);
 });
 
 loadInventory().catch(console.error); loadHotbar().catch(console.error);
 loadFurnaces().catch(console.error);
 updateSeedPreview();
+refreshContinueButton().catch(console.error);
 requestAnimationFrame(tick);
 
 async function clearSavedWorld(): Promise<void> {
@@ -760,4 +786,5 @@ async function clearSavedWorld(): Promise<void> {
   }
   clearWorldStatusEl.textContent = 'Saved chunks and inventory cleared.';
   clearWorldEl.disabled = false;
+  continueWorldEl.style.display = 'none';
 }

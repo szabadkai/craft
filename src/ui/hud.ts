@@ -26,6 +26,7 @@ export type HudElements = {
   startFormEl: HTMLFormElement;
   randomSeedEl: HTMLButtonElement;
   seedPreviewEl: HTMLElement;
+  continueWorldEl: HTMLButtonElement;
   clearWorldEl: HTMLButtonElement;
   clearWorldStatusEl: HTMLSpanElement;
   sensitivityInputEl: HTMLInputElement;
@@ -122,6 +123,7 @@ export function createHud(
           <span class="sandbox-hint">Disables hostile mobs</span>
         </label>
         <div class="seed-actions">
+          <button class="primary" type="button" id="continue-world" style="display:none">Continue</button>
           <button class="secondary" type="button" id="random-seed">Randomize</button>
           <button class="primary" type="submit">Generate</button>
         </div>
@@ -235,6 +237,7 @@ export function createHud(
     startFormEl: root.querySelector<HTMLFormElement>('.start-window')!,
     randomSeedEl: root.querySelector<HTMLButtonElement>('#random-seed')!,
     seedPreviewEl: root.querySelector<HTMLElement>('#seed-preview')!,
+    continueWorldEl: root.querySelector<HTMLButtonElement>('#continue-world')!,
     clearWorldEl: root.querySelector<HTMLButtonElement>('#clear-world')!,
     clearWorldStatusEl: root.querySelector<HTMLSpanElement>('#clear-world-status')!,
     sensitivityInputEl,
