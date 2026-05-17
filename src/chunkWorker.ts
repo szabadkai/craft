@@ -44,6 +44,7 @@ self.onmessage = (event: MessageEvent<WorkerIn>) => {
       event.data.cz,
       event.data.seed,
       event.data.blocks,
+      event.data.neighbors,
     );
     transferPayload(payload);
   } catch (error) {

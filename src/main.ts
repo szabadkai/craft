@@ -257,7 +257,7 @@ const inventorySystem = new InventorySystem(
     rebuildHeldItem: () => rebuildHeldItem(),
   },
 );
-const itemPickups = new ItemPickupSystem(scene, (item, amount) => inventorySystem.addItem(item, amount), () => sfx.itemPickup());
+const itemPickups = new ItemPickupSystem(scene, (item, amount) => inventorySystem.addItem(item, amount), getBlock, () => sfx.itemPickup());
 const chestSystem = new ChestSystem(
   inventorySystem,
   { chestOverlayEl, chestGridEl, chestInventoryEl },

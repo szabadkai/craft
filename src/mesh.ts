@@ -1,7 +1,7 @@
 import { isSolid } from './blocks';
 import { Tile, tileForBlockFace, tileRect } from './atlas';
 import { generatedBlockAt } from './terrain';
-import { Block, blockIndex, CHUNK_SIZE, ChunkMeshPayload, chunkKey, WORLD_HEIGHT } from './types';
+import { Block, blockIndex, CHUNK_SIZE, ChunkMeshPayload, chunkKey, NeighborBlocks, WORLD_HEIGHT } from './types';
 import {
   colorVariation,
   isDecoration,
@@ -124,6 +124,7 @@ export function buildChunkMesh(
   cz: number,
   seed: number,
   blocks: Uint16Array,
+  neighbors?: NeighborBlocks,
 ): ChunkMeshPayload {
   const positions: number[] = [];
   const normals: number[] = [];
@@ -151,6 +152,22 @@ export function buildChunkMesh(
     if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
     if (x >= 0 && x < CHUNK_SIZE && z >= 0 && z < CHUNK_SIZE) {
       return blocks[blockIndex(x, y, z)] as Block;
+    }
+    // Look up block in neighbor chunk data (player-modified) before falling
+    // back to generatedBlockAt which doesn't know about modifications.
+    if (neighbors) {
+      if (x >= CHUNK_SIZE && x < CHUNK_SIZE * 2 && z >= 0 && z < CHUNK_SIZE && neighbors.px) {
+        return neighbors.px[blockIndex(x - CHUNK_SIZE, y, z)] as Block;
+      }
+      if (x < 0 && x >= -CHUNK_SIZE && z >= 0 && z < CHUNK_SIZE && neighbors.nx) {
+        return neighbors.nx[blockIndex(x + CHUNK_SIZE, y, z)] as Block;
+      }
+      if (z >= CHUNK_SIZE && z < CHUNK_SIZE * 2 && x >= 0 && x < CHUNK_SIZE && neighbors.pz) {
+        return neighbors.pz[blockIndex(x, y, z - CHUNK_SIZE)] as Block;
+      }
+      if (z < 0 && z >= -CHUNK_SIZE && x >= 0 && x < CHUNK_SIZE && neighbors.nz) {
+        return neighbors.nz[blockIndex(x, y, z + CHUNK_SIZE)] as Block;
+      }
     }
     return generatedBlockAt(cx * CHUNK_SIZE + x, y, cz * CHUNK_SIZE + z, seed);
   };
@@ -341,7 +358,7 @@ function occludesFace(block: Block, neighbor: Block): boolean {
   if (block === Block.Water) return neighbor === Block.Water || isSolid(neighbor);
   // Open doors don't occlude adjacent faces
   if (block === Block.OakDoorOpen) return false;
-  return isSolid(neighbor) || neighbor === Block.Lava;
+  return isSolid(neighbor);
 }
 
 function sameCell(a: MaskCell, b: MaskCell | null): boolean {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { blockColor } from '../blocks';
+import { Block } from '../types';
+import { blockColor, isSolid } from '../blocks';
 import { itemDefs, Item, itemSwatch } from '../inventory/items';
 
 type ItemPickup = {
@@ -22,6 +23,7 @@ export class ItemPickupSystem {
   constructor(
     private readonly scene: THREE.Scene,
     private readonly addToInventory: (item: Item, amount: number) => number,
+    private readonly getBlock: (wx: number, y: number, wz: number) => Block,
     private readonly onPickup?: () => void,
   ) {}
 
@@ -55,8 +57,17 @@ export class ItemPickupSystem {
 
       pickup.velocity.y -= 9.8 * dt;
       pickup.mesh.position.addScaledVector(pickup.velocity, dt);
-      if (pickup.mesh.position.y < 0.28) {
-        pickup.mesh.position.y = 0.28;
+
+      const bx = Math.floor(pickup.mesh.position.x);
+      const by = Math.floor(pickup.mesh.position.y);
+      const bz = Math.floor(pickup.mesh.position.z);
+      const blockBelow = this.getBlock(bx, by - 1, bz);
+      const blockAt = this.getBlock(bx, by, bz);
+      const onSurface = isSolid(blockBelow) || (isSolid(blockAt) && pickup.velocity.y <= 0);
+
+      if (onSurface) {
+        const restY = (isSolid(blockAt) ? by + 1 : by) + 0.28;
+        pickup.mesh.position.y = restY;
         pickup.velocity.set(0, 0, 0);
       } else {
         pickup.velocity.multiplyScalar(Math.max(0, 1 - dt * 2.5));

@@ -2,6 +2,7 @@ import { Block, CHUNK_SIZE, WORLD_HEIGHT, blockIndex } from './types';
 import { addSurfaceDetails } from './terrainSurfaceDetails';
 import {
   addRavines,
+  isRavineBlock,
   addFloatingIslands,
   addVolcanicLavaLakes,
   addGiantMushrooms,
@@ -200,16 +201,59 @@ function undergroundStoneBlock(x: number, y: number, z: number, seed: number): B
   return Block.Stone;
 }
 
+/** Per-block check: would this position be carved by a mineshaft corridor? */
+function isMineshaftBlock(wx: number, y: number, wz: number, seed: number): boolean {
+  // Corridors exist at baseY=20..40, carve 3 tall, so affected range is y=20..42
+  if (y < 20 || y > 42) return false;
+  const h = terrainHeight(wx, wz, seed);
+  for (let baseY = Math.max(20, y - 2); baseY <= Math.min(40, y); baseY++) {
+    if (!isMineshaftCorridor(wx, baseY, wz, seed)) continue;
+    if (baseY >= h - 4) continue;
+    // Support pillars at intersections are NOT carved
+    const localX = ((wx % 5) + 5) % 5;
+    const localZ = ((wz % 5) + 5) % 5;
+    if (localX === 2 && localZ === 2) return false;
+    return true;
+  }
+  return false;
+}
+
+/** Per-block check: would this position be the Air interior of a dungeon? */
+function isDungeonInterior(wx: number, y: number, wz: number, seed: number): boolean {
+  for (let dgx = -1; dgx <= 1; dgx++) {
+    for (let dgz = -1; dgz <= 1; dgz++) {
+      const probe = dungeonCenter(wx + dgx * 48, wz + dgz * 48, seed);
+      if (!probe) continue;
+      const dx = wx - probe.cx;
+      const dz = wz - probe.cz;
+      const dy = y - probe.y;
+      if (Math.abs(dx) > 2 || Math.abs(dz) > 2 || dy < 0 || dy > 4) continue;
+      const isWall = Math.abs(dx) === 2 || Math.abs(dz) === 2 || dy === 0 || dy === 4;
+      if (!isWall) return true;
+    }
+  }
+  return false;
+}
+
 export function generatedBlockAt(x: number, y: number, z: number, seed: number): Block {
   if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
   const h = terrainHeight(x, z, seed);
   if (y > h) return Block.Air;
+
+  // Carving checks must run before surface/subsurface returns so that
+  // ravines, mineshafts, and dungeons that reach up to the surface are
+  // correctly reported as Air for cross-chunk neighbor lookups.
+  if (y <= h && y >= 5) {
+    if (isCaveBlock(x, y, z, h, seed)) return Block.Air;
+    if (isRavineBlock(x, y, z, seed)) return Block.Air;
+    if (isMineshaftBlock(x, y, z, seed)) return Block.Air;
+    if (isDungeonInterior(x, y, z, seed)) return Block.Air;
+  }
+
   if (y === h) {
     return surfaceBlockAt(x, z, h, seed);
   }
   if (y > h - 4) return subsurfaceBlockAt(x, z, h, seed);
-
-  if (isCaveBlock(x, y, z, h, seed)) return Block.Air;
 
   const ore = valueNoise(x * 1.7 + y * 0.9, z * 1.7 - y * 0.6, 9, seed + 31);
   const deepOre = valueNoise(x * 2.1 - y * 0.7, z * 2.1 + y * 0.8, 7, seed + 37);

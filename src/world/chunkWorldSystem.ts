@@ -14,6 +14,7 @@ import {
   ChunkMeshPayload,
   divFloor,
   mod,
+  NeighborBlocks,
   WorkerIn,
   WorkerOut,
   WORLD_HEIGHT,
@@ -179,9 +180,10 @@ export class ChunkWorldSystem {
       if (!this.dirty.has(key)) {
         this.dirty.add(key);
         const copy = new Uint16Array(chunk.blocks);
+        const { neighbors, transfers } = this.gatherNeighborBlocks(group.cx, group.cz);
         this.postChunkJob(
-          { type: 'remesh', cx: group.cx, cz: group.cz, seed: this.options.getSeed(), blocks: copy },
-          [copy.buffer],
+          { type: 'remesh', cx: group.cx, cz: group.cz, seed: this.options.getSeed(), blocks: copy, neighbors },
+          [copy.buffer, ...transfers],
         );
       }
     }
@@ -257,6 +259,7 @@ export class ChunkWorldSystem {
     for (let i = 0; i < this.maxRequestsPerFrame && this.pendingQueue.length > 0; i++) {
       const request = this.pendingQueue.shift()!;
       if (request.blocks) {
+        const { neighbors, transfers } = this.gatherNeighborBlocks(request.cx, request.cz);
         this.postChunkJob(
           {
             type: 'remesh',
@@ -264,8 +267,9 @@ export class ChunkWorldSystem {
             cz: request.cz,
             seed: this.options.getSeed(),
             blocks: request.blocks,
+            neighbors,
           },
-          [request.blocks.buffer],
+          [request.blocks.buffer, ...transfers],
         );
       } else {
         this.postChunkJob({
@@ -512,15 +516,34 @@ export class ChunkWorldSystem {
       });
   }
 
+  private gatherNeighborBlocks(cx: number, cz: number): { neighbors: NeighborBlocks; transfers: ArrayBuffer[] } {
+    const neighbors: NeighborBlocks = {};
+    const transfers: ArrayBuffer[] = [];
+    const tryAdd = (key: string, dir: keyof NeighborBlocks) => {
+      const n = this.chunks.get(key as ChunkKey);
+      if (n) {
+        const copy = new Uint16Array(n.blocks);
+        neighbors[dir] = copy;
+        transfers.push(copy.buffer);
+      }
+    };
+    tryAdd(chunkKey(cx + 1, cz), 'px');
+    tryAdd(chunkKey(cx - 1, cz), 'nx');
+    tryAdd(chunkKey(cx, cz + 1), 'pz');
+    tryAdd(chunkKey(cx, cz - 1), 'nz');
+    return { neighbors, transfers };
+  }
+
   private remesh(cx: number, cz: number): void {
     const key = chunkKey(cx, cz);
     const chunk = this.chunks.get(key);
     if (!chunk || this.dirty.has(key)) return;
     this.dirty.add(key);
     const copy = new Uint16Array(chunk.blocks);
+    const { neighbors, transfers } = this.gatherNeighborBlocks(cx, cz);
     this.postChunkJob(
-      { type: 'remesh', cx, cz, seed: this.options.getSeed(), blocks: copy },
-      [copy.buffer],
+      { type: 'remesh', cx, cz, seed: this.options.getSeed(), blocks: copy, neighbors },
+      [copy.buffer, ...transfers],
     );
   }
 

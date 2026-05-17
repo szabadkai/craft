@@ -104,9 +104,19 @@ export type ChunkMeshPayload = {
   decoIndices: Uint32Array | null;
 };
 
+/** Neighbor block data sent alongside a remesh so the mesher can look up
+ *  player-modified blocks in adjacent chunks instead of falling back to
+ *  generatedBlockAt(). Keys: 'px' (+X), 'nx' (-X), 'pz' (+Z), 'nz' (-Z). */
+export type NeighborBlocks = {
+  px?: Uint16Array; // chunk at (cx+1, cz)
+  nx?: Uint16Array; // chunk at (cx-1, cz)
+  pz?: Uint16Array; // chunk at (cx, cz+1)
+  nz?: Uint16Array; // chunk at (cx, cz-1)
+};
+
 export type WorkerIn =
   | { type: 'generate'; cx: number; cz: number; seed: number }
-  | { type: 'remesh'; cx: number; cz: number; seed: number; blocks: Uint16Array };
+  | { type: 'remesh'; cx: number; cz: number; seed: number; blocks: Uint16Array; neighbors?: NeighborBlocks };
 
 export type WorkerOut =
   | { type: 'chunk'; payload: ChunkMeshPayload }

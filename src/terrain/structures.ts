@@ -1,6 +1,19 @@
 import { Block, CHUNK_SIZE, WORLD_HEIGHT, blockIndex } from '../types';
 import { hash2, valueNoise, terrainHeight, biomeAt } from '../terrain';
 
+/** Per-block check: would this position be carved by a ravine? */
+export function isRavineBlock(wx: number, y: number, wz: number, seed: number): boolean {
+  const h = terrainHeight(wx, wz, seed);
+  if (h <= 44) return false;
+  const ravineNoise = valueNoise(wx * 1.3 + 7777, wz * 1.3 - 5555, 28, seed + 801);
+  const ravineCross = valueNoise(wx * 0.8 - 3333, wz * 0.8 + 4444, 18, seed + 811);
+  const width = ravineNoise * ravineCross;
+  if (width < 0.27 || width > 0.29) return false;
+  const depth = Math.floor(12 + hash2(wx, wz, seed + 821) * 16);
+  const bottom = Math.max(8, h - depth);
+  return y >= bottom && y <= h;
+}
+
 export function addRavines(blocks: Uint16Array, cx: number, cz: number, seed: number): void {
   for (let z = 0; z < CHUNK_SIZE; z++) {
     for (let x = 0; x < CHUNK_SIZE; x++) {
