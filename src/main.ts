@@ -43,6 +43,7 @@ import {
 import { BlockInteractionSystem } from './world/blockInteractionSystem';
 import { BlockRaycaster } from './world/blockRaycaster';
 import { ChunkWorldSystem } from './world/chunkWorldSystem';
+import { WaterSimSystem } from './world/waterSim';
 import { ItemPickupSystem } from './world/itemPickups';
 import { itemDefs } from './inventory/items';
 import { randomSeedText, seedFromString } from './world/seed';
@@ -243,6 +244,11 @@ const chunkWorld = new ChunkWorldSystem({
   getSeed: () => seed,
   onChunkMessage: () => diagnostics.incrementChunkMessages(),
 });
+const waterSim = new WaterSimSystem(
+  (wx, y, wz) => chunkWorld.getBlock(wx, y, wz),
+  (entries) => chunkWorld.setBlocks(entries),
+);
+
 const inventorySystem = new InventorySystem(
   {
     hotbarEl,
@@ -304,6 +310,7 @@ const interactionSystem = new BlockInteractionSystem(
   },
   doorSystem,
   (entries) => chunkWorld.setBlocks(entries),
+  waterSim,
   terrainAtlas,
 );
 
@@ -446,6 +453,9 @@ function startWorld(seedText: string): void {
   itemPickups.clear();
   hostile.clear();
   minimap.setSeed(seed);
+  inventorySystem.resetInventory();
+  void loadInventory();
+  void loadHotbar();
   void loadFurnaces();
 
   const spawnX = 8;
@@ -603,6 +613,7 @@ const { handlePrimaryAction, handleSecondaryAction } = setupInputHandlers(
     interactionSystem, blockRaycaster, wildlife, hostile, doorSystem,
     chunkWorld, eatingSystem, consoleSystem, diagnostics, pauseMenu,
     audioEngine, sfx, health, getBlock, triggerHandSwing,
+    dropItem: (item, count) => itemPickups.spawn(item, count, player.position.clone()),
   },
   {
     sensitivityInputEl, sensitivityValueEl,
@@ -663,6 +674,7 @@ function tick(now: number): void {
     if (caveFactor < 0.002) caveFactor = 0;
     submergeFactor = applyUnderwaterEffects(dt, worldReady, scene, player, getBlock, submergeFactor, caveFactor, waterOverlayEl, dayNight.fogColor(), dayNight.backgroundColor());
     itemPickups.update(dt, now, player.position);
+    waterSim.tick(now);
     chestSystem.tick();
     furnaceSystem.tick(dt);
     eatingSystem.tick(now);
@@ -759,8 +771,6 @@ randomSeedEl.addEventListener('click', () => {
   refreshContinueButton().catch(console.error);
 });
 
-loadInventory().catch(console.error); loadHotbar().catch(console.error);
-loadFurnaces().catch(console.error);
 updateSeedPreview();
 refreshContinueButton().catch(console.error);
 requestAnimationFrame(tick);

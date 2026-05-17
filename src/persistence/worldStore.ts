@@ -39,21 +39,21 @@ export class WorldStore {
 
   async loadInventory(): Promise<InventorySnapshot | Partial<Record<Item, number>> | null> {
     const value =
-      await this.loadState<InventorySnapshot | Partial<Record<Item, number>>>('inventory');
+      await this.loadState<InventorySnapshot | Partial<Record<Item, number>>>(this.inventoryStateKey());
     return value ?? null;
   }
 
   async loadHotbar(): Promise<Item[] | null> {
-    const value = await this.loadState<Item[]>('hotbar');
+    const value = await this.loadState<Item[]>(this.hotbarStateKey());
     return Array.isArray(value) ? value : null;
   }
 
   async saveInventory(inventory: InventorySnapshot): Promise<void> {
-    await this.saveState('inventory', inventory);
+    await this.saveState(this.inventoryStateKey(), inventory);
   }
 
   async saveHotbar(hotbar: Item[]): Promise<void> {
-    await this.saveState('hotbar', hotbar);
+    await this.saveState(this.hotbarStateKey(), hotbar);
   }
 
   async loadFurnaces(): Promise<Record<string, FurnaceSnapshot> | null> {
@@ -103,8 +103,8 @@ export class WorldStore {
     const db = await this.open();
     await Promise.all([
       this.clearChunksForCurrentSeed(db),
-      this.deleteState(db, 'inventory'),
-      this.deleteState(db, 'hotbar'),
+      this.deleteState(db, this.inventoryStateKey()),
+      this.deleteState(db, this.hotbarStateKey()),
       this.deleteState(db, this.furnaceStateKey()),
       this.deleteState(db, this.chestStateKey()),
       this.deleteState(db, this.doorStateKey()),
@@ -117,6 +117,14 @@ export class WorldStore {
 
   private storedChunkPrefix(): string {
     return `${this.getSeed()}:v${CHUNK_STORAGE_VERSION}:`;
+  }
+
+  private inventoryStateKey(): string {
+    return `inventory:${this.getSeed()}`;
+  }
+
+  private hotbarStateKey(): string {
+    return `hotbar:${this.getSeed()}`;
   }
 
   private furnaceStateKey(): string {

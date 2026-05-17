@@ -9,7 +9,7 @@ import {
   addMushroomSurfaceDetails,
   addTrees,
   addOceanReservoirs,
-  addLakes,
+  addInlandWater,
 } from './terrain/structures';
 
 export type Biome = 'plains' | 'forest' | 'hills' | 'beach' | 'snow' | 'dry' | 'volcanic' | 'mushroom';
@@ -168,7 +168,7 @@ function isCaveBlock(wx: number, y: number, wz: number, h: number, seed: number)
   // surface entrances — caves that reach upward near the surface
   if (y >= h - 12 && y < h - 4) {
     const entrance = valueNoise3D(wx, y * 1.5, wz, 14, seed + 431);
-    if (entrance > 0.66 && cavern > 0.5) return true;
+    if (entrance > 0.82 && cavern > 0.65) return true;
   }
 
   // occasional rooms — modest chambers at mid-depth, rare enough to feel special
@@ -238,7 +238,11 @@ function isDungeonInterior(wx: number, y: number, wz: number, seed: number): boo
 export function generatedBlockAt(x: number, y: number, z: number, seed: number): Block {
   if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
   const h = terrainHeight(x, z, seed);
-  if (y > h) return Block.Air;
+  if (y > h) {
+    const waterSurface = reservoirWaterSurfaceAt(x, z, seed);
+    if (waterSurface !== null && y <= waterSurface) return Block.Water;
+    return Block.Air;
+  }
 
   // Carving checks must run before surface/subsurface returns so that
   // ravines, mineshafts, and dungeons that reach up to the surface are
@@ -353,14 +357,14 @@ export function makeChunkBlocks(cx: number, cz: number, seed: number): Uint16Arr
   }
   addUndergroundFeatures(blocks, cx, cz, seed);
   addRavines(blocks, cx, cz, seed);
+  addOceanReservoirs(blocks, cx, cz, seed, OCEAN_SURFACE_Y);
+  addInlandWater(blocks, cx, cz, seed, OCEAN_SURFACE_Y);
   addTrees(blocks, cx, cz, seed);
   addGiantMushrooms(blocks, cx, cz, seed);
   addSurfaceDetails(blocks, cx, cz, seed);
   addMushroomSurfaceDetails(blocks, cx, cz, seed);
   addVolcanicLavaLakes(blocks, cx, cz, seed);
   addFloatingIslands(blocks, cx, cz, seed);
-  addOceanReservoirs(blocks, cx, cz, seed, OCEAN_SURFACE_Y);
-  addLakes(blocks, cx, cz, seed, OCEAN_SURFACE_Y);
   return blocks;
 }
 

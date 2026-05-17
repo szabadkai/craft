@@ -32,6 +32,7 @@ type InputSystems = {
     selectHotbarSlot: (i: number) => void;
     selectedHotbarIndex: number;
     slotAt: (i: number) => { item: Item; count: number } | null;
+    takeSlot: (i: number) => { item: Item; count: number } | null;
   };
   furnaceSystem: { isOpen: boolean; close: () => void; openAt: (p: { x: number; y: number; z: number }) => void; };
   chestSystem: { isOpen: boolean; close: () => void; openAt: (p: { x: number; y: number; z: number }) => void; };
@@ -63,6 +64,7 @@ type InputSystems = {
   health: { state: { isDead: boolean } };
   getBlock: (wx: number, y: number, wz: number) => Block;
   triggerHandSwing: (kind: 'mine' | 'place') => void;
+  dropItem: (item: Item, count: number) => void;
 };
 
 type InputElements = {
@@ -91,7 +93,7 @@ export function setupInputHandlers(
   elements: InputElements,
   applyRenderDistance: () => void,
 ): ActionHandlers {
-  const { renderer, player, camera, inventorySystem, furnaceSystem, chestSystem, interactionSystem, blockRaycaster, wildlife, hostile, doorSystem, chunkWorld, eatingSystem, consoleSystem, diagnostics, pauseMenu, audioEngine, sfx, health, getBlock, triggerHandSwing } = systems;
+  const { renderer, player, camera, inventorySystem, furnaceSystem, chestSystem, interactionSystem, blockRaycaster, wildlife, hostile, doorSystem, chunkWorld, eatingSystem, consoleSystem, diagnostics, pauseMenu, audioEngine, sfx, health, getBlock, triggerHandSwing, dropItem } = systems;
 
   function handlePrimaryAction(): void {
     const hit = blockRaycaster.raycast();
@@ -190,6 +192,15 @@ export function setupInputHandlers(
         if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
         return;
       }
+    }
+    if (event.code === 'KeyQ' && !inventorySystem.isOpen && !furnaceSystem.isOpen && !chestSystem.isOpen) {
+      event.preventDefault();
+      const held = inventorySystem.slotAt(inventorySystem.selectedHotbarIndex);
+      if (held) {
+        const taken = inventorySystem.takeSlot(inventorySystem.selectedHotbarIndex);
+        if (taken) dropItem(taken.item, taken.count);
+      }
+      return;
     }
     if (furnaceSystem.isOpen && event.code !== 'Tab') return;
     state.keys.add(event.code);

@@ -8,7 +8,7 @@ export function isRavineBlock(wx: number, y: number, wz: number, seed: number): 
   const ravineNoise = valueNoise(wx * 1.3 + 7777, wz * 1.3 - 5555, 28, seed + 801);
   const ravineCross = valueNoise(wx * 0.8 - 3333, wz * 0.8 + 4444, 18, seed + 811);
   const width = ravineNoise * ravineCross;
-  if (width < 0.27 || width > 0.29) return false;
+  if (width < 0.279 || width > 0.281) return false;
   const depth = Math.floor(12 + hash2(wx, wz, seed + 821) * 16);
   const bottom = Math.max(8, h - depth);
   return y >= bottom && y <= h;
@@ -24,7 +24,7 @@ export function addRavines(blocks: Uint16Array, cx: number, cz: number, seed: nu
       const ravineNoise = valueNoise(wx * 1.3 + 7777, wz * 1.3 - 5555, 28, seed + 801);
       const ravineCross = valueNoise(wx * 0.8 - 3333, wz * 0.8 + 4444, 18, seed + 811);
       const width = ravineNoise * ravineCross;
-      if (width < 0.27 || width > 0.29) continue;
+      if (width < 0.279 || width > 0.281) continue;
       const depth = Math.floor(12 + hash2(wx, wz, seed + 821) * 16);
       const bottom = Math.max(8, h - depth);
       for (let y = bottom; y <= h; y++) {
@@ -190,6 +190,8 @@ export function addTrees(blocks: Uint16Array, cx: number, cz: number, seed: numb
       if (hash2(wx, wz, seed + 99) < treeChance) continue;
       const h = terrainHeight(wx, wz, seed);
       if (h < 28 || h > WORLD_HEIGHT - 12) continue;
+      const aboveSurface = blockIndex(x, h + 1, z);
+      if (blocks[aboveSurface] === Block.Water) continue;
       const surface = surfaceBlockAt(wx, wz, h, seed);
       if (surface !== Block.Grass && surface !== Block.Snow) continue;
       const log =
@@ -233,35 +235,41 @@ export function addOceanReservoirs(blocks: Uint16Array, cx: number, cz: number, 
   }
 }
 
-export function addLakes(blocks: Uint16Array, cx: number, cz: number, seed: number, oceanSurfaceY: number): void {
-  for (let z = 0; z < CHUNK_SIZE; z++) {
-    for (let x = 0; x < CHUNK_SIZE; x++) {
-      const wx = cx * CHUNK_SIZE + x;
-      const wz = cz * CHUNK_SIZE + z;
-      const h = terrainHeight(wx, wz, seed);
-      const lakeLevel = lakeSurfaceY(wx, wz, h, seed, oceanSurfaceY);
-      if (lakeLevel === null) continue;
-      for (let y = h + 1; y <= lakeLevel && y < WORLD_HEIGHT; y++) {
-        const i = x + CHUNK_SIZE * (z + CHUNK_SIZE * y);
-        if (blocks[i] === Block.Air) blocks[i] = Block.Water;
-      }
-      const bottomI = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 1));
-      if (blocks[bottomI] === Block.Air) blocks[bottomI] = Block.Sand;
-    }
-  }
-}
+export function inlandWaterSurfaceY(wx: number, wz: number, h: number, seed: number, oceanSurfaceY: number): number | null {
+  if (h <= oceanSurfaceY + 2) return null;
+  if (h > oceanSurfaceY + 18) return null;
 
-function lakeSurfaceY(wx: number, wz: number, h: number, seed: number, oceanSurfaceY: number): number | null {
-  if (h <= oceanSurfaceY + 2 || h > oceanSurfaceY + 18) return null;
-  const lakeVal = valueNoise(wx + 2111, wz - 1333, oceanSurfaceY, seed + 501);
-  if (lakeVal < 0.82) return null;
+  const lakeNoise = valueNoise(wx + 2111, wz - 1333, oceanSurfaceY, seed + 501);
+  if (lakeNoise < 0.82) return null;
+
   const n = terrainHeight(wx, wz + 1, seed);
   const s = terrainHeight(wx, wz - 1, seed);
   const e = terrainHeight(wx + 1, wz, seed);
   const w = terrainHeight(wx - 1, wz, seed);
   const avgNeighbor = (n + s + e + w) / 4;
   if (avgNeighbor <= h + 1.5) return null;
+
   return Math.min(h + 2, oceanSurfaceY + 4);
+}
+
+export function addInlandWater(blocks: Uint16Array, cx: number, cz: number, seed: number, oceanSurfaceY: number): void {
+  for (let z = 0; z < CHUNK_SIZE; z++) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      const wx = cx * CHUNK_SIZE + x;
+      const wz = cz * CHUNK_SIZE + z;
+      const h = terrainHeight(wx, wz, seed);
+      const waterY = inlandWaterSurfaceY(wx, wz, h, seed, oceanSurfaceY);
+      if (waterY === null) continue;
+      for (let y = h + 1; y <= waterY && y < WORLD_HEIGHT; y++) {
+        const i = blockIndex(x, y, z);
+        if (blocks[i] === Block.Air) blocks[i] = Block.Water;
+      }
+      const surfI = blockIndex(x, h, z);
+      if (blocks[surfI] === Block.Grass || blocks[surfI] === Block.Dirt) {
+        blocks[surfI] = Block.Sand;
+      }
+    }
+  }
 }
 
 function surfaceBlockAt(x: number, z: number, h: number, seed: number): Block {

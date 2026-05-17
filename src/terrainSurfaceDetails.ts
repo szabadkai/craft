@@ -49,6 +49,7 @@ export function addSurfaceDetails(blocks: Uint16Array, cx: number, cz: number, s
       if (biome !== 'beach' && surface !== Block.Sand && surface !== Block.Water) {
         if (canPlaceSurfaceRock(wx, wz, biome, seed)) {
           const i = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 1));
+          if (blocks[i] !== Block.Air) continue;
           blocks[i] = Block.Cobblestone;
           if (hash2(wx, wz, seed + 313) > 0.9 && h + 2 < WORLD_HEIGHT) {
             const above = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 2));
@@ -62,6 +63,7 @@ export function addSurfaceDetails(blocks: Uint16Array, cx: number, cz: number, s
       const detail = hash2(wx, wz, seed + 301);
       const patch = surfaceDetailPatch(wx, wz, seed);
       const i = x + CHUNK_SIZE * (z + CHUNK_SIZE * (h + 1));
+      if (blocks[i] !== Block.Air) continue;
       if (patch < SURFACE_DETAIL_PATCH_THRESHOLD && detail < 0.992) continue;
       if (biome === 'forest' && detail > 0.982) {
         blocks[i] = detail > 0.991 ? Block.BerryBush : Block.Mushroom;

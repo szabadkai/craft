@@ -181,7 +181,7 @@ export const itemDefs: ItemDef[] = [
   { id: 'flower', label: 'Flower', category: 'Blocks', block: Block.RedFlower },
   { id: 'mushroom', label: 'Mushroom', category: 'Blocks', block: Block.Mushroom },
   { id: 'berries', label: 'Berries', category: 'Blocks', block: Block.BerryBush },
-  { id: 'sticks', label: 'Stick', category: 'Tools', tool: 'stick' },
+  { id: 'sticks', label: 'Stick', category: 'Materials', tool: 'stick', stackLimit: 64 },
   {
     id: 'wood_pickaxe',
     label: 'Wood Pick',
@@ -367,7 +367,8 @@ export function labelItem(item: Item): string {
 export function stackLimitFor(item: Item): number {
   const def = itemDefs.find((entry) => entry.id === item);
   if (def?.stackLimit !== undefined) return def.stackLimit;
-  return def?.tool ? 1 : 64;
+  if (def?.durability !== undefined) return 1;
+  return 64;
 }
 
 export function maxDurabilityFor(item: Item): number | null {

@@ -13,7 +13,7 @@ import {
   miningDrop,
   MiningTool,
 } from './miningRules';
-import { WaterFlowSystem } from './waterFlow';
+import { WaterSimSystem } from './waterSim';
 
 type UseBlockResult = 'handled' | 'pass';
 
@@ -49,6 +49,7 @@ export class BlockInteractionSystem {
     private readonly onBlockBroken: (wx: number, y: number, wz: number, block: Block) => void,
     private readonly doorSystem: DoorSystem,
     private readonly setBlocks: (entries: { wx: number; y: number; wz: number; block: Block }[]) => void,
+    private readonly waterSim: WaterSimSystem,
     atlasTexture: THREE.CanvasTexture,
   ) {
     this.atlasTexture = atlasTexture;
@@ -532,13 +533,7 @@ export class BlockInteractionSystem {
   }
 
   private triggerWaterFlow(wx: number, wy: number, wz: number): void {
-    const fills = WaterFlowSystem.flow({ x: wx, y: wy, z: wz }, this.getBlock);
-    if (fills.length === 0) return;
-    const entries: { wx: number; y: number; wz: number; block: Block }[] = [];
-    for (const f of fills) {
-      entries.push({ wx: f.x, y: f.y, wz: f.z, block: Block.Water });
-    }
-    this.setBlocks(entries);
+    this.waterSim.activateNeighbors(wx, wy, wz);
   }
 }
 
