@@ -308,6 +308,10 @@ export function blockToItem(block: Block): Item | null {
     case Block.BirchLogZ:
       return 'birch_wood';
     case Block.Torch:
+    case Block.TorchN:
+    case Block.TorchS:
+    case Block.TorchE:
+    case Block.TorchW:
       return 'torch';
     case Block.OakDoor:
     case Block.OakDoorOpen:

@@ -174,6 +174,10 @@ export function tileForBlockFace(block: Block, normal: [number, number, number])
     case Block.Obsidian:
       return Tile.Obsidian;
     case Block.Torch:
+    case Block.TorchN:
+    case Block.TorchS:
+    case Block.TorchE:
+    case Block.TorchW:
       return Tile.Torch;
     case Block.EmeraldOre:
       return Tile.EmeraldOre;

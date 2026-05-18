@@ -1322,18 +1322,18 @@ canvas {
 }
 
 .touch-btn-jump {
-  right: calc(20px + env(safe-area-inset-right));
+  right: calc(48px + env(safe-area-inset-right));
   bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
 .touch-btn-mine {
-  right: calc(20px + env(safe-area-inset-right));
-  bottom: calc(148px + env(safe-area-inset-bottom));
+  right: calc(48px + env(safe-area-inset-right));
+  bottom: calc(168px + env(safe-area-inset-bottom));
 }
 
 .touch-btn-place {
-  right: calc(88px + env(safe-area-inset-right));
-  bottom: calc(148px + env(safe-area-inset-bottom));
+  right: calc(104px + env(safe-area-inset-right));
+  bottom: calc(124px + env(safe-area-inset-bottom));
 }
 
 /* Mobile: safe area insets */
@@ -1404,16 +1404,18 @@ canvas {
   }
 
   .touch-btn-jump {
+    right: calc(56px + env(safe-area-inset-right));
     bottom: calc(90px + env(safe-area-inset-bottom));
   }
 
   .touch-btn-mine {
-    bottom: calc(168px + env(safe-area-inset-bottom));
+    right: calc(56px + env(safe-area-inset-right));
+    bottom: calc(186px + env(safe-area-inset-bottom));
   }
 
   .touch-btn-place {
-    right: calc(96px + env(safe-area-inset-right));
-    bottom: calc(168px + env(safe-area-inset-bottom));
+    right: calc(120px + env(safe-area-inset-right));
+    bottom: calc(138px + env(safe-area-inset-bottom));
   }
 }
 

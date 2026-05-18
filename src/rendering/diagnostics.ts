@@ -12,6 +12,14 @@ export type DiagnosticsSummary = {
   pendingRequests: number;
   requestedChunks: number;
   dirtyRemeshes: number;
+  incomingResults: number;
+  deferredDisposals: number;
+  chunkReceivesLastFrame: number;
+  chunkReceiveMsLastFrame: number;
+  chunkReceiveMsWorst: number;
+  chunkDisposeMsLastFrame: number;
+  farTerrainMsLast: number;
+  farTerrainMsWorst: number;
 };
 
 type GpuTimerExtension = {
@@ -165,8 +173,12 @@ export class DiagnosticsSystem {
         <b>Worker</b>
         <div><span>Workers</span><strong>${world.workerCount}</strong></div>
         <div><span>Pending / requested</span><strong>${world.pendingRequests} / ${world.requestedChunks}</strong></div>
-        <div><span>Dirty remeshes</span><strong>${world.dirtyRemeshes}</strong></div>
+        <div><span>Incoming / dirty</span><strong>${world.incomingResults} / ${world.dirtyRemeshes}</strong></div>
         <div><span>Chunk messages/sec</span><strong>${this.chunkMessagesPerSecond}</strong></div>
+        <div><span>Adopted chunks</span><strong>${world.chunkReceivesLastFrame} last frame</strong></div>
+        <div><span>Adopt ms last / worst</span><strong>${formatMs(world.chunkReceiveMsLastFrame)} / ${formatMs(world.chunkReceiveMsWorst)}</strong></div>
+        <div><span>Deferred disposals</span><strong>${world.deferredDisposals} queued, ${formatMs(world.chunkDisposeMsLastFrame)} last</strong></div>
+        <div><span>Far terrain ms last / worst</span><strong>${formatMs(world.farTerrainMsLast)} / ${formatMs(world.farTerrainMsWorst)}</strong></div>
       </div>
       <div class="diagnostics-group">
         <b>Memory</b>

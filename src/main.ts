@@ -601,9 +601,6 @@ const lastFootstepPos = new THREE.Vector3();
 
 function applyRenderDistanceInternal(): void {
   applyRenderDistance(scene, camera, farTerrain, player, seed, submergeFactor, caveFactor);
-  const pcx = Math.floor(player.position.x / CHUNK_SIZE);
-  const pcz = Math.floor(player.position.z / CHUNK_SIZE);
-  farTerrain.rebuild(pcx, pcz, seed, getFarRadius());
 }
 
 const inputState = {

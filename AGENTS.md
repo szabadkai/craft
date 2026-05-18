@@ -36,6 +36,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
   Wildlife spawning, mesh construction, lifetime cleanup, entity ray hits, loaded-world collision, and per-frame movement simulation.
 - `src/world/chunkWorldSystem.ts`
   Loaded chunk ownership, worker-pool requests, remeshing, chunk persistence saves, block access/mutation, spawn readiness, fade-in, and world diagnostics summary.
+- `src/world/chunkMeshFactory.ts`
+  Main-thread conversion of worker mesh payloads into Three.js chunk meshes.
 - `src/world/blockRaycaster.ts`
   Solid block raycast traversal for camera-targeted interaction.
 - `src/world/blockInteractionSystem.ts`
@@ -93,7 +95,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Console command system (`` ` `` key) with `give <item> [count]`, `items`, `help`, `clear`, tab completion.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Far terrain heightfield ring merged into a single mesh to keep draw calls low.
-- F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, memory estimates, and GPU timing when supported.
+- F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, chunk adoption/deferred disposal timings, far-terrain rebuild timings, memory estimates, and GPU timing when supported.
 - First-person held item view with proper scale (~75% larger) and closer to camera.
 - Damage flash overlay (red screen vignette on hit).
 - Continuous mining while holding mouse1 — chains into next block when current one breaks.
@@ -123,7 +125,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Furnace contents/progress are persisted separately from chunk block data, keyed by world seed and furnace block position.
 - Main thread should not generate terrain meshes directly.
 - Chunk generation and remeshing jobs are distributed across a small worker pool.
-- Far terrain is generated on the main thread today, but it should stay merged into a small number of meshes; avoid reintroducing one mesh per far patch.
+- Worker mesh results are adopted on the main thread with a small frame-time budget; old chunk geometry/material disposal is deferred across frames to reduce chunk pop-in stutter.
+- Far terrain is generated on the main thread today, but movement-triggered rebuilds are debounced and idempotent. It should stay merged into a small number of meshes; avoid reintroducing one mesh per far patch.
 - Terrain shader expects:
   - `uv`: repeated local face UVs.
   - `atlasRect`: vec4 of atlas tile rect.
@@ -160,7 +163,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Good Next Tasks
 
-- Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
+- Move far terrain generation fully off-thread or make rebuilds incremental.
 - Add more hostile mob variants (surface zombies, skeletons).
 - Improve stair auto-step (player automatically steps up when walking into stairs from the low side).
 - Improve water rendering with reflections or wave-based vertex displacement on far water.

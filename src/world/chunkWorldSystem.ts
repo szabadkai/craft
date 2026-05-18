@@ -5,6 +5,8 @@ import { WorldStore } from '../persistence/worldStore';
 import type { DiagnosticsSummary } from '../rendering/diagnostics';
 import type { FarTerrainSystem } from '../rendering/farTerrain';
 import { getDetailRadius, getFarRadius, getPreloadRadius } from '../player/renderDistance';
+import { buildChunkMeshes } from './chunkMeshFactory';
+import { createStreamingStats } from './streamingStats';
 import {
   Block,
   blockIndex,
@@ -19,7 +21,7 @@ import {
   WorkerOut,
   WORLD_HEIGHT,
 } from '../types';
-import { unpackSky } from '../lighting';
+import { getBlockLightEmission, unpackBlock, unpackSky } from '../lighting';
 import type { WildlifeSystem } from './wildlife';
 
 type LoadedChunk = {
@@ -66,7 +68,14 @@ export class ChunkWorldSystem {
   private readonly chunkSaveTimers = new Map<ChunkKey, number>();
   private readonly workers: Worker[];
   private readonly pendingQueue: PendingChunkRequest[] = [];
+  private readonly incomingResults: ChunkMeshPayload[] = [];
+  private readonly deferredDisposals: THREE.Mesh[] = [];
+  private readonly streamingStats = createStreamingStats();
   private readonly maxRequestsPerFrame: number;
+  private readonly receiveBudgetMs = 3.5;
+  private readonly initialReceiveBudgetMs = 8;
+  private readonly disposalBudgetMs = 1.25;
+  private readonly maxReceivesPerFrame = 4;
   private nextWorkerIndex = 0;
   private playerChunkX = Number.NaN;
   private playerChunkZ = Number.NaN;
@@ -95,8 +104,10 @@ export class ChunkWorldSystem {
     this.playerChunkX = Number.NaN;
     this.playerChunkZ = Number.NaN;
     this.pendingQueue.length = 0;
+    this.incomingResults.length = 0;
     this.requested.clear();
     this.dirty.clear();
+    this.drainDeferredDisposals(true);
     for (const timer of this.chunkSaveTimers.values()) window.clearTimeout(timer);
     this.chunkSaveTimers.clear();
   }
@@ -153,10 +164,20 @@ export class ChunkWorldSystem {
     const key = chunkKey(cx, cz);
     const chunk = this.chunks.get(key);
     if (!chunk) return;
-    chunk.blocks[blockIndex(mod(wx, CHUNK_SIZE), y, mod(wz, CHUNK_SIZE))] = block;
+    const lx = mod(wx, CHUNK_SIZE);
+    const lz = mod(wz, CHUNK_SIZE);
+    const oldBlock = chunk.blocks[blockIndex(lx, y, lz)] as Block;
+    chunk.blocks[blockIndex(lx, y, lz)] = block;
     this.scheduleChunkSave(key);
+    // Clear dirty so a fresh remesh is always queued with the latest block data,
+    // even if a stale remesh from a prior edit is still in-flight.
+    this.dirty.delete(key);
     this.remesh(cx, cz);
-    this.remeshNeighbours(wx, wz);
+    if (getBlockLightEmission(oldBlock) > 0 || getBlockLightEmission(block) > 0) {
+      this.remeshAllNeighbours(cx, cz);
+    } else {
+      this.remeshNeighbours(wx, wz);
+    }
   }
 
   /** Place multiple blocks at once, applying all changes before triggering a single remesh per chunk. */
@@ -220,13 +241,20 @@ export class ChunkWorldSystem {
     return null;
   }
 
+  private remeshAllNeighbours(cx: number, cz: number): void {
+    this.remesh(cx + 1, cz);
+    this.remesh(cx - 1, cz);
+    this.remesh(cx, cz + 1);
+    this.remesh(cx, cz - 1);
+  }
+
   updateChunkSet(frame: number): void {
     const pcx = divFloor(this.options.player.position.x, CHUNK_SIZE);
     const pcz = divFloor(this.options.player.position.z, CHUNK_SIZE);
     if (pcx !== this.playerChunkX || pcz !== this.playerChunkZ) {
       this.playerChunkX = pcx;
       this.playerChunkZ = pcz;
-      this.options.farTerrain.rebuild(pcx, pcz, this.options.getSeed(), getFarRadius());
+      this.options.farTerrain.requestRebuild(pcx, pcz, this.options.getSeed(), getFarRadius());
     }
 
     const preload = getPreloadRadius();
@@ -247,19 +275,16 @@ export class ChunkWorldSystem {
       if (chunk.mesh.visible) chunk.lastSeen = frame;
       if (d > preload + 3 && frame - chunk.lastSeen > 90) {
         this.options.scene.remove(chunk.mesh);
-        chunk.mesh.geometry.dispose();
         if (chunk.waterMesh) {
           this.options.scene.remove(chunk.waterMesh);
-          chunk.waterMesh.geometry.dispose();
         }
         if (chunk.transparentMesh) {
           this.options.scene.remove(chunk.transparentMesh);
-          chunk.transparentMesh.geometry.dispose();
         }
         if (chunk.decoMesh) {
           this.options.scene.remove(chunk.decoMesh);
-          chunk.decoMesh.geometry.dispose();
         }
+        this.queueDisposal(chunk.mesh, chunk.waterMesh, chunk.transparentMesh, chunk.decoMesh);
         this.chunks.delete(key);
         this.options.wildlife.removeForChunk(key);
       }
@@ -267,6 +292,7 @@ export class ChunkWorldSystem {
   }
 
   flushRequests(): void {
+    this.drainDeferredDisposals();
     this.pendingQueue.sort((a, b) => this.distSqToPlayer(a.cx, a.cz) - this.distSqToPlayer(b.cx, b.cz));
     for (let i = 0; i < this.maxRequestsPerFrame && this.pendingQueue.length > 0; i++) {
       const request = this.pendingQueue.shift()!;
@@ -292,6 +318,33 @@ export class ChunkWorldSystem {
         });
       }
     }
+
+    if (this.incomingResults.length > 0) {
+      this.incomingResults.sort(
+        (a, b) => this.distSqToPlayer(a.cx, a.cz) - this.distSqToPlayer(b.cx, b.cz),
+      );
+      const startedAt = performance.now();
+      const budget = this.chunks.size < (INITIAL_READY_RADIUS * 2 + 1) ** 2
+        ? this.initialReceiveBudgetMs
+        : this.receiveBudgetMs;
+      let count = 0;
+      while (this.incomingResults.length > 0 && count < this.maxReceivesPerFrame) {
+        this.receiveChunk(this.incomingResults.shift()!);
+        count++;
+        if (count > 0 && performance.now() - startedAt >= budget) break;
+      }
+      this.streamingStats.chunkReceivesLastFrame = count;
+      this.streamingStats.chunkReceiveMsLastFrame = performance.now() - startedAt;
+      this.streamingStats.chunkReceiveMsWorst = Math.max(
+        this.streamingStats.chunkReceiveMsWorst,
+        this.streamingStats.chunkReceiveMsLastFrame,
+      );
+    } else {
+      this.streamingStats.chunkReceivesLastFrame = 0;
+      this.streamingStats.chunkReceiveMsLastFrame = 0;
+    }
+    this.streamingStats.incomingResults = this.incomingResults.length;
+    this.streamingStats.deferredDisposals = this.deferredDisposals.length;
   }
 
   loadingProgress(): { loaded: number; total: number; ready: boolean } {
@@ -383,6 +436,14 @@ export class ChunkWorldSystem {
       pendingRequests: this.pendingQueue.length,
       requestedChunks: this.requested.size,
       dirtyRemeshes: this.dirty.size,
+      incomingResults: this.streamingStats.incomingResults,
+      deferredDisposals: this.streamingStats.deferredDisposals,
+      chunkReceivesLastFrame: this.streamingStats.chunkReceivesLastFrame,
+      chunkReceiveMsLastFrame: this.streamingStats.chunkReceiveMsLastFrame,
+      chunkReceiveMsWorst: this.streamingStats.chunkReceiveMsWorst,
+      chunkDisposeMsLastFrame: this.streamingStats.chunkDisposeMsLastFrame,
+      farTerrainMsLast: this.options.farTerrain.lastBuildMs,
+      farTerrainMsWorst: this.options.farTerrain.worstBuildMs,
     };
   }
 
@@ -395,7 +456,8 @@ export class ChunkWorldSystem {
       return;
     }
     this.options.onChunkMessage();
-    this.receiveChunk(event.data.payload);
+    this.dirty.delete(event.data.payload.key);
+    this.incomingResults.push(event.data.payload);
   }
 
   private receiveChunk(payload: ChunkMeshPayload): void {
@@ -405,89 +467,33 @@ export class ChunkWorldSystem {
     const isRemesh = Boolean(old);
     if (old) {
       this.options.scene.remove(old.mesh);
-      old.mesh.geometry.dispose();
       if (old.waterMesh) {
         this.options.scene.remove(old.waterMesh);
-        old.waterMesh.geometry.dispose();
       }
       if (old.transparentMesh) {
         this.options.scene.remove(old.transparentMesh);
-        old.transparentMesh.geometry.dispose();
       }
       if (old.decoMesh) {
         this.options.scene.remove(old.decoMesh);
-        old.decoMesh.geometry.dispose();
       }
+      this.queueDisposal(old.mesh, old.waterMesh, old.transparentMesh, old.decoMesh);
     }
-    this.dirty.delete(payload.key);
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(payload.positions, 3));
-    geometry.setAttribute('normal', new THREE.BufferAttribute(payload.normals, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(payload.colors, 3));
-    geometry.setAttribute('uv', new THREE.BufferAttribute(payload.uvs, 2));
-    geometry.setAttribute('atlasRect', new THREE.BufferAttribute(payload.atlas, 4));
-    geometry.setAttribute('light', new THREE.BufferAttribute(payload.lights, 2));
-    geometry.setIndex(new THREE.BufferAttribute(payload.indices, 1));
-    geometry.computeBoundingSphere();
-
-    const mesh = new THREE.Mesh(
-      geometry,
-      isRemesh ? this.options.chunkMaterial : this.options.fadeMaterial.clone(),
+    const { mesh, waterMesh, transparentMesh, decoMesh } = buildChunkMeshes(
+      payload,
+      {
+        chunk: this.options.chunkMaterial,
+        fade: this.options.fadeMaterial,
+        water: this.options.waterMaterial,
+        transparent: this.options.transparentMaterial,
+        deco: this.options.decoMaterial,
+      },
+      isRemesh,
     );
-    mesh.frustumCulled = true;
-    mesh.userData.birth = performance.now();
     this.options.scene.add(mesh);
-
-    let waterMesh: THREE.Mesh | null = null;
-    if (payload.waterPositions && payload.waterNormals && payload.waterIndices) {
-      const waterGeo = new THREE.BufferGeometry();
-      waterGeo.setAttribute('position', new THREE.BufferAttribute(payload.waterPositions, 3));
-      waterGeo.setAttribute('normal', new THREE.BufferAttribute(payload.waterNormals, 3));
-      if (payload.waterLights) waterGeo.setAttribute('light', new THREE.BufferAttribute(payload.waterLights, 2));
-      waterGeo.setIndex(new THREE.BufferAttribute(payload.waterIndices, 1));
-      waterGeo.computeBoundingSphere();
-      waterMesh = new THREE.Mesh(waterGeo, this.options.waterMaterial);
-      waterMesh.renderOrder = 1;
-      waterMesh.frustumCulled = true;
-      this.options.scene.add(waterMesh);
-    }
-
-    let transparentMesh: THREE.Mesh | null = null;
-    if (payload.transparentPositions && payload.transparentNormals && payload.transparentColors &&
-        payload.transparentUvs && payload.transparentAtlas && payload.transparentIndices) {
-      const transGeo = new THREE.BufferGeometry();
-      transGeo.setAttribute('position', new THREE.BufferAttribute(payload.transparentPositions, 3));
-      transGeo.setAttribute('normal', new THREE.BufferAttribute(payload.transparentNormals, 3));
-      transGeo.setAttribute('color', new THREE.BufferAttribute(payload.transparentColors, 3));
-      transGeo.setAttribute('uv', new THREE.BufferAttribute(payload.transparentUvs, 2));
-      transGeo.setAttribute('atlasRect', new THREE.BufferAttribute(payload.transparentAtlas, 4));
-      if (payload.transparentLights) transGeo.setAttribute('light', new THREE.BufferAttribute(payload.transparentLights, 2));
-      transGeo.setIndex(new THREE.BufferAttribute(payload.transparentIndices, 1));
-      transGeo.computeBoundingSphere();
-      transparentMesh = new THREE.Mesh(transGeo, this.options.transparentMaterial);
-      transparentMesh.renderOrder = 1;
-      transparentMesh.frustumCulled = true;
-      this.options.scene.add(transparentMesh);
-    }
-
-    let decoMesh: THREE.Mesh | null = null;
-    if (payload.decoPositions && payload.decoNormals && payload.decoColors &&
-        payload.decoUvs && payload.decoAtlas && payload.decoIndices) {
-      const decoGeo = new THREE.BufferGeometry();
-      decoGeo.setAttribute('position', new THREE.BufferAttribute(payload.decoPositions, 3));
-      decoGeo.setAttribute('normal', new THREE.BufferAttribute(payload.decoNormals, 3));
-      decoGeo.setAttribute('color', new THREE.BufferAttribute(payload.decoColors, 3));
-      decoGeo.setAttribute('uv', new THREE.BufferAttribute(payload.decoUvs, 2));
-      decoGeo.setAttribute('atlasRect', new THREE.BufferAttribute(payload.decoAtlas, 4));
-      if (payload.decoLights) decoGeo.setAttribute('light', new THREE.BufferAttribute(payload.decoLights, 2));
-      decoGeo.setIndex(new THREE.BufferAttribute(payload.decoIndices, 1));
-      decoGeo.computeBoundingSphere();
-      decoMesh = new THREE.Mesh(decoGeo, this.options.decoMaterial);
-      decoMesh.renderOrder = 1;
-      decoMesh.frustumCulled = true;
-      this.options.scene.add(decoMesh);
-    }
+    if (waterMesh) this.options.scene.add(waterMesh);
+    if (transparentMesh) this.options.scene.add(transparentMesh);
+    if (decoMesh) this.options.scene.add(decoMesh);
 
     this.chunks.set(payload.key, {
       cx: payload.cx,
@@ -503,6 +509,28 @@ export class ChunkWorldSystem {
     });
     this.options.wildlife.spawnForChunk(payload.cx, payload.cz);
     this.options.onChunkLoaded?.(payload.cx, payload.cz, payload.blocks);
+
+    if (!isRemesh) {
+      this.relightNeighborsIfBorderLight(payload.cx, payload.cz, payload.lightMap);
+    }
+  }
+
+  private relightNeighborsIfBorderLight(cx: number, cz: number, lightMap: Uint8Array): void {
+    const S = CHUNK_SIZE;
+    const H = WORLD_HEIGHT;
+    let needPx = false, needNx = false, needPz = false, needNz = false;
+    for (let y = 0; y < H && !(needPx && needNx && needPz && needNz); y++) {
+      for (let a = 0; a < S; a++) {
+        if (!needPx && unpackBlock(lightMap[blockIndex(S - 1, y, a)]) > 1) needPx = true;
+        if (!needNx && unpackBlock(lightMap[blockIndex(0, y, a)]) > 1) needNx = true;
+        if (!needPz && unpackBlock(lightMap[blockIndex(a, y, S - 1)]) > 1) needPz = true;
+        if (!needNz && unpackBlock(lightMap[blockIndex(a, y, 0)]) > 1) needNz = true;
+      }
+    }
+    if (needPx) this.remesh(cx + 1, cz);
+    if (needNx) this.remesh(cx - 1, cz);
+    if (needPz) this.remesh(cx, cz + 1);
+    if (needNz) this.remesh(cx, cz - 1);
   }
 
   private scheduleChunkSave(key: ChunkKey): void {
@@ -516,6 +544,35 @@ export class ChunkWorldSystem {
       if (latest) this.options.worldStore.saveChunk(key, latest.blocks).catch(console.error);
     }, 250);
     this.chunkSaveTimers.set(key, timer);
+  }
+
+  private queueDisposal(...meshes: Array<THREE.Mesh | null>): void {
+    for (const mesh of meshes) {
+      if (mesh) this.deferredDisposals.push(mesh);
+    }
+  }
+
+  private drainDeferredDisposals(disposeAll = false): void {
+    const startedAt = performance.now();
+    let disposed = 0;
+    while (this.deferredDisposals.length > 0 && (disposeAll || disposed < 8)) {
+      const mesh = this.deferredDisposals.shift()!;
+      mesh.geometry.dispose();
+      const material = mesh.material;
+      if (material !== this.options.chunkMaterial &&
+          material !== this.options.waterMaterial &&
+          material !== this.options.transparentMaterial &&
+          material !== this.options.decoMaterial) {
+        if (Array.isArray(material)) {
+          for (const mat of material) mat.dispose();
+        } else {
+          material.dispose();
+        }
+      }
+      disposed++;
+      if (!disposeAll && performance.now() - startedAt >= this.disposalBudgetMs) break;
+    }
+    this.streamingStats.chunkDisposeMsLastFrame = performance.now() - startedAt;
   }
 
   private requestChunk(cx: number, cz: number): void {

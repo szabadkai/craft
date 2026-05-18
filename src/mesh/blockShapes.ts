@@ -53,7 +53,11 @@ export function isDecoration(block: Block): boolean {
     block === Block.OakDoorOpen ||
     block === Block.AmethystCluster ||
     block === Block.GlowBerry ||
-    block === Block.Torch
+    block === Block.Torch ||
+    block === Block.TorchN ||
+    block === Block.TorchS ||
+    block === Block.TorchE ||
+    block === Block.TorchW
   );
 }
 
@@ -212,8 +216,12 @@ export function emitDecorations(
           continue;
         }
         if (!isDecoration(block)) continue;
-        // Decorations live inside their own block cell — sample light at their position
         const [sky, blk] = getLight(x, y, z);
+        if (block === Block.TorchN || block === Block.TorchS || block === Block.TorchE || block === Block.TorchW) {
+          emitWallTorchQuad(cx, cz, x, y, z, block, sky, blk, positions, normals, colors, uvs, atlas, lightArr, indices, false);
+          emitWallTorchQuad(cx, cz, x, y, z, block, sky, blk, positions, normals, colors, uvs, atlas, lightArr, indices, true);
+          continue;
+        }
         emitPlantQuad(cx, cz, x, y, z, block, sky, blk, positions, normals, colors, uvs, atlas, lightArr, indices, false);
         emitPlantQuad(cx, cz, x, y, z, block, sky, blk, positions, normals, colors, uvs, atlas, lightArr, indices, true);
       }
@@ -234,6 +242,55 @@ function emitPlantQuad(
   const c: [number, number, number][] = rotated
     ? [[wx + inset, y, wz + inset], [wx + inset, y + h, wz + inset], [wx + 1 - inset, y + h, wz + 1 - inset], [wx + 1 - inset, y, wz + 1 - inset]]
     : [[wx + 1 - inset, y, wz + inset], [wx + 1 - inset, y + h, wz + inset], [wx + inset, y + h, wz + 1 - inset], [wx + inset, y, wz + 1 - inset]];
+  const v = colorVariation(block, wx, y, wz, 1);
+  const skyN = sky / 15, blkN = blk / 15;
+  const base = positions.length / 3, uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];
+  for (let i = 0; i < 4; i++) {
+    positions.push(c[i][0], c[i][1], c[i][2]);
+    normals.push(0, 1, 0);
+    uvs.push(uv[i][0], uv[i][1]);
+    atlas.push(rect[0], rect[1], rect[2], rect[3]);
+    colors.push(v[0], v[1], v[2]);
+    lightArr.push(skyN, blkN);
+  }
+  indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+}
+
+function wallTorchOffset(block: Block): [number, number] {
+  switch (block) {
+    case Block.TorchN: return [0, -0.3];
+    case Block.TorchS: return [0, 0.3];
+    case Block.TorchE: return [0.3, 0];
+    case Block.TorchW: return [-0.3, 0];
+    default: return [0, 0];
+  }
+}
+
+function emitWallTorchQuad(
+  cx: number, cz: number, x: number, y: number, z: number,
+  block: Block, sky: number, blk: number,
+  positions: number[], normals: number[], colors: number[],
+  uvs: number[], atlas: number[], lightArr: number[], indices: number[], rotated: boolean,
+): void {
+  const wx = cx * CHUNK_SIZE + x, wz = cz * CHUNK_SIZE + z;
+  const rect = tileRect(tileForBlockFace(block, [0, 1, 0]));
+  const [ox, oz] = wallTorchOffset(block);
+  const inset = 0.34, h = 0.7;
+  const centerX = wx + 0.5 + ox, centerZ = wz + 0.5 + oz;
+  const half = 0.5 - inset;
+  const c: [number, number, number][] = rotated
+    ? [
+        [centerX - half, y + 0.15, centerZ - half],
+        [centerX - half, y + 0.15 + h, centerZ - half],
+        [centerX + half, y + 0.15 + h, centerZ + half],
+        [centerX + half, y + 0.15, centerZ + half],
+      ]
+    : [
+        [centerX + half, y + 0.15, centerZ - half],
+        [centerX + half, y + 0.15 + h, centerZ - half],
+        [centerX - half, y + 0.15 + h, centerZ + half],
+        [centerX - half, y + 0.15, centerZ + half],
+      ];
   const v = colorVariation(block, wx, y, wz, 1);
   const skyN = sky / 15, blkN = blk / 15;
   const base = positions.length / 3, uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];

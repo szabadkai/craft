@@ -298,7 +298,10 @@ export function buildChunkMesh(
           const nz = z + face.n[2];
           const neighbor = getBlock(nx, ny, nz);
           if (neighbor === Block.Water || isSolid(neighbor)) continue;
-          const [sky, blk] = getLight(nx, ny, nz);
+          if (face.n[1] < 0) continue;
+          if (face.n[1] === 0 && getBlock(x, y + 1, z) === Block.Water) continue;
+          let [sky, blk] = getLight(nx, ny, nz);
+          if (face.n[1] > 0) sky = 15;
           emitWaterBlockFace(cx, cz, x, y, z, face, sky, blk, waterPositions, waterNormals, waterLights, waterIndices);
         }
       }

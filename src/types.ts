@@ -74,6 +74,10 @@ export enum Block {
   Obsidian = 66,
   EmeraldOre = 67,
   RedstoneOre = 68,
+  TorchN = 69,
+  TorchS = 70,
+  TorchE = 71,
+  TorchW = 72,
 }
 
 export type ChunkKey = `${number},${number}`;

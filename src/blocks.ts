@@ -168,6 +168,10 @@ export function blockColor(block: Block): [number, number, number] {
     case Block.CobblestoneStairsW:
       return [0.38, 0.39, 0.38];
     case Block.Torch:
+    case Block.TorchN:
+    case Block.TorchS:
+    case Block.TorchE:
+    case Block.TorchW:
       return [1.0, 0.78, 0.25];
     case Block.OakDoor:
     case Block.OakDoorOpen:

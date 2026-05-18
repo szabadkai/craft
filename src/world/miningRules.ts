@@ -166,6 +166,10 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
     case Block.Furnace:
       return { item: 'furnace', count: 1 };
     case Block.Torch:
+    case Block.TorchN:
+    case Block.TorchS:
+    case Block.TorchE:
+    case Block.TorchW:
       return { item: 'torch', count: 1 };
     case Block.OakSlab:
     case Block.OakSlabTop:

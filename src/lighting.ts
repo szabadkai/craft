@@ -18,7 +18,7 @@ import { Block, blockIndex, CHUNK_SIZE, WORLD_HEIGHT } from './types';
 export function getBlockLightEmission(block: Block): number {
   switch (block) {
     case Block.Lava: return 15;
-    case Block.Torch: return 14;
+    case Block.Torch: case Block.TorchN: case Block.TorchS: case Block.TorchE: case Block.TorchW: return 14;
     case Block.GlowBerry: return 10;
     case Block.Furnace: return 8;
     case Block.AmethystCluster: return 5;
@@ -44,6 +44,10 @@ export function blocksLight(block: Block): boolean {
     case Block.Mushroom:
     case Block.BerryBush:
     case Block.Torch:
+    case Block.TorchN:
+    case Block.TorchS:
+    case Block.TorchE:
+    case Block.TorchW:
     case Block.GlowBerry:
     case Block.AmethystCluster:
     case Block.OakDoor:
@@ -399,10 +403,22 @@ export function sampleLight(
     const packed = neighborMap[blockIndex(lx, y, lz)];
     return [unpackSky(packed), unpackBlock(packed)];
   }
-  // No neighbor data — use the nearest in-bounds cell as a best guess.
-  // This avoids black faces on surface chunk borders and bright faces underground.
-  const clampX = Math.max(0, Math.min(CHUNK_SIZE - 1, x));
-  const clampZ = Math.max(0, Math.min(CHUNK_SIZE - 1, z));
-  const fallback = lightMap[blockIndex(clampX, y, clampZ)];
-  return [unpackSky(fallback), unpackBlock(fallback)];
+  // No neighbor light data. The clamped edge cell is typically solid
+  // (skylight=0 because the column scan only lights air blocks). Scan
+  // upward to find sky exposure — if ANY cell above has skylight, this
+  // face is on an exposed surface and should inherit that light level.
+  const edgeX = x < 0 ? 0 : x >= CHUNK_SIZE ? CHUNK_SIZE - 1 : x;
+  const edgeZ = z < 0 ? 0 : z >= CHUNK_SIZE ? CHUNK_SIZE - 1 : z;
+  const edgePacked = lightMap[blockIndex(edgeX, y, edgeZ)];
+  let sky = unpackSky(edgePacked);
+  if (sky === 0) {
+    for (let sy = y + 1; sy < WORLD_HEIGHT; sy++) {
+      const aboveSky = unpackSky(lightMap[blockIndex(edgeX, sy, edgeZ)]);
+      if (aboveSky > 0) {
+        sky = aboveSky;
+        break;
+      }
+    }
+  }
+  return [sky, unpackBlock(edgePacked)];
 }

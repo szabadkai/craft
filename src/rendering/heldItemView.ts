@@ -32,7 +32,9 @@ export class HeldItemView {
 
     if (!entry) return;
 
-    if (entry.kind === 'block') {
+    if (entry.kind === 'block' && entry.block === Block.Torch) {
+      this.heldRoot.add(makeTorch());
+    } else if (entry.kind === 'block') {
       this.heldRoot.add(makeHeldBlock(entry.block));
     } else if (entry.tool === 'stick') {
       this.heldRoot.add(makeStick());
@@ -87,6 +89,24 @@ function makeStick(): THREE.Group {
   shaft.rotation.set(0.36, 0, -0.52);
   shaft.position.set(0.02, 0, 0);
   group.add(shaft);
+  return group;
+}
+
+function makeTorch(): THREE.Group {
+  const group = new THREE.Group();
+  const pivot = new THREE.Group();
+  pivot.rotation.set(0.36, 0, -0.52);
+  pivot.position.set(0.02, -0.06, 0);
+  group.add(pivot);
+
+  const stickMat = new THREE.MeshLambertMaterial({ color: 0x8a572b });
+  const stick = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.58, 0.10), stickMat);
+  pivot.add(stick);
+
+  const flameMat = new THREE.MeshLambertMaterial({ color: 0xf0c040, emissive: 0xf0a020, emissiveIntensity: 0.8 });
+  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.12), flameMat);
+  flame.position.set(0, 0.34, 0);
+  pivot.add(flame);
   return group;
 }
 

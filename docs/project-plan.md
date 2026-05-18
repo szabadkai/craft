@@ -18,6 +18,7 @@ The prototype currently supports:
 - Warm original-style sky, fog, water shading, terrain atlas colors, and pixel hotbar styling.
 - Chunk fade-in for streamed terrain.
 - Far terrain heightfield ring merged into a single mesh for low draw-call overhead.
+- Budgeted main-thread chunk mesh adoption with deferred disposal to reduce visible stutter when worker results arrive.
 - Biome-driven terrain generation.
 - Snow, forest, plains, hills, beach, and dry areas.
 - Natural reservoir water seeds ocean basins and inland depressions, then settles from those sources instead of filling a fixed height layer.
@@ -36,7 +37,7 @@ The prototype currently supports:
 - Mining drop rules and tool durability for pickaxes, including iron pickaxe progression and diamond harvest gating.
 - Recipe cards show crafting outputs, ingredient requirements, and missing inputs.
 - Sky, terrain atlas generation, terrain shader materials, far terrain, chunk streaming/world lifecycle, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
-- F3 diagnostic overlay with frame, render, world, worker, memory, and supported GPU timing counters.
+- F3 diagnostic overlay with frame, render, world, worker, chunk adoption/disposal, far-terrain rebuild, memory, and supported GPU timing counters.
 - Day/night cycle with dynamic sun position, sky colors, terrain/water lighting, fog, and background transitions (~20 min real-time cycle).
 
 ## Guiding Constraints
@@ -194,7 +195,7 @@ Tasks:
   - Decorations moved out of the opaque mesh into their own depthWrite=false mesh.
   - See `ChunkMeshPayload` for `transparent*` and `deco*` arrays, `src/mesh.ts` `emitTransparentFace` / `emitDecorations`, and `src/world/chunkWorldSystem.ts` mesh creation.
 - Improve far terrain LOD blending.
-- Move far terrain rebuilds off the immediate chunk-boundary path or make them incremental.
+- [x] Move far terrain rebuilds off the immediate chunk-boundary path with debounced, idempotent rebuild scheduling.
 - Add chunk mesh memory accounting.
 - Add worker prioritization by camera direction.
 - Add optional lower render-distance profile.
@@ -222,7 +223,7 @@ Exit criteria:
 12. ✅ Add shoreline improvements and inland lakes.
 13. ✅ Add day/night cycle and light propagation.
 14. Separate transparent render paths for glass/water.
-15. Move far terrain rebuilds off chunk-boundary path.
+15. ✅ Move far terrain rebuilds off chunk-boundary path.
 
 ## Current Priority
 
@@ -230,7 +231,7 @@ Per-block lighting system: dual-channel skylight (0–15) + blocklight (0–15) 
 
 ## Known Risks
 
-- `src/main.ts` is below the line cap, but still owns top-level app orchestration and scene setup.
+- `src/main.ts` is over the line cap and still owns top-level app orchestration and scene setup.
 - IndexedDB saves can obscure terrain-generation changes during testing.
 - Block enum numeric IDs are persistence-sensitive.
 - Greedy meshing plus transparent blocks needs careful material separation.

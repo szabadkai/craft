@@ -174,8 +174,8 @@ export class BlockInteractionSystem {
     }
 
     const place = hit.block.clone().add(hit.normal);
-    if (!this.canReplaceForPlacement(place.x, place.y, place.z) || this.wouldIntersectPlayer(place))
-      return;
+    if (!this.canReplaceForPlacement(place.x, place.y, place.z)) return;
+    if (block !== Block.Torch && this.wouldIntersectPlayer(place)) return;
 
     // Orient logs based on placement face normal
     let placeBlock = block;
@@ -193,6 +193,20 @@ export class BlockInteractionSystem {
     } else if (block === Block.OakStairsN || block === Block.CobblestoneStairsN) {
       // Orient stairs based on player's yaw: higher step faces away from player
       placeBlock = stairForYaw(block === Block.OakStairsN ? 'oak' : 'cobble', this.player.yaw);
+    } else if (block === Block.Torch) {
+      if (hit.normal.y > 0) {
+        placeBlock = Block.Torch;
+      } else if (hit.normal.y < 0) {
+        return;
+      } else if (hit.normal.x > 0) {
+        placeBlock = Block.TorchW;
+      } else if (hit.normal.x < 0) {
+        placeBlock = Block.TorchE;
+      } else if (hit.normal.z > 0) {
+        placeBlock = Block.TorchN;
+      } else {
+        placeBlock = Block.TorchS;
+      }
     }
 
     // Handle door placement (two-tall)
@@ -288,6 +302,9 @@ export class BlockInteractionSystem {
           this.mining.block.z,
         );
       }
+      this.dislodgeAttachedTorches(
+        this.mining.block.x, this.mining.block.y, this.mining.block.z,
+      );
       // Leaf decay: when a log is broken, nearby leaves decay with drops
       if (
         block === Block.Log || block === Block.LogX || block === Block.LogZ ||
@@ -307,7 +324,7 @@ export class BlockInteractionSystem {
 
   private updatePlacePreview(hit: BlockHit): void {
     const block = this.inventory.selectedPlaceBlock();
-    if (block === null) return;
+    if (block === null || block === Block.Torch) return;
     const item = this.inventory.selectedPlaceItem();
     if (item && this.inventory.itemCount(item) <= 0) return;
 
@@ -316,7 +333,7 @@ export class BlockInteractionSystem {
     if (this.wouldIntersectPlayer(place)) return;
 
     // Orient log preview based on placement face normal
-    let previewBlock = block;
+    let previewBlock: Block = block;
     if (block === Block.Log) {
       if (Math.abs(hit.normal.x) > 0) previewBlock = Block.LogX;
       else if (Math.abs(hit.normal.z) > 0) previewBlock = Block.LogZ;
@@ -534,6 +551,23 @@ export class BlockInteractionSystem {
 
   private triggerWaterFlow(wx: number, wy: number, wz: number): void {
     this.waterSim.activateNeighbors(wx, wy, wz);
+  }
+
+  private dislodgeAttachedTorches(wx: number, wy: number, wz: number): void {
+    const checks: [number, number, number, Block][] = [
+      [wx, wy + 1, wz, Block.Torch],
+      [wx, wy, wz + 1, Block.TorchN],
+      [wx, wy, wz - 1, Block.TorchS],
+      [wx - 1, wy, wz, Block.TorchE],
+      [wx + 1, wy, wz, Block.TorchW],
+    ];
+    for (const [tx, ty, tz, expected] of checks) {
+      const neighbor = this.getBlock(tx, ty, tz);
+      if (neighbor === expected) {
+        this.setBlock(tx, ty, tz, Block.Air);
+        this.spawnItemDrop('torch', 1, new THREE.Vector3(tx + 0.5, ty + 0.65, tz + 0.5));
+      }
+    }
   }
 }
 

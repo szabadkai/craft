@@ -11,6 +11,10 @@ export class FarTerrainSystem {
     side: THREE.DoubleSide,
   });
   private waterMesh: THREE.Mesh | null = null;
+  private pendingRebuild: number | null = null;
+  private lastKey = '';
+  private lastBuildMsValue = 0;
+  private worstBuildMsValue = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -19,7 +23,32 @@ export class FarTerrainSystem {
     scene.add(this.group);
   }
 
+  get lastBuildMs(): number {
+    return this.lastBuildMsValue;
+  }
+
+  get worstBuildMs(): number {
+    return this.worstBuildMsValue;
+  }
+
+  requestRebuild(pcx: number, pcz: number, seed: number, farRadius: number): void {
+    const key = `${pcx},${pcz},${seed},${farRadius}`;
+    if (key === this.lastKey) return;
+    if (this.pendingRebuild !== null) window.clearTimeout(this.pendingRebuild);
+    this.pendingRebuild = window.setTimeout(() => {
+      this.pendingRebuild = null;
+      this.rebuild(pcx, pcz, seed, farRadius);
+    }, 140);
+  }
+
   rebuild(pcx: number, pcz: number, seed: number, farRadius: number): void {
+    const key = `${pcx},${pcz},${seed},${farRadius}`;
+    if (key === this.lastKey) return;
+    if (this.pendingRebuild !== null) {
+      window.clearTimeout(this.pendingRebuild);
+      this.pendingRebuild = null;
+    }
+    const startedAt = performance.now();
     this.clear();
 
     const step = 4;
@@ -37,7 +66,10 @@ export class FarTerrainSystem {
       }
     }
 
-    if (positions.length === 0) return;
+    if (positions.length === 0) {
+      this.recordBuild(key, startedAt);
+      return;
+    }
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -48,6 +80,7 @@ export class FarTerrainSystem {
     this.group.add(new THREE.Mesh(geo, this.material));
 
     this.buildWater(pcx, pcz, seed, farRadius);
+    this.recordBuild(key, startedAt);
   }
 
   private buildWater(pcx: number, pcz: number, seed: number, farRadius: number): void {
@@ -89,6 +122,12 @@ export class FarTerrainSystem {
     }
     this.group.clear();
     this.waterMesh = null;
+  }
+
+  private recordBuild(key: string, startedAt: number): void {
+    this.lastKey = key;
+    this.lastBuildMsValue = performance.now() - startedAt;
+    this.worstBuildMsValue = Math.max(this.worstBuildMsValue, this.lastBuildMsValue);
   }
 }
 
