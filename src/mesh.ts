@@ -1,7 +1,7 @@
 import { isSolid } from './blocks';
 import { Tile, tileForBlockFace, tileRect } from './atlas';
 import { generatedBlockAt } from './terrain';
-import { sampleLight, type NeighborLightData } from './lighting';
+import { sampleLight, unpackBlock, type NeighborLightData } from './lighting';
 import { Block, blockIndex, CHUNK_SIZE, ChunkMeshPayload, chunkKey, NeighborBlocks, WORLD_HEIGHT } from './types';
 import {
   colorVariation,
@@ -356,6 +356,22 @@ export function buildChunkMesh(
     }
   }
 
+  let solidVoxels = 0;
+  let borderLightPx = false, borderLightNx = false, borderLightPz = false, borderLightNz = false;
+  const S = CHUNK_SIZE;
+  const H = WORLD_HEIGHT;
+  for (let i = 0; i < blocks.length; i++) {
+    if (isSolid(blocks[i] as Block)) solidVoxels++;
+  }
+  for (let y = 0; y < H && !(borderLightPx && borderLightNx && borderLightPz && borderLightNz); y++) {
+    for (let a = 0; a < S; a++) {
+      if (!borderLightPx && unpackBlock(defaultLightMap[blockIndex(S - 1, y, a)]) > 1) borderLightPx = true;
+      if (!borderLightNx && unpackBlock(defaultLightMap[blockIndex(0, y, a)]) > 1) borderLightNx = true;
+      if (!borderLightPz && unpackBlock(defaultLightMap[blockIndex(a, y, S - 1)]) > 1) borderLightPz = true;
+      if (!borderLightNz && unpackBlock(defaultLightMap[blockIndex(a, y, 0)]) > 1) borderLightNz = true;
+    }
+  }
+
   return {
     key: chunkKey(cx, cz),
     cx,
@@ -387,6 +403,11 @@ export function buildChunkMesh(
     decoAtlas: decoAtlas.length > 0 ? new Float32Array(decoAtlas) : null,
     decoLights: decoLights.length > 0 ? new Float32Array(decoLights) : null,
     decoIndices: decoIndices.length > 0 ? new Uint32Array(decoIndices) : null,
+    solidVoxels,
+    borderLightPx,
+    borderLightNx,
+    borderLightPz,
+    borderLightNz,
   };
 }
 

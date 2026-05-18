@@ -113,6 +113,11 @@ export type ChunkMeshPayload = {
   decoAtlas: Float32Array | null;
   decoLights: Float32Array | null;
   decoIndices: Uint32Array | null;
+  solidVoxels: number;
+  borderLightPx: boolean;
+  borderLightNx: boolean;
+  borderLightPz: boolean;
+  borderLightNz: boolean;
 };
 
 /** Neighbor block data sent alongside a remesh so the mesher can look up

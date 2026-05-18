@@ -21,7 +21,7 @@ import {
   WorkerOut,
   WORLD_HEIGHT,
 } from '../types';
-import { getBlockLightEmission, unpackBlock, unpackSky } from '../lighting';
+import { getBlockLightEmission, unpackSky } from '../lighting';
 import type { WildlifeSystem } from './wildlife';
 
 type LoadedChunk = {
@@ -254,7 +254,7 @@ export class ChunkWorldSystem {
     if (pcx !== this.playerChunkX || pcz !== this.playerChunkZ) {
       this.playerChunkX = pcx;
       this.playerChunkZ = pcz;
-      this.options.farTerrain.requestRebuild(pcx, pcz, this.options.getSeed(), getFarRadius());
+      this.options.farTerrain.requestRebuild(pcx, pcz, this.options.getSeed(), getFarRadius(), getDetailRadius());
     }
 
     const preload = getPreloadRadius();
@@ -383,10 +383,6 @@ export class ChunkWorldSystem {
     this.options.waterMaterial.uniforms.time.value = seconds;
     this.options.transparentMaterial.uniforms.time.value = seconds;
     this.options.decoMaterial.uniforms.time.value = seconds;
-    for (const chunk of this.chunks.values()) {
-      const material = chunk.mesh.material;
-      if (material instanceof THREE.ShaderMaterial) material.uniforms.time.value = seconds;
-    }
   }
 
   fadeChunks(now: number): void {
@@ -505,33 +501,19 @@ export class ChunkWorldSystem {
       transparentMesh,
       decoMesh,
       lastSeen: 0,
-      solidVoxels: countSolidVoxels(payload.blocks),
+      solidVoxels: payload.solidVoxels,
     });
     this.options.wildlife.spawnForChunk(payload.cx, payload.cz);
     this.options.onChunkLoaded?.(payload.cx, payload.cz, payload.blocks);
 
     if (!isRemesh) {
-      this.relightNeighborsIfBorderLight(payload.cx, payload.cz, payload.lightMap);
+      if (payload.borderLightPx) this.remesh(payload.cx + 1, payload.cz);
+      if (payload.borderLightNx) this.remesh(payload.cx - 1, payload.cz);
+      if (payload.borderLightPz) this.remesh(payload.cx, payload.cz + 1);
+      if (payload.borderLightNz) this.remesh(payload.cx, payload.cz - 1);
     }
   }
 
-  private relightNeighborsIfBorderLight(cx: number, cz: number, lightMap: Uint8Array): void {
-    const S = CHUNK_SIZE;
-    const H = WORLD_HEIGHT;
-    let needPx = false, needNx = false, needPz = false, needNz = false;
-    for (let y = 0; y < H && !(needPx && needNx && needPz && needNz); y++) {
-      for (let a = 0; a < S; a++) {
-        if (!needPx && unpackBlock(lightMap[blockIndex(S - 1, y, a)]) > 1) needPx = true;
-        if (!needNx && unpackBlock(lightMap[blockIndex(0, y, a)]) > 1) needNx = true;
-        if (!needPz && unpackBlock(lightMap[blockIndex(a, y, S - 1)]) > 1) needPz = true;
-        if (!needNz && unpackBlock(lightMap[blockIndex(a, y, 0)]) > 1) needNz = true;
-      }
-    }
-    if (needPx) this.remesh(cx + 1, cz);
-    if (needNx) this.remesh(cx - 1, cz);
-    if (needPz) this.remesh(cx, cz + 1);
-    if (needNz) this.remesh(cx, cz - 1);
-  }
 
   private scheduleChunkSave(key: ChunkKey): void {
     const chunk = this.chunks.get(key);
@@ -636,10 +618,3 @@ export class ChunkWorldSystem {
   }
 }
 
-function countSolidVoxels(blocks: Uint16Array): number {
-  let count = 0;
-  for (let i = 0; i < blocks.length; i++) {
-    if (isSolid(blocks[i] as Block)) count++;
-  }
-  return count;
-}

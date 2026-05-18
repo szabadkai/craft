@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { terrainHeight } from '../terrain';
-import { getFarRadius, getFogFar, getFogNear } from '../player/renderDistance';
+import { getDetailRadius, getFarRadius, getFogFar, getFogNear } from '../player/renderDistance';
 import { Block, CHUNK_SIZE, WORLD_HEIGHT } from '../types';
 import type { FarTerrainSystem } from './farTerrain';
 
@@ -23,7 +23,7 @@ export function applyRenderDistance(
   }
   const pcx = Math.floor(player.position.x / CHUNK_SIZE);
   const pcz = Math.floor(player.position.z / CHUNK_SIZE);
-  farTerrain.rebuild(pcx, pcz, seed, getFarRadius());
+  farTerrain.requestRebuild(pcx, pcz, seed, getFarRadius(), getDetailRadius());
 }
 
 export function updateCaveFactor(

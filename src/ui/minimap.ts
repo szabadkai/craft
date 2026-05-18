@@ -1,21 +1,10 @@
-import { biomeAt, reservoirWaterSurfaceAt, terrainHeight } from '../terrain';
+import type { MinimapOut } from '../minimapWorker';
 
 export type Waypoint = { name: string; x: number; z: number; color: string };
 
 const SIZE = 70;
 const HALF = SIZE / 2;
 const SCALE = 4;
-
-const BIOME_COLORS: Record<string, string> = {
-  plains: '#5a8f3c',
-  forest: '#3d6b2e',
-  hills: '#7a7a6e',
-  beach: '#d4c576',
-  snow: '#e8eaec',
-  dry: '#b5a44c',
-};
-const WATER_COLOR = '#3366aa';
-const HIGH_HILL_COLOR = '#9a9a8a';
 
 function storageKey(seed: number): string {
   return `craft-waypoints-${seed}`;
@@ -45,11 +34,13 @@ export class MinimapSystem {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly container: HTMLDivElement;
+  private readonly worker: Worker;
   private lastPx = NaN;
   private lastPz = NaN;
   private seed = 0;
   private waypoints: Waypoint[] = [];
   private terrainCache: ImageData | null = null;
+  private inFlight = false;
 
   constructor() {
     this.container = document.createElement('div');
@@ -62,6 +53,11 @@ export class MinimapSystem {
 
     this.ctx = this.canvas.getContext('2d')!;
     document.body.appendChild(this.container);
+
+    this.worker = new Worker(new URL('../minimapWorker.ts', import.meta.url), { type: 'module' });
+    this.worker.onmessage = (event: MessageEvent<MinimapOut>) => {
+      this.handleResult(event.data);
+    };
   }
 
   show(): void {
@@ -106,55 +102,27 @@ export class MinimapSystem {
     if (bx !== this.lastPx || bz !== this.lastPz) {
       this.lastPx = bx;
       this.lastPz = bz;
-      this.terrainCache = this.buildTerrain(bx, bz);
+      this.requestBuild(bx, bz);
     }
     if (this.terrainCache) this.ctx.putImageData(this.terrainCache, 0, 0);
     this.drawOverlay(px, pz, yaw);
   }
 
-  private buildTerrain(cx: number, cz: number): ImageData {
-    const img = this.ctx.createImageData(SIZE, SIZE);
-    const data = img.data;
+  private requestBuild(cx: number, cz: number): void {
+    if (this.inFlight) return;
+    this.inFlight = true;
+    this.worker.postMessage({ cx, cz, seed: this.seed, size: SIZE, half: HALF, scale: SCALE });
+  }
 
-    for (let py = 0; py < SIZE; py++) {
-      for (let px = 0; px < SIZE; px++) {
-        const wx = cx + (px - HALF) * SCALE;
-        const wz = cz + (py - HALF) * SCALE;
-        const h = terrainHeight(wx, wz, this.seed);
-        const i = (py * SIZE + px) * 4;
-
-        const waterSurface = reservoirWaterSurfaceAt(wx, wz, this.seed);
-        if (waterSurface !== null && waterSurface > h) {
-          const depth = Math.max(0, waterSurface - h);
-          const darkening = Math.max(0.5, 1 - depth * 0.03);
-          data[i] = 51 * darkening;
-          data[i + 1] = 102 * darkening;
-          data[i + 2] = 170 * darkening;
-          data[i + 3] = 255;
-          continue;
-        }
-
-        const biome = biomeAt(wx, wz, this.seed);
-        let color: string;
-        if (biome === 'hills' && h > 55) {
-          color = HIGH_HILL_COLOR;
-        } else {
-          color = BIOME_COLORS[biome] ?? BIOME_COLORS.plains;
-        }
-
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
-
-        const shade = 0.85 + (h - 40) * 0.004;
-        data[i] = Math.min(255, r * shade);
-        data[i + 1] = Math.min(255, g * shade);
-        data[i + 2] = Math.min(255, b * shade);
-        data[i + 3] = 255;
-      }
+  private handleResult(result: MinimapOut): void {
+    this.inFlight = false;
+    this.terrainCache = new ImageData(new Uint8ClampedArray(result.data.buffer as ArrayBuffer), SIZE, SIZE);
+    // If position changed while worker was busy, request a new build
+    const bx = this.lastPx;
+    const bz = this.lastPz;
+    if (bx !== result.cx || bz !== result.cz) {
+      this.requestBuild(bx, bz);
     }
-
-    return img;
   }
 
   private drawOverlay(px: number, pz: number, yaw: number): void {

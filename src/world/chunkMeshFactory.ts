@@ -16,6 +16,15 @@ export type ChunkMeshes = {
   decoMesh: THREE.Mesh | null;
 };
 
+const CHUNK_BOUND_RADIUS = 65; // sqrt(8² + 64² + 8²) ≈ 64.98
+
+function chunkBoundingSphere(cx: number, cz: number): THREE.Sphere {
+  return new THREE.Sphere(
+    new THREE.Vector3(cx * 16 + 8, 64, cz * 16 + 8),
+    CHUNK_BOUND_RADIUS,
+  );
+}
+
 export function buildChunkMeshes(
   payload: ChunkMeshPayload,
   materials: ChunkMeshMaterials,
@@ -29,14 +38,17 @@ export function buildChunkMeshes(
   geometry.setAttribute('atlasRect', new THREE.BufferAttribute(payload.atlas, 4));
   geometry.setAttribute('light', new THREE.BufferAttribute(payload.lights, 2));
   geometry.setIndex(new THREE.BufferAttribute(payload.indices, 1));
-  geometry.computeBoundingSphere();
+  geometry.boundingSphere = chunkBoundingSphere(payload.cx, payload.cz);
 
-  const mesh = new THREE.Mesh(geometry, isRemesh ? materials.chunk : materials.fade.clone());
+  const fadeMat = materials.fade.clone();
+  fadeMat.uniforms.time = materials.fade.uniforms.time;
+  const mesh = new THREE.Mesh(geometry, isRemesh ? materials.chunk : fadeMat);
   mesh.frustumCulled = true;
   mesh.userData.birth = performance.now();
 
+  const bounds = chunkBoundingSphere(payload.cx, payload.cz);
   const waterMesh = payload.waterPositions && payload.waterNormals && payload.waterIndices
-    ? buildWaterMesh(payload, materials.water)
+    ? buildWaterMesh(payload, materials.water, bounds)
     : null;
   const transparentMesh = payload.transparentPositions && payload.transparentNormals &&
     payload.transparentColors && payload.transparentUvs && payload.transparentAtlas &&
@@ -50,6 +62,7 @@ export function buildChunkMeshes(
         payload.transparentLights,
         payload.transparentIndices,
         materials.transparent,
+        bounds,
       )
     : null;
   const decoMesh = payload.decoPositions && payload.decoNormals && payload.decoColors &&
@@ -63,19 +76,20 @@ export function buildChunkMeshes(
         payload.decoLights,
         payload.decoIndices,
         materials.deco,
+        bounds,
       )
     : null;
 
   return { mesh, waterMesh, transparentMesh, decoMesh };
 }
 
-function buildWaterMesh(payload: ChunkMeshPayload, material: THREE.ShaderMaterial): THREE.Mesh {
+function buildWaterMesh(payload: ChunkMeshPayload, material: THREE.ShaderMaterial, bounds: THREE.Sphere): THREE.Mesh {
   const waterGeo = new THREE.BufferGeometry();
   waterGeo.setAttribute('position', new THREE.BufferAttribute(payload.waterPositions!, 3));
   waterGeo.setAttribute('normal', new THREE.BufferAttribute(payload.waterNormals!, 3));
   if (payload.waterLights) waterGeo.setAttribute('light', new THREE.BufferAttribute(payload.waterLights, 2));
   waterGeo.setIndex(new THREE.BufferAttribute(payload.waterIndices!, 1));
-  waterGeo.computeBoundingSphere();
+  waterGeo.boundingSphere = bounds.clone();
   const mesh = new THREE.Mesh(waterGeo, material);
   mesh.renderOrder = 1;
   mesh.frustumCulled = true;
@@ -91,6 +105,7 @@ function buildTexturedMesh(
   lights: Float32Array | null,
   indices: Uint32Array,
   material: THREE.ShaderMaterial,
+  bounds: THREE.Sphere,
 ): THREE.Mesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -100,7 +115,7 @@ function buildTexturedMesh(
   geo.setAttribute('atlasRect', new THREE.BufferAttribute(atlas, 4));
   if (lights) geo.setAttribute('light', new THREE.BufferAttribute(lights, 2));
   geo.setIndex(new THREE.BufferAttribute(indices, 1));
-  geo.computeBoundingSphere();
+  geo.boundingSphere = bounds.clone();
   const mesh = new THREE.Mesh(geo, material);
   mesh.renderOrder = 1;
   mesh.frustumCulled = true;
