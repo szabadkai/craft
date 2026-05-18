@@ -64,7 +64,10 @@ export function blockHardness(block: Block, tool: MiningTool): number {
     case Block.GoldOre:
       return 1700 / speed;
     case Block.DiamondOre:
+    case Block.EmeraldOre:
       return 2200 / speed;
+    case Block.RedstoneOre:
+      return 1500 / speed;
     case Block.Amethyst:
       return 1300 / speed;
     case Block.AmethystCluster:
@@ -112,6 +115,10 @@ export function miningDrop(block: Block, tool: MiningTool): MiningDrop | null {
       return toolTier(tool) >= 2 ? { item: 'gold_ore', count: 1 } : null;
     case Block.DiamondOre:
       return toolTier(tool) >= 3 ? { item: 'diamond', count: 1 } : null;
+    case Block.EmeraldOre:
+      return toolTier(tool) >= 3 ? { item: 'emerald', count: 1 } : null;
+    case Block.RedstoneOre:
+      return toolTier(tool) >= 2 ? { item: 'redstone', count: 1 + Math.floor(Math.random() * 4) } : null;
     case Block.Leaves:
     case Block.BirchLeaves:
       if (Math.random() < 0.08) return { item: 'apple', count: 1 };
@@ -220,6 +227,8 @@ export function damagesTool(block: Block, tool: MiningTool): boolean {
     case Block.IronOre:
     case Block.GoldOre:
     case Block.DiamondOre:
+    case Block.EmeraldOre:
+    case Block.RedstoneOre:
     case Block.Furnace:
     case Block.Cobblestone:
     case Block.MossyCobblestone:
@@ -258,6 +267,8 @@ function miningSpeedMultiplier(block: Block, tool: MiningTool): number {
     case Block.IronOre:
     case Block.GoldOre:
     case Block.DiamondOre:
+    case Block.EmeraldOre:
+    case Block.RedstoneOre:
       return tier >= 3 ? 3 : tier === 2 ? 2.2 : tier === 1 ? 1.25 : 1;
     default:
       return 1;

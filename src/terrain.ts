@@ -266,6 +266,8 @@ export function generatedBlockAt(x: number, y: number, z: number, seed: number):
   if (y < 32 && ore > 0.782 && ore < 0.802) return Block.IronOre;
   if (y < 22 && deepOre > 0.747 && deepOre < 0.76) return Block.GoldOre;
   if (y < 14 && ore > 0.739 && ore < 0.745) return Block.DiamondOre;
+  if (y < 18 && deepOre > 0.735 && deepOre < 0.742) return Block.EmeraldOre;
+  if (y < 28 && ore > 0.815 && ore < 0.835) return Block.RedstoneOre;
   if (valueNoise(x + y * 3, z - y * 2, 18, seed + 91) > 0.91) return Block.Gravel;
   return undergroundStoneBlock(x, y, z, seed);
 }
@@ -499,6 +501,8 @@ function addDungeons(blocks: Uint16Array, cx: number, cz: number, seed: number):
               blocks[i] = Block.MossyStoneBrick;
             } else if (dx === 0 && dz === 0 && ddy === 1) {
               blocks[i] = Block.Spawner;
+            } else if (dx === -1 && dz === -1 && ddy === 1) {
+              blocks[i] = Block.Chest;
             } else {
               blocks[i] = Block.Air;
             }

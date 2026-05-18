@@ -123,6 +123,7 @@ const hostile: HostileSystem = new HostileSystem(
   () => dayNight.timeOfDay,
   () => sfx.mobHit(),
   () => sfx.mobDeath(),
+  (wx, y, wz) => chunkWorld.getSkylight(wx, y, wz),
 );
 hostile.setPlayerDamageCallback((amount) => health.damageFrom(amount, 'mob'));
 const wildlife: WildlifeSystem = new WildlifeSystem(
@@ -243,6 +244,17 @@ const chunkWorld = new ChunkWorldSystem({
   player,
   getSeed: () => seed,
   onChunkMessage: () => diagnostics.incrementChunkMessages(),
+  onChunkLoaded: (cx, cz, blocks) => {
+    const CS = 16, WH = 128;
+    for (let y = 0; y < WH; y++) {
+      for (let z = 0; z < CS; z++) {
+        for (let x = 0; x < CS; x++) {
+          if (blocks[x + CS * (z + CS * y)] !== 34) continue;
+          chestSystem.seedDungeonChest({ x: cx * CS + x, y, z: cz * CS + z }, seed);
+        }
+      }
+    }
+  },
 });
 const waterSim = new WaterSimSystem(
   (wx, y, wz) => chunkWorld.getBlock(wx, y, wz),

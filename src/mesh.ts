@@ -1,6 +1,7 @@
 import { isSolid } from './blocks';
 import { Tile, tileForBlockFace, tileRect } from './atlas';
 import { generatedBlockAt } from './terrain';
+import { sampleLight, type NeighborLightData } from './lighting';
 import { Block, blockIndex, CHUNK_SIZE, ChunkMeshPayload, chunkKey, NeighborBlocks, WORLD_HEIGHT } from './types';
 import {
   colorVariation,
@@ -34,6 +35,8 @@ type MaskCell = {
   block: Block;
   tile: Tile;
   shade: number;
+  sky: number;
+  blk: number;
 };
 
 const dims = [CHUNK_SIZE, WORLD_HEIGHT, CHUNK_SIZE] as const;
@@ -125,28 +128,47 @@ export function buildChunkMesh(
   seed: number,
   blocks: Uint16Array,
   neighbors?: NeighborBlocks,
+  lightMap?: Uint8Array,
 ): ChunkMeshPayload {
   const positions: number[] = [];
   const normals: number[] = [];
   const colors: number[] = [];
   const uvs: number[] = [];
   const atlas: number[] = [];
+  const lights: number[] = [];
   const indices: number[] = [];
   const waterPositions: number[] = [];
   const waterNormals: number[] = [];
+  const waterLights: number[] = [];
   const waterIndices: number[] = [];
   const transparentPositions: number[] = [];
   const transparentNormals: number[] = [];
   const transparentColors: number[] = [];
   const transparentUvs: number[] = [];
   const transparentAtlas: number[] = [];
+  const transparentLights: number[] = [];
   const transparentIndices: number[] = [];
   const decoPositions: number[] = [];
   const decoNormals: number[] = [];
   const decoColors: number[] = [];
   const decoUvs: number[] = [];
   const decoAtlas: number[] = [];
+  const decoLights: number[] = [];
   const decoIndices: number[] = [];
+
+  const neighborLightData: NeighborLightData | undefined = neighbors ? {
+    px: neighbors.pxLight,
+    nx: neighbors.nxLight,
+    pz: neighbors.pzLight,
+    nz: neighbors.nzLight,
+  } : undefined;
+
+  // Default to full skylight if no light map provided (shouldn't happen in practice)
+  const defaultLightMap = lightMap ?? new Uint8Array(CHUNK_SIZE * WORLD_HEIGHT * CHUNK_SIZE).fill(0xF0);
+
+  const getLight = (x: number, y: number, z: number): [number, number] => {
+    return sampleLight(defaultLightMap, x, y, z, neighborLightData);
+  };
 
   const getBlock = (x: number, y: number, z: number): Block => {
     if (y < 0 || y >= WORLD_HEIGHT) return Block.Air;
@@ -193,10 +215,12 @@ export function buildChunkMesh(
           const block = getBlock(p[0], p[1], p[2]);
           const neighbor = getBlock(p[0] + face.n[0], p[1] + face.n[1], p[2] + face.n[2]);
           const index = u + v * uSize;
-          mask[index] =
-            block !== Block.Air && block !== Block.Water && block !== Block.Lava && block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves && block !== Block.IronBars && !isDecoration(block) && !isSlab(block) && !isStair(block) && !occludesFace(block, neighbor)
-              ? { block, tile: tileForBlockFace(block, face.n), shade: face.shade }
-              : null;
+          if (block !== Block.Air && block !== Block.Water && block !== Block.Lava && block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves && block !== Block.IronBars && !isDecoration(block) && !isSlab(block) && !isStair(block) && !occludesFace(block, neighbor)) {
+            const [sky, blk] = getLight(p[0] + face.n[0], p[1] + face.n[1], p[2] + face.n[2]);
+            mask[index] = { block, tile: tileForBlockFace(block, face.n), shade: face.shade, sky, blk };
+          } else {
+            mask[index] = null;
+          }
         }
       }
 
@@ -234,6 +258,7 @@ export function buildChunkMesh(
             colors,
             uvs,
             atlas,
+            lights,
             indices,
           });
 
@@ -255,7 +280,8 @@ export function buildChunkMesh(
         for (const face of faces) {
           const neighbor = getBlock(x + face.n[0], y + face.n[1], z + face.n[2]);
           if (neighbor === block) continue;
-          emitTransparentFace(cx, cz, x, y, z, block, face, transparentPositions, transparentNormals, transparentColors, transparentUvs, transparentAtlas, transparentIndices);
+          const [sky, blk] = getLight(x + face.n[0], y + face.n[1], z + face.n[2]);
+          emitTransparentFace(cx, cz, x, y, z, block, face, sky, blk, transparentPositions, transparentNormals, transparentColors, transparentUvs, transparentAtlas, transparentLights, transparentIndices);
         }
       }
     }
@@ -272,7 +298,8 @@ export function buildChunkMesh(
           const nz = z + face.n[2];
           const neighbor = getBlock(nx, ny, nz);
           if (neighbor === Block.Water || isSolid(neighbor)) continue;
-          emitWaterBlockFace(cx, cz, x, y, z, face, waterPositions, waterNormals, waterIndices);
+          const [sky, blk] = getLight(nx, ny, nz);
+          emitWaterBlockFace(cx, cz, x, y, z, face, sky, blk, waterPositions, waterNormals, waterLights, waterIndices);
         }
       }
     }
@@ -286,7 +313,8 @@ export function buildChunkMesh(
         for (const face of faces) {
           const neighbor = getBlock(x + face.n[0], y + face.n[1], z + face.n[2]);
           if (neighbor === Block.Lava) continue;
-          emitTransparentFace(cx, cz, x, y, z, Block.Lava, face, transparentPositions, transparentNormals, transparentColors, transparentUvs, transparentAtlas, transparentIndices);
+          // Lava is self-lit — always full brightness
+          emitTransparentFace(cx, cz, x, y, z, Block.Lava, face, 15, 15, transparentPositions, transparentNormals, transparentColors, transparentUvs, transparentAtlas, transparentLights, transparentIndices);
         }
       }
     }
@@ -305,13 +333,14 @@ export function buildChunkMesh(
           const neighbor = getBlock(nx, ny, nz);
           // A slab face is visible if neighbor is air/water/decor or a non-matching slab
           if (!slabFaceVisible(face, neighbor, block, y)) continue;
-          emitSlabFace(cx, cz, x, y, z, block, face, positions, normals, colors, uvs, atlas, indices);
+          const [slabSky, slabBlk] = getLight(nx, ny, nz);
+          emitSlabFace(cx, cz, x, y, z, block, face, slabSky, slabBlk, positions, normals, colors, uvs, atlas, lights, indices);
         }
       }
     }
   }
 
-  emitDecorations(cx, cz, getBlock, decoPositions, decoNormals, decoColors, decoUvs, decoAtlas, decoIndices);
+  emitDecorations(cx, cz, getBlock, getLight, decoPositions, decoNormals, decoColors, decoUvs, decoAtlas, decoLights, decoIndices);
 
   // Emit individual stair faces (non-greedy, stepped geometry)
   for (let y = 0; y < WORLD_HEIGHT; y++) {
@@ -319,7 +348,7 @@ export function buildChunkMesh(
       for (let x = 0; x < CHUNK_SIZE; x++) {
         const block = getBlock(x, y, z);
         if (!isStair(block)) continue;
-        emitStairFaces(cx, cz, x, y, z, block, getBlock, positions, normals, colors, uvs, atlas, indices);
+        emitStairFaces(cx, cz, x, y, z, block, getBlock, getLight, positions, normals, colors, uvs, atlas, lights, indices);
       }
     }
   }
@@ -329,26 +358,31 @@ export function buildChunkMesh(
     cx,
     cz,
     blocks,
+    lightMap: defaultLightMap,
     positions: new Float32Array(positions),
     normals: new Float32Array(normals),
     colors: new Float32Array(colors),
     uvs: new Float32Array(uvs),
     atlas: new Float32Array(atlas),
+    lights: new Float32Array(lights),
     indices: new Uint32Array(indices),
     waterPositions: waterPositions.length > 0 ? new Float32Array(waterPositions) : null,
     waterNormals: waterNormals.length > 0 ? new Float32Array(waterNormals) : null,
+    waterLights: waterLights.length > 0 ? new Float32Array(waterLights) : null,
     waterIndices: waterIndices.length > 0 ? new Uint32Array(waterIndices) : null,
     transparentPositions: transparentPositions.length > 0 ? new Float32Array(transparentPositions) : null,
     transparentNormals: transparentNormals.length > 0 ? new Float32Array(transparentNormals) : null,
     transparentColors: transparentColors.length > 0 ? new Float32Array(transparentColors) : null,
     transparentUvs: transparentUvs.length > 0 ? new Float32Array(transparentUvs) : null,
     transparentAtlas: transparentAtlas.length > 0 ? new Float32Array(transparentAtlas) : null,
+    transparentLights: transparentLights.length > 0 ? new Float32Array(transparentLights) : null,
     transparentIndices: transparentIndices.length > 0 ? new Uint32Array(transparentIndices) : null,
     decoPositions: decoPositions.length > 0 ? new Float32Array(decoPositions) : null,
     decoNormals: decoNormals.length > 0 ? new Float32Array(decoNormals) : null,
     decoColors: decoColors.length > 0 ? new Float32Array(decoColors) : null,
     decoUvs: decoUvs.length > 0 ? new Float32Array(decoUvs) : null,
     decoAtlas: decoAtlas.length > 0 ? new Float32Array(decoAtlas) : null,
+    decoLights: decoLights.length > 0 ? new Float32Array(decoLights) : null,
     decoIndices: decoIndices.length > 0 ? new Uint32Array(decoIndices) : null,
   };
 }
@@ -362,7 +396,7 @@ function occludesFace(block: Block, neighbor: Block): boolean {
 }
 
 function sameCell(a: MaskCell, b: MaskCell | null): boolean {
-  return Boolean(b && a.block === b.block && a.tile === b.tile && a.shade === b.shade);
+  return Boolean(b && a.block === b.block && a.tile === b.tile && a.shade === b.shade && a.sky === b.sky && a.blk === b.blk);
 }
 
 function emitWaterBlockFace(
@@ -372,8 +406,11 @@ function emitWaterBlockFace(
   y: number,
   z: number,
   face: FaceDef,
+  sky: number,
+  blk: number,
   waterPositions: number[],
   waterNormals: number[],
+  waterLights: number[],
   waterIndices: number[],
 ): void {
   const base = waterPositions.length / 3;
@@ -381,10 +418,13 @@ function emitWaterBlockFace(
   const u0 = face.uAxis === 0 ? x : face.uAxis === 1 ? y : z;
   const v0 = face.vAxis === 0 ? x : face.vAxis === 1 ? y : z;
   const corners = face.corners(plane, u0, v0, u0 + 1, v0 + 1);
+  const skyN = sky / 15;
+  const blkN = blk / 15;
   for (let i = 0; i < corners.length; i++) {
     const corner = corners[i];
     waterPositions.push(cx * CHUNK_SIZE + corner[0], corner[1], cz * CHUNK_SIZE + corner[2]);
     waterNormals.push(...face.n);
+    waterLights.push(skyN, blkN);
   }
   waterIndices.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
@@ -397,11 +437,14 @@ function emitTransparentFace(
   z: number,
   block: Block,
   face: FaceDef,
+  sky: number,
+  blk: number,
   positions: number[],
   normals: number[],
   colors: number[],
   uvs: number[],
   atlas: number[],
+  lightArr: number[],
   indices: number[],
 ): void {
   const wx = cx * CHUNK_SIZE + x, wz = cz * CHUNK_SIZE + z, n = face.n;
@@ -414,6 +457,8 @@ function emitTransparentFace(
   const v0 = face.vAxis === 0 ? x : face.vAxis === 1 ? y : z;
   const corners = face.corners(plane, u0, v0, u0 + 1, v0 + 1);
   const uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];
+  const skyN = sky / 15;
+  const blkN = blk / 15;
   for (let i = 0; i < 4; i++) {
     const corner = corners[i];
     positions.push(cx * CHUNK_SIZE + corner[0], corner[1], cz * CHUNK_SIZE + corner[2]);
@@ -421,6 +466,7 @@ function emitTransparentFace(
     uvs.push(uv[i][0], uv[i][1]);
     atlas.push(rect[0], rect[1], rect[2], rect[3]);
     colors.push(shade * variation[0], shade * variation[1], shade * variation[2]);
+    lightArr.push(skyN, blkN);
   }
   indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
@@ -441,6 +487,7 @@ function emitQuad(input: {
   colors: number[];
   uvs: number[];
   atlas: number[];
+  lights: number[];
   indices: number[];
 }): void {
   const {
@@ -458,12 +505,15 @@ function emitQuad(input: {
     colors,
     uvs,
     atlas,
+    lights,
     indices,
   } = input;
   const base = positions.length / 3;
   const plane = face.n[face.dAxis] > 0 ? d + 1 : d;
   const corners = face.corners(plane, u, v, u + width, v + height);
   const rect = tileRect(cell.tile);
+  const skyN = cell.sky / 15;
+  const blkN = cell.blk / 15;
 
   for (let i = 0; i < corners.length; i++) {
     const corner = corners[i];
@@ -479,6 +529,7 @@ function emitQuad(input: {
       cell.shade * variation[1],
       cell.shade * variation[2],
     );
+    lights.push(skyN, blkN);
   }
 
   indices.push(base, base + 1, base + 2, base, base + 2, base + 3);

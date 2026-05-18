@@ -72,6 +72,8 @@ export enum Block {
   MushroomCapRed = 64,
   MushroomCapBrown = 65,
   Obsidian = 66,
+  EmeraldOre = 67,
+  RedstoneOre = 68,
 }
 
 export type ChunkKey = `${number},${number}`;
@@ -81,26 +83,31 @@ export type ChunkMeshPayload = {
   cx: number;
   cz: number;
   blocks: Uint16Array;
+  lightMap: Uint8Array;
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
   uvs: Float32Array;
   atlas: Float32Array;
+  lights: Float32Array;
   indices: Uint32Array;
   waterPositions: Float32Array | null;
   waterNormals: Float32Array | null;
+  waterLights: Float32Array | null;
   waterIndices: Uint32Array | null;
   transparentPositions: Float32Array | null;
   transparentNormals: Float32Array | null;
   transparentColors: Float32Array | null;
   transparentUvs: Float32Array | null;
   transparentAtlas: Float32Array | null;
+  transparentLights: Float32Array | null;
   transparentIndices: Uint32Array | null;
   decoPositions: Float32Array | null;
   decoNormals: Float32Array | null;
   decoColors: Float32Array | null;
   decoUvs: Float32Array | null;
   decoAtlas: Float32Array | null;
+  decoLights: Float32Array | null;
   decoIndices: Uint32Array | null;
 };
 
@@ -112,6 +119,10 @@ export type NeighborBlocks = {
   nx?: Uint16Array; // chunk at (cx-1, cz)
   pz?: Uint16Array; // chunk at (cx, cz+1)
   nz?: Uint16Array; // chunk at (cx, cz-1)
+  pxLight?: Uint8Array;
+  nxLight?: Uint8Array;
+  pzLight?: Uint8Array;
+  nzLight?: Uint8Array;
 };
 
 export type WorkerIn =

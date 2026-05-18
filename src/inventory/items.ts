@@ -55,7 +55,9 @@ export type Item =
   | 'mushroom_stem'
   | 'mushroom_cap_red'
   | 'mushroom_cap_brown'
-  | 'obsidian';
+  | 'obsidian'
+  | 'emerald'
+  | 'redstone';
 
 export type Recipe = {
   name: string;
@@ -138,6 +140,8 @@ export const defaultInventoryCounts: Record<Item, number> = {
   mushroom_cap_red: 0,
   mushroom_cap_brown: 0,
   obsidian: 0,
+  emerald: 0,
+  redstone: 0,
 };
 
 export const recipes: Recipe[] = [
@@ -208,10 +212,12 @@ export const itemDefs: ItemDef[] = [
   { id: 'copper_ore', label: 'Copper Ore', category: 'Materials' },
   { id: 'gold_ore', label: 'Gold Ore', category: 'Materials' },
   { id: 'diamond', label: 'Diamond', category: 'Materials' },
+  { id: 'emerald', label: 'Emerald', category: 'Materials' },
+  { id: 'redstone', label: 'Redstone', category: 'Materials' },
   { id: 'iron_ingot', label: 'Iron Ingot', category: 'Materials' },
   { id: 'copper_ingot', label: 'Copper Ingot', category: 'Materials' },
   { id: 'gold_ingot', label: 'Gold Ingot', category: 'Materials' },
-  { id: 'torch', label: 'Torch', category: 'Materials' },
+  { id: 'torch', label: 'Torch', category: 'Blocks', block: Block.Torch },
   { id: 'apple', label: 'Apple', category: 'Food', foodValue: 4, stackLimit: 16 },
   { id: 'raw_meat', label: 'Raw Meat', category: 'Food', foodValue: 3, stackLimit: 16 },
   { id: 'cooked_meat', label: 'Cooked Meat', category: 'Food', foodValue: 7, stackLimit: 16 },
@@ -265,6 +271,10 @@ export function blockToItem(block: Block): Item | null {
       return 'gold_ore';
     case Block.DiamondOre:
       return 'diamond';
+    case Block.EmeraldOre:
+      return 'emerald';
+    case Block.RedstoneOre:
+      return 'redstone';
     case Block.Gravel:
       return 'gravel';
     case Block.Clay:

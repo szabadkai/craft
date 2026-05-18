@@ -377,6 +377,20 @@ export function drawTile(
       context.fillStyle = '#3a5a3a';
       context.fillRect(x + Math.floor(rand(i) * 16), y + Math.floor(rand(i + 20) * 16), 1, 1);
     }
+  } else if (pattern === 'torch') {
+    context.clearRect(x, y, 16, 16);
+    context.globalAlpha = 1;
+    // Stick
+    context.fillStyle = '#7c522b';
+    context.fillRect(x + 7, y + 5, 2, 10);
+    // Top / flame base
+    context.fillStyle = '#d4a030';
+    context.fillRect(x + 6, y + 3, 4, 3);
+    // Flame
+    context.fillStyle = '#f0c040';
+    context.fillRect(x + 7, y + 1, 2, 3);
+    context.fillStyle = '#ff8020';
+    context.fillRect(x + 7, y + 0, 2, 2);
   }
   context.globalAlpha = 1;
 }

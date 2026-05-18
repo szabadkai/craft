@@ -1,6 +1,6 @@
 import { Block } from '../types';
 import { InventorySystem, InventorySlot } from './inventorySystem';
-import { itemSwatch, labelItem, maxDurabilityFor, stackLimitFor } from './items';
+import { Item, itemSwatch, labelItem, maxDurabilityFor, stackLimitFor } from './items';
 
 export type ChestPosition = { x: number; y: number; z: number };
 
@@ -90,6 +90,37 @@ export class ChestSystem {
   close(): void {
     this.openChest = null;
     this.paint();
+  }
+
+  seedDungeonChest(position: ChestPosition, seed: number): void {
+    const key = chestKey(position);
+    if (this.chests.has(key)) return;
+    const slots: (InventorySlot | null)[] = Array.from({ length: CHEST_SIZE }, () => null);
+    let h = Math.imul(position.x * 374761 ^ position.z * 668265 ^ seed, 1274126177) >>> 0;
+    const rand = () => { h = (Math.imul(h ^ (h >>> 16), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0; return h / 4294967296; };
+    const loot: { item: Item; min: number; max: number; chance: number }[] = [
+      { item: 'iron_ore', min: 1, max: 4, chance: 0.6 },
+      { item: 'gold_ore', min: 1, max: 3, chance: 0.35 },
+      { item: 'diamond', min: 1, max: 2, chance: 0.15 },
+      { item: 'emerald', min: 1, max: 2, chance: 0.12 },
+      { item: 'redstone', min: 2, max: 6, chance: 0.4 },
+      { item: 'coal', min: 2, max: 6, chance: 0.55 },
+      { item: 'torch', min: 3, max: 8, chance: 0.7 },
+      { item: 'iron_pickaxe', min: 1, max: 1, chance: 0.18 },
+      { item: 'stone_pickaxe', min: 1, max: 1, chance: 0.3 },
+      { item: 'apple', min: 2, max: 4, chance: 0.45 },
+      { item: 'cooked_meat', min: 1, max: 3, chance: 0.35 },
+      { item: 'obsidian', min: 1, max: 2, chance: 0.1 },
+    ];
+    let slot = 0;
+    for (const entry of loot) {
+      if (slot >= CHEST_SIZE) break;
+      if (rand() < entry.chance) {
+        const count = entry.min + Math.floor(rand() * (entry.max - entry.min + 1));
+        slots[slot++] = { item: entry.item, count };
+      }
+    }
+    this.chests.set(key, { slots });
   }
 
   removeAt(position: ChestPosition): void {

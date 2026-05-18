@@ -226,7 +226,7 @@ Exit criteria:
 
 ## Current Priority
 
-M6 rendering improvements: transparent material separation is done. Next items are far terrain rebuild optimization and ambient occlusion for greedy meshing. Restone/mechanism blocks and additional hostile mobs remain on the backlog.
+Per-block lighting system: dual-channel skylight (0–15) + blocklight (0–15) computed worker-side via BFS flood-fill, baked into per-vertex mesh attributes, and applied in the fragment shader. This is the single biggest unlock for cave exploration, day/night immersion, and making torches essential. Replaces the current flat global lighting with real darkness underground and light-emitting blocks (torch=14, lava=15, glow_berry=10, amethyst_cluster=5).
 
 ## Known Risks
 

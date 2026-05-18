@@ -52,7 +52,8 @@ export function isDecoration(block: Block): boolean {
     block === Block.BerryBush ||
     block === Block.OakDoorOpen ||
     block === Block.AmethystCluster ||
-    block === Block.GlowBerry
+    block === Block.GlowBerry ||
+    block === Block.Torch
   );
 }
 
@@ -102,9 +103,9 @@ export function slabFaceVisible(face: FaceDef, neighbor: Block, _slabBlock: Bloc
 
 export function emitSlabFace(
   cx: number, cz: number, x: number, y: number, z: number,
-  block: Block, face: FaceDef,
+  block: Block, face: FaceDef, sky: number, blk: number,
   positions: number[], normals: number[], colors: number[],
-  uvs: number[], atlas: number[], indices: number[],
+  uvs: number[], atlas: number[], lightArr: number[], indices: number[],
 ): void {
   const wx = cx * CHUNK_SIZE + x, wz = cz * CHUNK_SIZE + z, n = face.n;
   const tile = tileForBlockFace(block, n), rect = tileRect(tile);
@@ -118,12 +119,14 @@ export function emitSlabFace(
   else if (n[2] > 0) corners = [[wx + 1, yMin, wz + 1], [wx + 1, yMax, wz + 1], [wx, yMax, wz + 1], [wx, yMin, wz + 1]];
   else corners = [[wx, yMin, wz], [wx, yMax, wz], [wx + 1, yMax, wz], [wx + 1, yMin, wz]];
   const base = positions.length / 3, uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];
+  const skyN = sky / 15, blkN = blk / 15;
   for (let i = 0; i < 4; i++) {
     positions.push(corners[i][0], corners[i][1], corners[i][2]);
     normals.push(n[0], n[1], n[2]);
     uvs.push(uv[i][0], uv[i][1]);
     atlas.push(rect[0], rect[1], rect[2], rect[3]);
     colors.push(sh * v[0], sh * v[1], sh * v[2]);
+    lightArr.push(skyN, blkN);
   }
   indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
@@ -131,8 +134,9 @@ export function emitSlabFace(
 export function emitStairFaces(
   cx: number, cz: number, x: number, y: number, z: number,
   block: Block, getBlock: (x: number, y: number, z: number) => Block,
+  getLight: (x: number, y: number, z: number) => [number, number],
   positions: number[], normals: number[], colors: number[],
-  uvs: number[], atlas: number[], indices: number[],
+  uvs: number[], atlas: number[], lightArr: number[], indices: number[],
 ): void {
   const wx = cx * CHUNK_SIZE + x, wz = cz * CHUNK_SIZE + z;
   const dir = stairDir(block), matBlock = stairMaterial(block);
@@ -141,7 +145,9 @@ export function emitStairFaces(
   const upperZ0 = dir === 'n' ? z : z + 0.5, upperZ1 = dir === 's' ? z + 0.5 : z + 1;
   const Y0 = y, Y1 = y + 0.5, Y2 = y + 1;
 
-  const emit = (n: [number, number, number], c: [number, number, number][], shade: number) => {
+  const emit = (n: [number, number, number], c: [number, number, number][], shade: number, lx: number, ly: number, lz: number) => {
+    const [sky, blk] = getLight(lx, ly, lz);
+    const skyN = sky / 15, blkN = blk / 15;
     const base = positions.length / 3, tile = tileForBlockFace(matBlock, n);
     const rect = tileRect(tile), uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];
     for (let i = 0; i < 4; i++) {
@@ -150,34 +156,36 @@ export function emitStairFaces(
       uvs.push(uv[i][0], uv[i][1]);
       atlas.push(rect[0], rect[1], rect[2], rect[3]);
       colors.push(shade * variation[0], shade * variation[1], shade * variation[2]);
+      lightArr.push(skyN, blkN);
     }
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   };
   const air = (b: Block) => b === Block.Air || b === Block.Water || isDecoration(b);
 
-  if (Y0 === 0 || air(getBlock(x, Y0 - 1, z))) emit([0, -1, 0], [[x, Y0, z], [x + 1, Y0, z], [x + 1, Y0, z + 1], [x, Y0, z + 1]], 0.72);
-  if (air(getBlock(x + 1, Y0, z))) emit([1, 0, 0], [[x + 1, Y0, z], [x + 1, Y1, z], [x + 1, Y1, z + 1], [x + 1, Y0, z + 1]], 0.98);
-  if (air(getBlock(x - 1, Y0, z))) emit([-1, 0, 0], [[x, Y0, z + 1], [x, Y1, z + 1], [x, Y1, z], [x, Y0, z]], 0.92);
-  if (air(getBlock(x, Y0, z + 1))) emit([0, 0, 1], [[x + 1, Y0, z + 1], [x + 1, Y1, z + 1], [x, Y1, z + 1], [x, Y0, z + 1]], 1);
-  if (air(getBlock(x, Y0, z - 1))) emit([0, 0, -1], [[x, Y0, z], [x, Y1, z], [x + 1, Y1, z], [x + 1, Y0, z]], 0.88);
+  if (Y0 === 0 || air(getBlock(x, Y0 - 1, z))) emit([0, -1, 0], [[x, Y0, z], [x + 1, Y0, z], [x + 1, Y0, z + 1], [x, Y0, z + 1]], 0.72, x, Y0 - 1, z);
+  if (air(getBlock(x + 1, Y0, z))) emit([1, 0, 0], [[x + 1, Y0, z], [x + 1, Y1, z], [x + 1, Y1, z + 1], [x + 1, Y0, z + 1]], 0.98, x + 1, Y0, z);
+  if (air(getBlock(x - 1, Y0, z))) emit([-1, 0, 0], [[x, Y0, z + 1], [x, Y1, z + 1], [x, Y1, z], [x, Y0, z]], 0.92, x - 1, Y0, z);
+  if (air(getBlock(x, Y0, z + 1))) emit([0, 0, 1], [[x + 1, Y0, z + 1], [x + 1, Y1, z + 1], [x, Y1, z + 1], [x, Y0, z + 1]], 1, x, Y0, z + 1);
+  if (air(getBlock(x, Y0, z - 1))) emit([0, 0, -1], [[x, Y0, z], [x, Y1, z], [x + 1, Y1, z], [x + 1, Y0, z]], 0.88, x, Y0, z - 1);
 
-  if (Y2 >= WORLD_HEIGHT || air(getBlock(x, Y2, z))) emit([0, 1, 0], [[upperX0, Y2, upperZ0], [upperX1, Y2, upperZ0], [upperX1, Y2, upperZ1], [upperX0, Y2, upperZ1]], 1);
-  if (dir !== 'e' && air(getBlock(x + 1, Y1, z))) emit([1, 0, 0], [[x + 1, Y1, z], [x + 1, Y2, z], [x + 1, Y2, upperZ1], [x + 1, Y1, upperZ1]], 0.98);
-  if (dir !== 'w' && air(getBlock(x - 1, Y1, z))) emit([-1, 0, 0], [[x, Y1, upperZ1], [x, Y2, upperZ1], [x, Y2, z], [x, Y1, z]], 0.92);
-  if (dir !== 's' && air(getBlock(x, Y1, z + 1))) emit([0, 0, 1], [[upperX1, Y1, z + 1], [upperX1, Y2, z + 1], [upperX0, Y2, z + 1], [upperX0, Y1, z + 1]], 1);
-  if (dir !== 'n' && air(getBlock(x, Y1, z - 1))) emit([0, 0, -1], [[upperX0, Y1, z], [upperX0, Y2, z], [upperX1, Y2, z], [upperX1, Y1, z]], 0.88);
+  if (Y2 >= WORLD_HEIGHT || air(getBlock(x, Y2, z))) emit([0, 1, 0], [[upperX0, Y2, upperZ0], [upperX1, Y2, upperZ0], [upperX1, Y2, upperZ1], [upperX0, Y2, upperZ1]], 1, x, Y2, z);
+  if (dir !== 'e' && air(getBlock(x + 1, Y1, z))) emit([1, 0, 0], [[x + 1, Y1, z], [x + 1, Y2, z], [x + 1, Y2, upperZ1], [x + 1, Y1, upperZ1]], 0.98, x + 1, Y1, z);
+  if (dir !== 'w' && air(getBlock(x - 1, Y1, z))) emit([-1, 0, 0], [[x, Y1, upperZ1], [x, Y2, upperZ1], [x, Y2, z], [x, Y1, z]], 0.92, x - 1, Y1, z);
+  if (dir !== 's' && air(getBlock(x, Y1, z + 1))) emit([0, 0, 1], [[upperX1, Y1, z + 1], [upperX1, Y2, z + 1], [upperX0, Y2, z + 1], [upperX0, Y1, z + 1]], 1, x, Y1, z + 1);
+  if (dir !== 'n' && air(getBlock(x, Y1, z - 1))) emit([0, 0, -1], [[upperX0, Y1, z], [upperX0, Y2, z], [upperX1, Y2, z], [upperX1, Y1, z]], 0.88, x, Y1, z - 1);
 
-  if (dir === 'n') emit([0, 0, 1], [[x, Y1, z + 0.5], [x, Y2, z + 0.5], [x + 1, Y2, z + 0.5], [x + 1, Y1, z + 0.5]], 1);
-  else if (dir === 's') emit([0, 0, -1], [[x + 1, Y1, z + 0.5], [x + 1, Y2, z + 0.5], [x, Y2, z + 0.5], [x, Y1, z + 0.5]], 0.88);
-  else if (dir === 'e') emit([1, 0, 0], [[x + 0.5, Y1, z], [x + 0.5, Y2, z], [x + 0.5, Y2, z + 1], [x + 0.5, Y1, z + 1]], 0.98);
-  else emit([-1, 0, 0], [[x + 0.5, Y1, z + 1], [x + 0.5, Y2, z + 1], [x + 0.5, Y2, z], [x + 0.5, Y1, z]], 0.92);
+  // Internal step faces use the stair block's own light
+  if (dir === 'n') emit([0, 0, 1], [[x, Y1, z + 0.5], [x, Y2, z + 0.5], [x + 1, Y2, z + 0.5], [x + 1, Y1, z + 0.5]], 1, x, y, z);
+  else if (dir === 's') emit([0, 0, -1], [[x + 1, Y1, z + 0.5], [x + 1, Y2, z + 0.5], [x, Y2, z + 0.5], [x, Y1, z + 0.5]], 0.88, x, y, z);
+  else if (dir === 'e') emit([1, 0, 0], [[x + 0.5, Y1, z], [x + 0.5, Y2, z], [x + 0.5, Y2, z + 1], [x + 0.5, Y1, z + 1]], 0.98, x, y, z);
+  else emit([-1, 0, 0], [[x + 0.5, Y1, z + 1], [x + 0.5, Y2, z + 1], [x + 0.5, Y2, z], [x + 0.5, Y1, z]], 0.92, x, y, z);
 
   if (dir === 'n' || dir === 's') {
     const e0 = dir === 'n' ? z + 0.5 : z, e1 = dir === 'n' ? z + 1 : z + 0.5;
-    if (air(getBlock(x, Y2, z))) emit([0, 1, 0], [[x, Y1, e0], [x + 1, Y1, e0], [x + 1, Y1, e1], [x, Y1, e1]], 1);
+    if (air(getBlock(x, Y2, z))) emit([0, 1, 0], [[x, Y1, e0], [x + 1, Y1, e0], [x + 1, Y1, e1], [x, Y1, e1]], 1, x, y, z);
   } else {
     const e0 = dir === 'e' ? x : x + 0.5, e1 = dir === 'e' ? x + 0.5 : x + 1;
-    if (air(getBlock(x, Y2, z))) emit([0, 1, 0], [[e0, Y1, z], [e1, Y1, z], [e1, Y1, z + 1], [e0, Y1, z + 1]], 1);
+    if (air(getBlock(x, Y2, z))) emit([0, 1, 0], [[e0, Y1, z], [e1, Y1, z], [e1, Y1, z + 1], [e0, Y1, z + 1]], 1, x, y, z);
   }
 }
 
@@ -185,11 +193,13 @@ export function emitDecorations(
   cx: number,
   cz: number,
   getBlock: (x: number, y: number, z: number) => Block,
+  getLight: (x: number, y: number, z: number) => [number, number],
   positions: number[],
   normals: number[],
   colors: number[],
   uvs: number[],
   atlas: number[],
+  lightArr: number[],
   indices: number[],
 ): void {
   for (let y = 0; y < WORLD_HEIGHT; y++) {
@@ -197,12 +207,15 @@ export function emitDecorations(
       for (let x = 0; x < CHUNK_SIZE; x++) {
         const block = getBlock(x, y, z);
         if (block === Block.OakDoorOpen) {
-          emitOpenDoorQuad(cx, cz, x, y, z, positions, normals, colors, uvs, atlas, indices);
+          const [sky, blk] = getLight(x, y, z);
+          emitOpenDoorQuad(cx, cz, x, y, z, sky, blk, positions, normals, colors, uvs, atlas, lightArr, indices);
           continue;
         }
         if (!isDecoration(block)) continue;
-        emitPlantQuad(cx, cz, x, y, z, block, positions, normals, colors, uvs, atlas, indices, false);
-        emitPlantQuad(cx, cz, x, y, z, block, positions, normals, colors, uvs, atlas, indices, true);
+        // Decorations live inside their own block cell — sample light at their position
+        const [sky, blk] = getLight(x, y, z);
+        emitPlantQuad(cx, cz, x, y, z, block, sky, blk, positions, normals, colors, uvs, atlas, lightArr, indices, false);
+        emitPlantQuad(cx, cz, x, y, z, block, sky, blk, positions, normals, colors, uvs, atlas, lightArr, indices, true);
       }
     }
   }
@@ -210,17 +223,19 @@ export function emitDecorations(
 
 function emitPlantQuad(
   cx: number, cz: number, x: number, y: number, z: number,
-  block: Block, positions: number[], normals: number[], colors: number[],
-  uvs: number[], atlas: number[], indices: number[], rotated: boolean,
+  block: Block, sky: number, blk: number,
+  positions: number[], normals: number[], colors: number[],
+  uvs: number[], atlas: number[], lightArr: number[], indices: number[], rotated: boolean,
 ): void {
   const wx = cx * CHUNK_SIZE + x, wz = cz * CHUNK_SIZE + z;
   const rect = tileRect(tileForBlockFace(block, [0, 1, 0]));
-  const inset = block === Block.BerryBush ? 0.14 : block === Block.Mushroom ? 0.3 : 0.22;
-  const h = block === Block.BerryBush ? 0.82 : block === Block.Mushroom ? 0.62 : 1;
+  const inset = block === Block.Torch ? 0.34 : block === Block.BerryBush ? 0.14 : block === Block.Mushroom ? 0.3 : 0.22;
+  const h = block === Block.Torch ? 0.7 : block === Block.BerryBush ? 0.82 : block === Block.Mushroom ? 0.62 : 1;
   const c: [number, number, number][] = rotated
     ? [[wx + inset, y, wz + inset], [wx + inset, y + h, wz + inset], [wx + 1 - inset, y + h, wz + 1 - inset], [wx + 1 - inset, y, wz + 1 - inset]]
     : [[wx + 1 - inset, y, wz + inset], [wx + 1 - inset, y + h, wz + inset], [wx + inset, y + h, wz + 1 - inset], [wx + inset, y, wz + 1 - inset]];
   const v = colorVariation(block, wx, y, wz, 1);
+  const skyN = sky / 15, blkN = blk / 15;
   const base = positions.length / 3, uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];
   for (let i = 0; i < 4; i++) {
     positions.push(c[i][0], c[i][1], c[i][2]);
@@ -228,19 +243,22 @@ function emitPlantQuad(
     uvs.push(uv[i][0], uv[i][1]);
     atlas.push(rect[0], rect[1], rect[2], rect[3]);
     colors.push(v[0], v[1], v[2]);
+    lightArr.push(skyN, blkN);
   }
   indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 
 function emitOpenDoorQuad(
   cx: number, cz: number, x: number, y: number, z: number,
+  sky: number, blk: number,
   positions: number[], normals: number[], colors: number[],
-  uvs: number[], atlas: number[], indices: number[],
+  uvs: number[], atlas: number[], lightArr: number[], indices: number[],
 ): void {
   const wx = cx * CHUNK_SIZE + x, wz = cz * CHUNK_SIZE + z;
   const rect = tileRect(Tile.DoorOak);
   const thickness = 0.08, half = 0.5, faceZ = wz - half;
   const v = colorVariation(Block.Planks, wx, y, wz, 1);
+  const skyN = sky / 15, blkN = blk / 15;
   const uv: [number, number][] = [[0, 0], [0, 1], [1, 1], [1, 0]];
 
   const emitPanel = (
@@ -254,6 +272,7 @@ function emitOpenDoorQuad(
       uvs.push(uv[i][0], uv[i][1]);
       atlas.push(rect[0], rect[1], rect[2], rect[3]);
       colors.push(v[0], v[1], v[2]);
+      lightArr.push(skyN, blkN);
     }
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   };

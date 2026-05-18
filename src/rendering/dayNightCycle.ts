@@ -150,6 +150,17 @@ const DIRECTIONAL_INTENSITY: FloatStop[] = [
   { time: 24000, value: 1.20 },
 ];
 
+// How much skylight contributes — full during day, near-zero at night
+const SUN_BRIGHTNESS: FloatStop[] = [
+  { time: 0, value: 0.8 },
+  { time: 2000, value: 1.0 },
+  { time: 10000, value: 1.0 },
+  { time: 12000, value: 0.7 },
+  { time: 13500, value: 0.1 },
+  { time: 22500, value: 0.1 },
+  { time: 24000, value: 0.8 },
+];
+
 // ── cycle state ───────────────────────────────────────────────────
 
 export class DayNightCycle {
@@ -223,6 +234,11 @@ export class DayNightCycle {
     return lerpFloat(DIRECTIONAL_INTENSITY, this.timeOfDay);
   }
 
+  /** Skylight brightness factor (1.0 = full day, ~0.1 = night) */
+  sunBrightness(): number {
+    return lerpFloat(SUN_BRIGHTNESS, this.timeOfDay);
+  }
+
   // ── convenience: apply to a Three.js scene ──────────────────────
 
   applyToLights(
@@ -259,10 +275,12 @@ export class DayNightCycle {
     deco: THREE.ShaderMaterial,
   ): void {
     const dir = this.sunDirection();
+    const sb = this.sunBrightness();
     for (const mat of [terrain, fade, water, transparent, deco]) {
       const u = mat.uniforms;
       if (u.sunDirection) u.sunDirection.value.copy(dir);
       if (u.fogColor) u.fogColor.value.copy(this.fogColor());
+      if (u.sunBrightness) u.sunBrightness.value = sb;
     }
   }
 

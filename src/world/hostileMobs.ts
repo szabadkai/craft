@@ -43,6 +43,7 @@ export class HostileSystem {
     private readonly getTimeOfDay: () => number = () => 0,
     private readonly onMobHit?: () => void,
     private readonly onMobDeath?: () => void,
+    private readonly getSkylight?: (wx: number, y: number, wz: number) => number,
   ) {
     this.physics = createMobPhysics(getBlock);
   }
@@ -93,6 +94,12 @@ export class HostileSystem {
       if (this.getBlock(wx, wy, wz) !== Block.Air) continue;
       if (!isSolid(this.getBlock(wx, wy - 1, wz))) continue;
       if (this.getBlock(wx, wy + 1, wz) !== Block.Air) continue;
+
+      // Only spawn in darkness — light level below 7
+      if (this.getSkylight) {
+        const light = this.getSkylight(wx, wy, wz);
+        if (light >= 7) continue;
+      }
 
       const kind: HostileKind = isSurface
         ? (Math.random() < 0.5 ? 'zombie' : 'skeleton')

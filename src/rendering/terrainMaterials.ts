@@ -58,6 +58,7 @@ export function createTerrainMaterial(
       opacity: { value: opacity },
       time: { value: 0 },
       sunDirection: { value: new THREE.Vector3(0.62, 0.42, 0.2) },
+      sunBrightness: { value: 1.0 },
       fogColor: {
         value: fog instanceof THREE.Fog ? fog.color : new THREE.Color(0xd8e8f1),
       },
@@ -66,17 +67,20 @@ export function createTerrainMaterial(
     },
     vertexShader: `
       attribute vec4 atlasRect;
+      attribute vec2 light;
       varying vec2 vRepeatUv;
       varying vec4 vAtlasRect;
       varying vec3 vColor;
       varying vec3 vNormal;
       varying vec3 vWorldPosition;
+      varying vec2 vLight;
 
       void main() {
         vRepeatUv = uv;
         vAtlasRect = atlasRect;
         vColor = color;
         vNormal = normal;
+        vLight = light;
         vec4 worldPosition = modelMatrix * vec4(position, 1.0);
         vWorldPosition = worldPosition.xyz;
         gl_Position = projectionMatrix * viewMatrix * worldPosition;
@@ -91,11 +95,13 @@ export function createTerrainMaterial(
       uniform vec3 fogColor;
       uniform float fogNear;
       uniform float fogFar;
+      uniform float sunBrightness;
       varying vec2 vRepeatUv;
       varying vec4 vAtlasRect;
       varying vec3 vColor;
       varying vec3 vNormal;
       varying vec3 vWorldPosition;
+      varying vec2 vLight;
 
       float hashTile(vec2 p) {
         vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -127,20 +133,31 @@ export function createTerrainMaterial(
             : floor(vWorldPosition.xy);
         float variation = mix(0.98, 1.08, hashTile(tileCoord));
         vec3 color = gradeBlockColor(texel.rgb * vColor * variation);
+
+        // Per-block lighting: skylight modulated by sun, blocklight is warm/constant
+        float skyContrib = vLight.x * sunBrightness;
+        float blockContrib = vLight.y;
+        float lightLevel = max(skyContrib, blockContrib);
+        // Remap to avoid total blackness: curve for more contrast
+        float brightness = lightLevel * lightLevel * 0.92 + 0.08;
+
+        // Subtle directional face shading (keep the old feel but lighter)
         vec3 normal = normalize(vNormal);
         vec3 sunDir = normalize(sunDirection);
         float sunFacing = max(dot(normal, sunDir), 0.0);
-        float warmLight = isSnow
-          ? 0.84 + sunFacing * 0.08 + max(normal.y, 0.0) * 0.03
-          : 1.16 + sunFacing * 0.22 + max(normal.y, 0.0) * 0.08;
-        color *= warmLight;
-        if (isSnow) {
-          color += vec3(0.025, 0.03, 0.035);
-        } else {
-          color += vec3(0.11, 0.09, 0.055) * (0.55 + max(normal.y, 0.0) * 0.45);
+        float faceBias = isSnow
+          ? 0.96 + sunFacing * 0.04
+          : 0.94 + sunFacing * 0.06;
+        color *= faceBias * brightness;
+
+        // Blocklight warm tint (torches/lava glow warm)
+        if (blockContrib > skyContrib) {
+          float warmth = (blockContrib - skyContrib) * 0.35;
+          color += vec3(0.12, 0.06, 0.0) * warmth * brightness;
         }
+
         if (isSnow) {
-          color = mix(color, vec3(0.82, 0.88, 0.9), 0.34);
+          color = mix(color, vec3(0.82, 0.88, 0.9) * brightness, 0.34);
           color = min(color, vec3(0.9, 0.94, 0.95));
         }
         float fogDepth = length(cameraPosition - vWorldPosition);
@@ -166,6 +183,7 @@ export function createWaterMaterial(
       time: { value: 0 },
       waterLevel: { value: waterLevel },
       sunDirection: { value: new THREE.Vector3(0.62, 0.42, 0.2) },
+      sunBrightness: { value: 1.0 },
       fogColor: {
         value: fog instanceof THREE.Fog ? fog.color : new THREE.Color(0xd8e8f1),
       },
@@ -173,11 +191,14 @@ export function createWaterMaterial(
       fogFar: { value: fog instanceof THREE.Fog ? fog.far : 220 },
     },
     vertexShader: `
+      attribute vec2 light;
       uniform float time;
       varying vec3 vWorldPosition;
       varying vec3 vNormal;
       varying float vWave;
+      varying vec2 vLight;
       void main() {
+        vLight = light;
         vec4 worldPos = modelMatrix * vec4(position, 1.0);
         vWorldPosition = worldPos.xyz;
         vNormal = normal;
@@ -196,18 +217,26 @@ export function createWaterMaterial(
       uniform float time;
       uniform float waterLevel;
       uniform vec3 sunDirection;
+      uniform float sunBrightness;
       uniform vec3 fogColor;
       uniform float fogNear;
       uniform float fogFar;
       varying vec3 vWorldPosition;
       varying vec3 vNormal;
       varying float vWave;
+      varying vec2 vLight;
       void main() {
         vec3 waterDeep   = vec3(0.06, 0.18, 0.42);
         vec3 waterMid    = vec3(0.18, 0.42, 0.58);
         vec3 waterShallow = vec3(0.38, 0.62, 0.74);
         float depthFactor = clamp((vWorldPosition.y - waterLevel + 4.0) / 8.0, 0.0, 1.0);
         vec3 waterColor = mix(waterDeep, waterMid, depthFactor);
+
+        // Per-block lighting
+        float skyContrib = vLight.x * sunBrightness;
+        float blockContrib = vLight.y;
+        float lightLevel = max(skyContrib, blockContrib);
+        float brightness = lightLevel * lightLevel * 0.92 + 0.08;
 
         // wave crest highlights
         float crest = smoothstep(0.02, 0.09, vWave);
@@ -223,7 +252,7 @@ export function createWaterMaterial(
         vec3 viewDir = normalize(cameraPosition - vWorldPosition);
         vec3 halfVec = normalize(sunDir + viewDir);
         float spec = pow(max(dot(normal, halfVec), 0.0), 180.0) * 0.5;
-        waterColor += vec3(1.0, 0.95, 0.78) * spec;
+        waterColor += vec3(1.0, 0.95, 0.78) * spec * brightness;
 
         // fresnel edge darkening
         float fresnel = 1.0 - abs(dot(normal, viewDir));
@@ -232,6 +261,9 @@ export function createWaterMaterial(
         // foam on wave peaks
         float foam = smoothstep(0.065, 0.095, vWave) * 0.18;
         waterColor = mix(waterColor, vec3(0.85, 0.92, 0.95), foam);
+
+        // Apply brightness
+        waterColor *= brightness;
 
         // fog
         float fogDepth = length(cameraPosition - vWorldPosition);
@@ -307,6 +339,9 @@ export function createTerrainAtlas(): THREE.CanvasTexture {
   drawTile(context, Tile.MushroomCapRed, '#c42020', '#ffffff', 'mushroomCapRed');
   drawTile(context, Tile.MushroomCapBrown, '#7a4a28', '#5a3218', 'mushroomCapBrown');
   drawTile(context, Tile.Obsidian, '#1a0e24', '#0a0610', 'obsidian');
+  drawTile(context, Tile.Torch, '#7c522b', '#f0c040', 'torch');
+  drawTile(context, Tile.EmeraldOre, '#858984', '#2ecc40', 'ore');
+  drawTile(context, Tile.RedstoneOre, '#858984', '#cc2020', 'ore');
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;

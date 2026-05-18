@@ -44,6 +44,8 @@ export const solidBlocks = new Set<Block>([
   Block.MushroomCapRed,
   Block.MushroomCapBrown,
   Block.Obsidian,
+  Block.EmeraldOre,
+  Block.RedstoneOre,
 ]);
 
 export const selectableBlocks = [
@@ -198,6 +200,10 @@ export function blockColor(block: Block): [number, number, number] {
       return [0.52, 0.32, 0.18];
     case Block.Obsidian:
       return [0.12, 0.08, 0.16];
+    case Block.EmeraldOre:
+      return [0.22, 0.72, 0.32];
+    case Block.RedstoneOre:
+      return [0.72, 0.18, 0.18];
     default:
       return [1, 1, 1];
   }

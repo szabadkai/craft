@@ -19,12 +19,14 @@ import {
   WorkerOut,
   WORLD_HEIGHT,
 } from '../types';
+import { unpackSky } from '../lighting';
 import type { WildlifeSystem } from './wildlife';
 
 type LoadedChunk = {
   cx: number;
   cz: number;
   blocks: Uint16Array;
+  lightMap: Uint8Array;
   mesh: THREE.Mesh;
   waterMesh: THREE.Mesh | null;
   transparentMesh: THREE.Mesh | null;
@@ -52,6 +54,7 @@ type ChunkWorldOptions = {
   player: PlayerState;
   getSeed: () => number;
   onChunkMessage: () => void;
+  onChunkLoaded?: (cx: number, cz: number, blocks: Uint16Array) => void;
 };
 
 const INITIAL_READY_RADIUS = 1;
@@ -132,6 +135,15 @@ export class ChunkWorldSystem {
     const chunk = this.chunks.get(chunkKey(cx, cz));
     if (!chunk) return Block.Air;
     return chunk.blocks[blockIndex(mod(wx, CHUNK_SIZE), y, mod(wz, CHUNK_SIZE))] as Block;
+  }
+
+  getSkylight(wx: number, y: number, wz: number): number {
+    if (y < 0 || y >= WORLD_HEIGHT) return y >= WORLD_HEIGHT ? 15 : 0;
+    const cx = divFloor(wx, CHUNK_SIZE);
+    const cz = divFloor(wz, CHUNK_SIZE);
+    const chunk = this.chunks.get(chunkKey(cx, cz));
+    if (!chunk) return 15;
+    return unpackSky(chunk.lightMap[blockIndex(mod(wx, CHUNK_SIZE), y, mod(wz, CHUNK_SIZE))]);
   }
 
   setBlock(wx: number, y: number, wz: number, block: Block): void {
@@ -415,6 +427,7 @@ export class ChunkWorldSystem {
     geometry.setAttribute('color', new THREE.BufferAttribute(payload.colors, 3));
     geometry.setAttribute('uv', new THREE.BufferAttribute(payload.uvs, 2));
     geometry.setAttribute('atlasRect', new THREE.BufferAttribute(payload.atlas, 4));
+    geometry.setAttribute('light', new THREE.BufferAttribute(payload.lights, 2));
     geometry.setIndex(new THREE.BufferAttribute(payload.indices, 1));
     geometry.computeBoundingSphere();
 
@@ -431,6 +444,7 @@ export class ChunkWorldSystem {
       const waterGeo = new THREE.BufferGeometry();
       waterGeo.setAttribute('position', new THREE.BufferAttribute(payload.waterPositions, 3));
       waterGeo.setAttribute('normal', new THREE.BufferAttribute(payload.waterNormals, 3));
+      if (payload.waterLights) waterGeo.setAttribute('light', new THREE.BufferAttribute(payload.waterLights, 2));
       waterGeo.setIndex(new THREE.BufferAttribute(payload.waterIndices, 1));
       waterGeo.computeBoundingSphere();
       waterMesh = new THREE.Mesh(waterGeo, this.options.waterMaterial);
@@ -448,6 +462,7 @@ export class ChunkWorldSystem {
       transGeo.setAttribute('color', new THREE.BufferAttribute(payload.transparentColors, 3));
       transGeo.setAttribute('uv', new THREE.BufferAttribute(payload.transparentUvs, 2));
       transGeo.setAttribute('atlasRect', new THREE.BufferAttribute(payload.transparentAtlas, 4));
+      if (payload.transparentLights) transGeo.setAttribute('light', new THREE.BufferAttribute(payload.transparentLights, 2));
       transGeo.setIndex(new THREE.BufferAttribute(payload.transparentIndices, 1));
       transGeo.computeBoundingSphere();
       transparentMesh = new THREE.Mesh(transGeo, this.options.transparentMaterial);
@@ -465,6 +480,7 @@ export class ChunkWorldSystem {
       decoGeo.setAttribute('color', new THREE.BufferAttribute(payload.decoColors, 3));
       decoGeo.setAttribute('uv', new THREE.BufferAttribute(payload.decoUvs, 2));
       decoGeo.setAttribute('atlasRect', new THREE.BufferAttribute(payload.decoAtlas, 4));
+      if (payload.decoLights) decoGeo.setAttribute('light', new THREE.BufferAttribute(payload.decoLights, 2));
       decoGeo.setIndex(new THREE.BufferAttribute(payload.decoIndices, 1));
       decoGeo.computeBoundingSphere();
       decoMesh = new THREE.Mesh(decoGeo, this.options.decoMaterial);
@@ -477,6 +493,7 @@ export class ChunkWorldSystem {
       cx: payload.cx,
       cz: payload.cz,
       blocks: payload.blocks,
+      lightMap: payload.lightMap,
       mesh,
       waterMesh,
       transparentMesh,
@@ -485,6 +502,7 @@ export class ChunkWorldSystem {
       solidVoxels: countSolidVoxels(payload.blocks),
     });
     this.options.wildlife.spawnForChunk(payload.cx, payload.cz);
+    this.options.onChunkLoaded?.(payload.cx, payload.cz, payload.blocks);
   }
 
   private scheduleChunkSave(key: ChunkKey): void {
@@ -519,18 +537,19 @@ export class ChunkWorldSystem {
   private gatherNeighborBlocks(cx: number, cz: number): { neighbors: NeighborBlocks; transfers: ArrayBuffer[] } {
     const neighbors: NeighborBlocks = {};
     const transfers: ArrayBuffer[] = [];
-    const tryAdd = (key: string, dir: keyof NeighborBlocks) => {
-      const n = this.chunks.get(key as ChunkKey);
+    const blockDirs: (keyof NeighborBlocks)[] = ['px', 'nx', 'pz', 'nz'];
+    const lightDirs: (keyof NeighborBlocks)[] = ['pxLight', 'nxLight', 'pzLight', 'nzLight'];
+    const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let i = 0; i < 4; i++) {
+      const n = this.chunks.get(chunkKey(cx + offsets[i][0], cz + offsets[i][1]) as ChunkKey);
       if (n) {
-        const copy = new Uint16Array(n.blocks);
-        neighbors[dir] = copy;
-        transfers.push(copy.buffer);
+        const blocksCopy = new Uint16Array(n.blocks);
+        const lightCopy = new Uint8Array(n.lightMap);
+        (neighbors as Record<string, unknown>)[blockDirs[i]] = blocksCopy;
+        (neighbors as Record<string, unknown>)[lightDirs[i]] = lightCopy;
+        transfers.push(blocksCopy.buffer as ArrayBuffer, lightCopy.buffer as ArrayBuffer);
       }
-    };
-    tryAdd(chunkKey(cx + 1, cz), 'px');
-    tryAdd(chunkKey(cx - 1, cz), 'nx');
-    tryAdd(chunkKey(cx, cz + 1), 'pz');
-    tryAdd(chunkKey(cx, cz - 1), 'nz');
+    }
     return { neighbors, transfers };
   }
 
