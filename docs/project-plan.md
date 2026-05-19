@@ -25,7 +25,7 @@ The prototype currently supports:
 - Trees, flowers, tall grass, ores, and surface variation, with patch-based density masks that leave quieter land between feature clusters.
 - Block breaking with crack animation.
 - Block placement with placement preview.
-- Held item/tool visuals.
+- Held visuals for empty hands, tools, foods, loose materials, and many non-cube blocks.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Persistent modified chunks through IndexedDB.
 - Modified chunk storage keys include a chunk storage version so generator-level visual changes do not reuse stale chunk meshes near spawn.

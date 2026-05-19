@@ -1,4 +1,3 @@
-import { blockColor } from '../blocks';
 import { Block } from '../types';
 import {
   defaultInventoryCounts,
@@ -237,15 +236,7 @@ export class InventorySystem {
       slot.addEventListener('click', () => this.selectHotbarSlot(index));
       const swatch = document.createElement('div');
       swatch.className = 'swatch';
-      if (entry?.kind === 'block') {
-        const [r, g, b] = blockColor(entry.block);
-        swatch.style.background = `rgb(${r * 255}, ${g * 255}, ${b * 255})`;
-      } else if (entry?.kind === 'tool') {
-        swatch.style.background =
-          entry.tool === 'stick'
-            ? 'linear-gradient(135deg, transparent 35%, #8b5a2b 36%, #8b5a2b 64%, transparent 65%)'
-            : 'linear-gradient(135deg, #7a4a23 0 35%, #c2c7c4 36% 68%, transparent 69%)';
-      } else if (inventorySlot && foodValueFor(inventorySlot.item) > 0) {
+      if (inventorySlot && entry) {
         swatch.style.background = itemSwatch(inventorySlot.item);
       } else {
         swatch.classList.add('empty');
@@ -466,4 +457,3 @@ export class InventorySystem {
     return `${slot.durability ?? maxDurability}`;
   }
 }
-

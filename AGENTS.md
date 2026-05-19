@@ -96,7 +96,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Far terrain heightfield ring merged into a single mesh to keep draw calls low.
 - F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, chunk adoption/deferred disposal timings, far-terrain rebuild timings, memory estimates, and GPU timing when supported.
-- First-person held item view with proper scale (~75% larger) and closer to camera.
+- First-person held item view with proper scale (~75% larger), closer camera placement, empty-hand model, and distinct models for tools, foods, loose materials, and many non-cube blocks.
 - Damage flash overlay (red screen vignette on hit).
 - Continuous mining while holding mouse1 — chains into next block when current one breaks.
 - Oak doors — two-tall openable blocks with right-click toggle, door state persistence, and planks-based recipe (6 planks → 3 doors).
