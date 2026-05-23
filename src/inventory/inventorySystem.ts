@@ -15,7 +15,6 @@ import {
 import {
   type InventorySlot,
   type InventorySnapshot,
-  INVENTORY_SLOT_COUNT,
   createInventorySlotsFromCounts,
   applyItemDelta,
   canFitItem,

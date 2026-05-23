@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { isSolid } from '../blocks';
 import { Block } from '../types';
 
+const AUTO_STEP_HEIGHT = 0.56;
+const AUTO_STEP_SETTLE_STEP = 0.03;
+
 function isSlabBlock(block: Block): boolean {
   return (
     block === Block.OakSlab ||
@@ -198,6 +201,7 @@ export class PlayerController {
       this.state.position.copy(next);
       return;
     }
+    if (this.tryAutoStep(axis, amount)) return;
     const sign = Math.sign(amount);
     while (Math.abs(amount) > 0.001) {
       const tiny = Math.min(Math.abs(amount), 0.02) * sign;
@@ -209,5 +213,29 @@ export class PlayerController {
     }
     this.state.velocity[axis] = 0;
     if (axis === 'y' && sign < 0) this.state.onGround = true;
+  }
+
+  private tryAutoStep(axis: 'x' | 'y' | 'z', amount: number): boolean {
+    if (axis === 'y' || !this.state.onGround || this.state.inWater || this.state.velocity.y > 0.05) {
+      return false;
+    }
+
+    const raised = this.state.position.clone();
+    raised.y += AUTO_STEP_HEIGHT;
+    raised[axis] += amount;
+    if (this.collides(raised)) return false;
+
+    let lastFree = raised.clone();
+    for (let drop = AUTO_STEP_SETTLE_STEP; drop <= AUTO_STEP_HEIGHT + AUTO_STEP_SETTLE_STEP; drop += AUTO_STEP_SETTLE_STEP) {
+      const test = raised.clone();
+      test.y -= drop;
+      if (this.collides(test)) {
+        this.state.position.copy(lastFree);
+        this.state.onGround = true;
+        return true;
+      }
+      lastFree = test;
+    }
+    return false;
   }
 }

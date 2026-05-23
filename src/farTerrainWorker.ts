@@ -3,6 +3,7 @@ import { generatedBlockAt, reservoirWaterSurfaceAt, terrainHeight } from './terr
 import { Block, CHUNK_SIZE } from './types';
 
 export type FarTerrainIn = {
+  requestId: number;
   pcx: number;
   pcz: number;
   seed: number;
@@ -11,6 +12,7 @@ export type FarTerrainIn = {
 };
 
 export type FarTerrainOut = {
+  requestId: number;
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
@@ -109,6 +111,7 @@ function buildFarTerrain(msg: FarTerrainIn): FarTerrainOut {
   }
 
   return {
+    requestId: msg.requestId,
     positions: new Float32Array(positions),
     normals,
     colors: new Float32Array(colors),

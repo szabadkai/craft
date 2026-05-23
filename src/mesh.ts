@@ -37,6 +37,7 @@ type MaskCell = {
   shade: number;
   sky: number;
   blk: number;
+  ao: [number, number, number, number];
 };
 
 const dims = [CHUNK_SIZE, WORLD_HEIGHT, CHUNK_SIZE] as const;
@@ -217,7 +218,14 @@ export function buildChunkMesh(
           const index = u + v * uSize;
           if (block !== Block.Air && block !== Block.Water && block !== Block.Lava && block !== Block.Glass && block !== Block.Leaves && block !== Block.BirchLeaves && block !== Block.IronBars && !isDecoration(block) && !isSlab(block) && !isStair(block) && !occludesFace(block, neighbor)) {
             const [sky, blk] = getLight(p[0] + face.n[0], p[1] + face.n[1], p[2] + face.n[2]);
-            mask[index] = { block, tile: tileForBlockFace(block, face.n), shade: face.shade, sky, blk };
+            mask[index] = {
+              block,
+              tile: tileForBlockFace(block, face.n),
+              shade: face.shade,
+              sky,
+              blk,
+              ao: faceAo(face, p[0], p[1], p[2], u, v, getBlock),
+            };
           } else {
             mask[index] = null;
           }
@@ -300,9 +308,10 @@ export function buildChunkMesh(
           if (neighbor === Block.Water || isSolid(neighbor)) continue;
           if (face.n[1] < 0) continue;
           if (face.n[1] === 0 && getBlock(x, y + 1, z) === Block.Water) continue;
-          let [sky, blk] = getLight(nx, ny, nz);
+          const [neighborSky, blockLight] = getLight(nx, ny, nz);
+          let sky = neighborSky;
           if (face.n[1] > 0) sky = 15;
-          emitWaterBlockFace(cx, cz, x, y, z, face, sky, blk, waterPositions, waterNormals, waterLights, waterIndices);
+          emitWaterBlockFace(cx, cz, x, y, z, face, sky, blockLight, waterPositions, waterNormals, waterLights, waterIndices);
         }
       }
     }
@@ -420,7 +429,65 @@ function occludesFace(block: Block, neighbor: Block): boolean {
 }
 
 function sameCell(a: MaskCell, b: MaskCell | null): boolean {
-  return Boolean(b && a.block === b.block && a.tile === b.tile && a.shade === b.shade && a.sky === b.sky && a.blk === b.blk);
+  return Boolean(
+    b &&
+    a.block === b.block &&
+    a.tile === b.tile &&
+    a.shade === b.shade &&
+    a.sky === b.sky &&
+    a.blk === b.blk &&
+    a.ao[0] === b.ao[0] &&
+    a.ao[1] === b.ao[1] &&
+    a.ao[2] === b.ao[2] &&
+    a.ao[3] === b.ao[3],
+  );
+}
+
+function faceAo(
+  face: FaceDef,
+  x: number,
+  y: number,
+  z: number,
+  u: number,
+  v: number,
+  getBlock: (x: number, y: number, z: number) => Block,
+): [number, number, number, number] {
+  const plane = face.n[face.dAxis] > 0 ? [x, y, z][face.dAxis] + 1 : [x, y, z][face.dAxis];
+  const corners = face.corners(plane, u, v, u + 1, v + 1);
+  return corners.map((corner) => {
+    const uSign = corner[face.uAxis] === u ? -1 : 1;
+    const vSign = corner[face.vAxis] === v ? -1 : 1;
+    return vertexAo(face, x, y, z, uSign, vSign, getBlock);
+  }) as [number, number, number, number];
+}
+
+function vertexAo(
+  face: FaceDef,
+  x: number,
+  y: number,
+  z: number,
+  uSign: number,
+  vSign: number,
+  getBlock: (x: number, y: number, z: number) => Block,
+): number {
+  const sideU = [x, y, z] as [number, number, number];
+  const sideV = [x, y, z] as [number, number, number];
+  const corner = [x, y, z] as [number, number, number];
+  sideU[face.uAxis] += uSign;
+  sideV[face.vAxis] += vSign;
+  corner[face.uAxis] += uSign;
+  corner[face.vAxis] += vSign;
+  const uBlocked = isAoBlock(getBlock(sideU[0], sideU[1], sideU[2]));
+  const vBlocked = isAoBlock(getBlock(sideV[0], sideV[1], sideV[2]));
+  const cornerBlocked = isAoBlock(getBlock(corner[0], corner[1], corner[2]));
+  const occlusion = uBlocked && vBlocked
+    ? 3
+    : Number(uBlocked) + Number(vBlocked) + Number(cornerBlocked);
+  return 1 - occlusion * 0.095;
+}
+
+function isAoBlock(block: Block): boolean {
+  return isSolid(block) || isSlab(block) || isStair(block) || block === Block.OakDoor;
 }
 
 function emitWaterBlockFace(
@@ -549,9 +616,9 @@ function emitQuad(input: {
     uvs.push(corner[face.uAxis] - u, corner[face.vAxis] - v);
     atlas.push(rect[0], rect[1], rect[2], rect[3]);
     colors.push(
-      cell.shade * variation[0],
-      cell.shade * variation[1],
-      cell.shade * variation[2],
+      cell.shade * cell.ao[i] * variation[0],
+      cell.shade * cell.ao[i] * variation[1],
+      cell.shade * cell.ao[i] * variation[2],
     );
     lights.push(skyN, blkN);
   }

@@ -81,7 +81,9 @@ export function createAmbientSystem(ctx: AudioContext, destination: GainNode): A
   function stopCrackle(): void {
     if (!crackleActive || !crackleSource) return;
     crackleActive = false;
-    try { crackleSource.stop(); } catch {}
+    try { crackleSource.stop(); } catch {
+      // Source may already be stopped by the Web Audio runtime.
+    }
     crackleSource.disconnect();
     crackleSource = null;
   }

@@ -1,12 +1,13 @@
 const STORAGE_KEY = 'craft-render-distance';
 const DEFAULT_DETAIL_RADIUS = 8;
-const MIN_DETAIL_RADIUS = 4;
+const MIN_DETAIL_RADIUS = 2;
 const MAX_DETAIL_RADIUS = 12;
 
-const LEVELS = [4, 6, 8, 10, 12] as const;
+const LEVELS = [2, 4, 6, 8, 10, 12] as const;
 type DetailRadius = (typeof LEVELS)[number];
 
 const LABELS: Record<DetailRadius, string> = {
+  2: 'Low',
   4: 'Tiny',
   6: 'Short',
   8: 'Normal',
@@ -29,7 +30,7 @@ export function setDetailRadius(value: number): void {
 export function clampDetailRadius(value: number): DetailRadius {
   if (!Number.isFinite(value)) return DEFAULT_DETAIL_RADIUS;
   const clamped = Math.min(MAX_DETAIL_RADIUS, Math.max(MIN_DETAIL_RADIUS, value));
-  let best: DetailRadius = 4;
+  let best: DetailRadius = 2;
   for (const level of LEVELS) {
     if (Math.abs(level - clamped) < Math.abs(best - clamped)) best = level;
   }

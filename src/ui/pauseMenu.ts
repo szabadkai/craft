@@ -81,7 +81,7 @@ export class PauseMenu {
         <label class="sensitivity-field" for="pause-render-distance">
           <span>Render distance</span>
           <output id="pause-render-distance-value">${defaults.renderDistanceLabel}</output>
-          <input id="pause-render-distance" type="range" min="4" max="12" step="2" value="${defaults.renderDistanceValue}" />
+          <input id="pause-render-distance" type="range" min="2" max="12" step="2" value="${defaults.renderDistanceValue}" />
         </label>
         <label class="sensitivity-field" for="pause-sfx-volume">
           <span>Sound effects</span>

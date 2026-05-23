@@ -21,7 +21,7 @@ import {
   WorkerOut,
   WORLD_HEIGHT,
 } from '../types';
-import { getBlockLightEmission, unpackSky } from '../lighting';
+import { getBlockLightEmission, unpackBlock, unpackSky } from '../lighting';
 import type { WildlifeSystem } from './wildlife';
 
 type LoadedChunk = {
@@ -155,6 +155,15 @@ export class ChunkWorldSystem {
     const chunk = this.chunks.get(chunkKey(cx, cz));
     if (!chunk) return 15;
     return unpackSky(chunk.lightMap[blockIndex(mod(wx, CHUNK_SIZE), y, mod(wz, CHUNK_SIZE))]);
+  }
+
+  getBlocklight(wx: number, y: number, wz: number): number {
+    if (y < 0 || y >= WORLD_HEIGHT) return 0;
+    const cx = divFloor(wx, CHUNK_SIZE);
+    const cz = divFloor(wz, CHUNK_SIZE);
+    const chunk = this.chunks.get(chunkKey(cx, cz));
+    if (!chunk) return 0;
+    return unpackBlock(chunk.lightMap[blockIndex(mod(wx, CHUNK_SIZE), y, mod(wz, CHUNK_SIZE))]);
   }
 
   setBlock(wx: number, y: number, wz: number, block: Block): void {
@@ -293,7 +302,7 @@ export class ChunkWorldSystem {
 
   flushRequests(): void {
     this.drainDeferredDisposals();
-    this.pendingQueue.sort((a, b) => this.distSqToPlayer(a.cx, a.cz) - this.distSqToPlayer(b.cx, b.cz));
+    this.pendingQueue.sort((a, b) => this.chunkPriority(a.cx, a.cz) - this.chunkPriority(b.cx, b.cz));
     for (let i = 0; i < this.maxRequestsPerFrame && this.pendingQueue.length > 0; i++) {
       const request = this.pendingQueue.shift()!;
       if (request.blocks) {
@@ -321,7 +330,7 @@ export class ChunkWorldSystem {
 
     if (this.incomingResults.length > 0) {
       this.incomingResults.sort(
-        (a, b) => this.distSqToPlayer(a.cx, a.cz) - this.distSqToPlayer(b.cx, b.cz),
+        (a, b) => this.chunkPriority(a.cx, a.cz) - this.chunkPriority(b.cx, b.cz),
       );
       const startedAt = performance.now();
       const budget = this.chunks.size < (INITIAL_READY_RADIUS * 2 + 1) ** 2
@@ -408,15 +417,19 @@ export class ChunkWorldSystem {
     for (const chunk of this.chunks.values()) {
       if (!chunk.mesh.visible) continue;
       visibleChunks++;
-      const geometry = chunk.mesh.geometry;
-      const position = geometry.getAttribute('position');
-      if (position) chunkVertices += position.count;
-      if (geometry.index) chunkIndices += geometry.index.count;
-      for (const attribute of Object.values(geometry.attributes)) {
-        const array = attribute.array as ArrayBufferView;
-        chunkBytes += array.byteLength;
+      const geometries = [
+        chunk.mesh.geometry,
+        chunk.waterMesh?.geometry,
+        chunk.transparentMesh?.geometry,
+        chunk.decoMesh?.geometry,
+      ];
+      for (const geometry of geometries) {
+        if (!geometry) continue;
+        const position = geometry.getAttribute('position');
+        if (position) chunkVertices += position.count;
+        if (geometry.index) chunkIndices += geometry.index.count;
+        chunkBytes += this.geometryBytes(geometry);
       }
-      if (geometry.index) chunkBytes += (geometry.index.array as ArrayBufferView).byteLength;
       visibleSolidVoxels += chunk.solidVoxels;
     }
 
@@ -440,6 +453,8 @@ export class ChunkWorldSystem {
       chunkDisposeMsLastFrame: this.streamingStats.chunkDisposeMsLastFrame,
       farTerrainMsLast: this.options.farTerrain.lastBuildMs,
       farTerrainMsWorst: this.options.farTerrain.worstBuildMs,
+      farTerrainDisposeMsLast: this.options.farTerrain.lastDisposeMs,
+      farTerrainDisposeMsWorst: this.options.farTerrain.worstDisposeMs,
     };
   }
 
@@ -611,10 +626,32 @@ export class ChunkWorldSystem {
     return (cx - pcx) ** 2 + (cz - pcz) ** 2;
   }
 
+  private geometryBytes(geometry: THREE.BufferGeometry): number {
+    let bytes = 0;
+    for (const attribute of Object.values(geometry.attributes)) {
+      bytes += (attribute.array as ArrayBufferView).byteLength;
+    }
+    if (geometry.index) bytes += (geometry.index.array as ArrayBufferView).byteLength;
+    return bytes;
+  }
+
+  private chunkPriority(cx: number, cz: number): number {
+    const pcx = divFloor(this.options.player.position.x, CHUNK_SIZE);
+    const pcz = divFloor(this.options.player.position.z, CHUNK_SIZE);
+    const dx = cx - pcx;
+    const dz = cz - pcz;
+    const distSq = dx * dx + dz * dz;
+    const dist = Math.sqrt(distSq);
+    if (dist < 1.5) return distSq;
+    const forwardX = -Math.sin(this.options.player.yaw);
+    const forwardZ = -Math.cos(this.options.player.yaw);
+    const forwardDot = (dx * forwardX + dz * forwardZ) / dist;
+    return distSq - forwardDot * 4;
+  }
+
   private postChunkJob(message: WorkerIn, transfer: Transferable[] = []): void {
     const chunkWorker = this.workers[this.nextWorkerIndex];
     this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.workers.length;
     chunkWorker.postMessage(message, transfer);
   }
 }
-

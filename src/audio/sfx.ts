@@ -32,19 +32,6 @@ function createNoiseBuffer(ctx: AudioContext, duration: number): AudioBuffer {
   return buffer;
 }
 
-function noise(ctx: AudioContext, buffer: AudioBuffer, duration: number, dest: AudioNode, volume = 0.3): AudioBufferSourceNode {
-  const now = ctx.currentTime;
-  const src = ctx.createBufferSource();
-  src.buffer = buffer;
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(volume, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  src.connect(gain).connect(dest);
-  src.start(now);
-  src.stop(now + duration + 0.01);
-  return src;
-}
-
 function rnd(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }

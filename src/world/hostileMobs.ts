@@ -44,6 +44,7 @@ export class HostileSystem {
     private readonly onMobHit?: () => void,
     private readonly onMobDeath?: () => void,
     private readonly getSkylight?: (wx: number, y: number, wz: number) => number,
+    private readonly getBlocklight?: (wx: number, y: number, wz: number) => number,
   ) {
     this.physics = createMobPhysics(getBlock);
   }
@@ -95,10 +96,12 @@ export class HostileSystem {
       if (!isSolid(this.getBlock(wx, wy - 1, wz))) continue;
       if (this.getBlock(wx, wy + 1, wz) !== Block.Air) continue;
 
-      // Only spawn in darkness — light level below 7
-      if (this.getSkylight) {
-        const light = this.getSkylight(wx, wy, wz);
-        if (light >= 7) continue;
+      const skyLight = this.getSkylight?.(wx, wy, wz) ?? (isSurface ? 0 : 15);
+      const blockLight = this.getBlocklight?.(wx, wy, wz) ?? 0;
+      if (isSurface) {
+        if (blockLight >= 8) continue;
+      } else if (Math.max(skyLight, blockLight) >= 7) {
+        continue;
       }
 
       const kind: HostileKind = isSurface

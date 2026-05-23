@@ -10,15 +10,21 @@ The project should stay browser-first: efficient chunk meshes, worker-side gener
 
 The prototype currently supports:
 
-- First-person movement, jumping, and block collision.
+- First-person movement, jumping, block collision, and grounded half-block auto-step for stairs/slabs.
 - Persistent mouse sensitivity control for pointer-lock camera movement.
+- Persistent render-distance control with a 2-chunk Low profile for weaker devices.
 - Worker-pool generated chunks.
+- Chunk worker requests and incoming mesh adoption are biased toward the camera direction after nearby chunks.
+- Production build splits Three.js into bounded vendor chunks so the main app bundle stays below Vite's large-chunk warning threshold.
+- F3 chunk mesh memory accounting includes opaque, water, transparent, and decoration mesh buffers.
+- Greedy terrain faces include per-corner ambient occlusion baked into vertex colors; AO values are part of the merge key so incompatible faces do not merge.
 - Greedy voxel meshing.
 - Repeating texture atlas shader for merged faces.
 - Warm original-style sky, fog, water shading, terrain atlas colors, and pixel hotbar styling.
 - Chunk fade-in for streamed terrain.
-- Far terrain heightfield ring merged into a single mesh for low draw-call overhead.
+- Far terrain heightfield ring generated in a worker and merged into a single mesh for low draw-call overhead.
 - Budgeted main-thread chunk mesh adoption with deferred disposal to reduce visible stutter when worker results arrive.
+- Far terrain replacement suppresses stale worker results and defers old-geometry disposal across frames.
 - Biome-driven terrain generation.
 - Snow, forest, plains, hills, beach, and dry areas.
 - Natural reservoir water seeds ocean basins and inland depressions, then settles from those sources instead of filling a fixed height layer.
@@ -37,8 +43,11 @@ The prototype currently supports:
 - Mining drop rules and tool durability for pickaxes, including iron pickaxe progression and diamond harvest gating.
 - Recipe cards show crafting outputs, ingredient requirements, and missing inputs.
 - Sky, terrain atlas generation, terrain shader materials, far terrain, chunk streaming/world lifecycle, held-item rendering, diagnostics, persistence, inventory/crafting, HUD setup, seed utilities, player movement, block raycasting/interaction, and wildlife simulation now live outside `src/main.ts` under owned modules.
-- F3 diagnostic overlay with frame, render, world, worker, chunk adoption/disposal, far-terrain rebuild, memory, and supported GPU timing counters.
+- F3 diagnostic overlay with frame, render, world, worker, chunk adoption/disposal, far-terrain rebuild/adoption/disposal, memory, and supported GPU timing counters.
 - Day/night cycle with dynamic sun position, sky colors, terrain/water lighting, fog, and background transitions (~20 min real-time cycle).
+- Hostile mobs include cave spiders underground plus zombies/skeletons on dark night surfaces; placed blocklight suppresses nearby spawns.
+- Water rendering uses animated vertex waves, wave-derived specular normals, crest tinting, and foam.
+- Runtime water flow now persists per-source remaining budgets, so mined-open reservoirs have bounded saved supply instead of an untracked infinite spread.
 
 ## Guiding Constraints
 
@@ -72,7 +81,7 @@ Tasks:
   - triangle count
   - worker queue length
   - frame timing and GPU timing where supported
-- [ ] Document persistence format.
+- [x] Document persistence format in `docs/persistence-format.md`.
 
 Exit criteria:
 
@@ -159,6 +168,7 @@ Goal: make exploration more rewarding.
 
 Tasks:
 
+- [x] Improve water rendering with wave-derived normals and specular highlights.
 - Improve water rendering with a separated transparent/reflection pass if the current shader-only water becomes limiting.
 - Add lakes and shoreline improvements.
 - [x] Reduce terrain busyness with sparse surface detail masks, rarer rocks, restrained cave carving, and lower underground decoration density.
@@ -180,7 +190,7 @@ Exit criteria:
 
 - World has visible variety across biomes.
 - Caves and ores create exploration goals.
-- Terrain water comes from source reservoirs without generation-time fluid settling, and mined openings use source-connected flow with a bounded supply hook.
+- Terrain water comes from source reservoirs without generation-time fluid settling, and mined openings use source-connected flow with persisted bounded supply.
 
 ### Milestone 6: Rendering And Performance
 
@@ -188,7 +198,7 @@ Goal: improve visual quality without losing browser performance.
 
 Tasks:
 
-- Restore ambient occlusion compatible with greedy meshing.
+- [x] Restore ambient occlusion compatible with greedy meshing.
 - [x] Add transparent-material separation for decorations/glass/water.
   - Four meshes per chunk: opaque (renderOrder 0), water (1, depthWrite false), solid transparent — glass + leaves (1, depthWrite true), decorations — plants + open doors (1, depthWrite false).
   - Glass and leaves excluded from greedy meshing; individual faces with proper tile mapping.
@@ -196,9 +206,11 @@ Tasks:
   - See `ChunkMeshPayload` for `transparent*` and `deco*` arrays, `src/mesh.ts` `emitTransparentFace` / `emitDecorations`, and `src/world/chunkWorldSystem.ts` mesh creation.
 - Improve far terrain LOD blending.
 - [x] Move far terrain rebuilds off the immediate chunk-boundary path with debounced, idempotent rebuild scheduling.
-- Add chunk mesh memory accounting.
-- Add worker prioritization by camera direction.
-- Add optional lower render-distance profile.
+- [x] Keep far terrain generation worker-side and make main-thread replacement cheaper with stale-result suppression plus deferred geometry disposal.
+- [x] Add chunk mesh memory accounting.
+- [x] Add worker prioritization by camera direction.
+- [x] Add optional lower render-distance profile.
+- [x] Split production bundles so app/vendor chunks stay below the large-chunk warning threshold.
 - Investigate WebGPU only after WebGL path is solid.
 
 Exit criteria:
@@ -224,14 +236,29 @@ Exit criteria:
 13. ✅ Add day/night cycle and light propagation.
 14. Separate transparent render paths for glass/water.
 15. ✅ Move far terrain rebuilds off chunk-boundary path.
+16. ✅ Reduce far terrain replacement spikes with stale-result suppression and deferred geometry disposal.
+17. ✅ Improve stair/slab movement with grounded half-block auto-step.
+18. ✅ Make surface zombie/skeleton night spawning work with blocklight spawn suppression.
+19. ✅ Improve water shader highlights with wave-derived normals.
+20. ✅ Persist per-source water flow budgets.
+21. ✅ Add 2-chunk Low render-distance profile.
+22. ✅ Bias chunk request/adoption priority toward the camera direction.
+23. ✅ Split Three.js vendor output into bounded production chunks.
+24. ✅ Count all visible chunk mesh buffers in F3 memory diagnostics.
+25. ✅ Restore greedy-mesh-compatible ambient occlusion.
 
 ## Current Priority
 
-Per-block lighting system: dual-channel skylight (0–15) + blocklight (0–15) computed worker-side via BFS flood-fill, baked into per-vertex mesh attributes, and applied in the fragment shader. This is the single biggest unlock for cave exploration, day/night immersion, and making torches essential. Replaces the current flat global lighting with real darkness underground and light-emitting blocks (torch=14, lava=15, glow_berry=10, amethyst_cluster=5).
+Remaining high-value work is now broader gameplay and polish:
+
+- Improve far terrain LOD blending at the near/far transition.
+- Add water recharge/evaporation loops on top of persisted source budgets.
+- Add mechanism/redstone-style blocks once building depth becomes the priority.
+- Continue shrinking top-level app orchestration out of `src/main.ts` when touching nearby systems.
 
 ## Known Risks
 
-- `src/main.ts` is over the line cap and still owns top-level app orchestration and scene setup.
+- `src/main.ts` still owns top-level app orchestration and scene setup, but is back under the lint line cap after moving console commands, death handling, start-screen handlers, touch setup, and frame audio into `src/game/*`.
 - IndexedDB saves can obscure terrain-generation changes during testing.
 - Block enum numeric IDs are persistence-sensitive.
 - Greedy meshing plus transparent blocks needs careful material separation.

@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import type { FarTerrainOut } from '../farTerrainWorker';
-import { CHUNK_SIZE } from '../types';
+
+type FarTerrainRequest = {
+  requestId: number;
+  pcx: number;
+  pcz: number;
+  seed: number;
+  farRadius: number;
+  detailRadius: number;
+};
 
 export class FarTerrainSystem {
   private readonly group = new THREE.Group();
@@ -12,9 +20,14 @@ export class FarTerrainSystem {
   private waterMesh: THREE.Mesh | null = null;
   private lastKey = '';
   private inFlight = false;
-  private pendingRequest: { pcx: number; pcz: number; seed: number; farRadius: number; detailRadius: number } | null = null;
+  private pendingRequest: FarTerrainRequest | null = null;
+  private nextRequestId = 1;
+  private activeRequestId = 0;
+  private readonly deferredGeometries: THREE.BufferGeometry[] = [];
   private lastBuildMsValue = 0;
   private worstBuildMsValue = 0;
+  private lastDisposeMsValue = 0;
+  private worstDisposeMsValue = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -35,12 +48,20 @@ export class FarTerrainSystem {
     return this.worstBuildMsValue;
   }
 
+  get lastDisposeMs(): number {
+    return this.lastDisposeMsValue;
+  }
+
+  get worstDisposeMs(): number {
+    return this.worstDisposeMsValue;
+  }
+
   requestRebuild(pcx: number, pcz: number, seed: number, farRadius: number, detailRadius?: number): void {
     const dr = detailRadius ?? farRadius;
-    const key = `${pcx},${pcz},${seed},${farRadius}`;
+    const key = `${pcx},${pcz},${seed},${farRadius},${dr}`;
     if (key === this.lastKey) return;
 
-    const request = { pcx, pcz, seed, farRadius, detailRadius: dr };
+    const request = { requestId: this.nextRequestId++, pcx, pcz, seed, farRadius, detailRadius: dr };
     if (this.inFlight) {
       this.pendingRequest = request;
       return;
@@ -48,25 +69,43 @@ export class FarTerrainSystem {
     this.dispatchRequest(request, key);
   }
 
-  private dispatchRequest(request: { pcx: number; pcz: number; seed: number; farRadius: number; detailRadius: number }, key: string): void {
+  update(disposalBudgetMs = 0.7): void {
+    const startedAt = performance.now();
+    let disposed = 0;
+    while (this.deferredGeometries.length > 0 && performance.now() - startedAt < disposalBudgetMs) {
+      const geometry = this.deferredGeometries.shift();
+      geometry?.dispose();
+      disposed++;
+    }
+    this.lastDisposeMsValue = disposed > 0 ? performance.now() - startedAt : 0;
+    this.worstDisposeMsValue = Math.max(this.worstDisposeMsValue, this.lastDisposeMsValue);
+  }
+
+  private dispatchRequest(request: FarTerrainRequest, key: string): void {
     this.inFlight = true;
     this.lastKey = key;
+    this.activeRequestId = request.requestId;
     this.worker.postMessage(request);
   }
 
   private handleResult(data: FarTerrainOut): void {
-    const startedAt = performance.now();
     this.inFlight = false;
 
     if (this.pendingRequest) {
       const req = this.pendingRequest;
       this.pendingRequest = null;
-      const key = `${req.pcx},${req.pcz},${req.seed},${req.farRadius}`;
+      const key = `${req.pcx},${req.pcz},${req.seed},${req.farRadius},${req.detailRadius}`;
       if (key !== this.lastKey) {
         this.dispatchRequest(req, key);
       }
+      if (data.requestId !== this.activeRequestId) return;
     }
 
+    if (data.requestId !== this.activeRequestId) {
+      return;
+    }
+
+    const startedAt = performance.now();
     this.clear();
 
     if (data.positions.length > 0) {
@@ -97,7 +136,7 @@ export class FarTerrainSystem {
   private clear(): void {
     for (const child of this.group.children) {
       const mesh = child as THREE.Mesh;
-      mesh.geometry.dispose();
+      this.deferredGeometries.push(mesh.geometry);
     }
     this.group.clear();
     this.waterMesh = null;

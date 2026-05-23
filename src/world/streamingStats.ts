@@ -7,6 +7,8 @@ export type StreamingStats = {
   chunkDisposeMsLastFrame: number;
   farTerrainMsLast: number;
   farTerrainMsWorst: number;
+  farTerrainDisposeMsLast: number;
+  farTerrainDisposeMsWorst: number;
 };
 
 export function createStreamingStats(): StreamingStats {
@@ -19,5 +21,7 @@ export function createStreamingStats(): StreamingStats {
     chunkDisposeMsLastFrame: 0,
     farTerrainMsLast: 0,
     farTerrainMsWorst: 0,
+    farTerrainDisposeMsLast: 0,
+    farTerrainDisposeMsWorst: 0,
   };
 }

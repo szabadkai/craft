@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Block } from '../types';
 import { BASE_MOUSE_RADIANS_PER_PIXEL, clampMouseSensitivity, formatMouseSensitivity, saveMouseSensitivity } from '../player/mouseSensitivity';
-import { clampDetailRadius, formatRenderDistance, getDetailRadius, setDetailRadius } from '../player/renderDistance';
+import { clampDetailRadius, formatRenderDistance, setDetailRadius } from '../player/renderDistance';
 import { saveSandboxMode } from '../player/sandboxMode';
 import { foodValueFor, Item } from '../inventory/items';
 import type { Wildlife } from '../world/wildlife';

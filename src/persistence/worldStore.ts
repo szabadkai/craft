@@ -3,6 +3,7 @@ import { FurnaceSnapshot } from '../inventory/furnaceSystem';
 import { Item } from '../inventory/items';
 import type { InventorySnapshot } from '../inventory/inventorySystem';
 import { ChunkKey } from '../types';
+import type { WaterBudgetSnapshot } from '../world/waterSim';
 
 export type DoorSnapshot = Record<string, 'x' | 'z'>;
 
@@ -83,6 +84,15 @@ export class WorldStore {
     await this.saveState(this.doorStateKey(), doors);
   }
 
+  async loadWaterBudgets(): Promise<WaterBudgetSnapshot | null> {
+    const value = await this.loadState<WaterBudgetSnapshot>(this.waterBudgetStateKey());
+    return value ?? null;
+  }
+
+  async saveWaterBudgets(waterBudgets: WaterBudgetSnapshot): Promise<void> {
+    await this.saveState(this.waterBudgetStateKey(), waterBudgets);
+  }
+
   async hasSavedWorld(): Promise<boolean> {
     const db = await this.open();
     const prefix = this.storedChunkPrefix();
@@ -108,6 +118,7 @@ export class WorldStore {
       this.deleteState(db, this.furnaceStateKey()),
       this.deleteState(db, this.chestStateKey()),
       this.deleteState(db, this.doorStateKey()),
+      this.deleteState(db, this.waterBudgetStateKey()),
     ]);
   }
 
@@ -137,6 +148,10 @@ export class WorldStore {
 
   private doorStateKey(): string {
     return `doors:${this.getSeed()}`;
+  }
+
+  private waterBudgetStateKey(): string {
+    return `water-budgets:${this.getSeed()}`;
   }
 
   private async loadState<T>(key: string): Promise<T | undefined> {

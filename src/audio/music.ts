@@ -108,7 +108,9 @@ export function createMusicSystem(ctx: AudioContext, destination: GainNode): Mus
 
   function stopCurrent(): void {
     if (activeSource) {
-      try { activeSource.stop(); } catch {}
+      try { activeSource.stop(); } catch {
+        // Source may already be stopped by the Web Audio runtime.
+      }
       activeSource.disconnect();
       activeSource = null;
     }

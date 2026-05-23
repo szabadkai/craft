@@ -197,6 +197,12 @@ export function createWaterMaterial(
       varying vec3 vNormal;
       varying float vWave;
       varying vec2 vLight;
+      float waterWave(vec2 xz) {
+        float wave = sin(xz.x * 2.3 + time * 1.6) * cos(xz.y * 2.7 + time * 1.3) * 0.07;
+        wave += sin(xz.x * 4.1 + time * 2.1) * cos(xz.y * 3.9 - time * 1.8) * 0.035;
+        wave += sin(xz.x * 6.5 - time * 2.8) * cos(xz.y * 5.1 + time * 2.4) * 0.02;
+        return wave;
+      }
       void main() {
         vLight = light;
         vec4 worldPos = modelMatrix * vec4(position, 1.0);
@@ -204,9 +210,14 @@ export function createWaterMaterial(
         vNormal = normal;
         float wave = 0.0;
         if (normal.y > 0.5) {
-          wave  = sin(worldPos.x * 2.3 + time * 1.6) * cos(worldPos.z * 2.7 + time * 1.3) * 0.07;
-          wave += sin(worldPos.x * 4.1 + time * 2.1) * cos(worldPos.z * 3.9 - time * 1.8) * 0.035;
-          wave += sin(worldPos.x * 6.5 - time * 2.8) * cos(worldPos.z * 5.1 + time * 2.4) * 0.02;
+          vec2 xz = worldPos.xz;
+          wave = waterWave(xz);
+          float eps = 0.18;
+          float left = waterWave(xz - vec2(eps, 0.0));
+          float right = waterWave(xz + vec2(eps, 0.0));
+          float down = waterWave(xz - vec2(0.0, eps));
+          float up = waterWave(xz + vec2(0.0, eps));
+          vNormal = normalize(vec3(left - right, eps * 2.0, down - up));
         }
         vWave = wave;
         worldPos.y += wave;
@@ -350,4 +361,3 @@ export function createTerrainAtlas(): THREE.CanvasTexture {
   texture.generateMipmaps = false;
   return texture;
 }
-

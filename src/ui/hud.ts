@@ -87,7 +87,7 @@ export function createHud(
           <input
             id="render-distance-input"
             type="range"
-            min="4"
+            min="2"
             max="12"
             step="2"
             value="8"

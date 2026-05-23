@@ -3,13 +3,11 @@ import * as THREE from 'three';
 import { ChestSystem } from './inventory/chestSystem';
 import { FurnaceSystem } from './inventory/furnaceSystem';
 import { InventorySystem } from './inventory/inventorySystem';
-import { ConsoleCommand, ConsoleSystem, defaultConsoleCommands } from './ui/console';
+import { ConsoleSystem } from './ui/console';
 import { PlayerController } from './player/playerController';
 import { DoorSystem } from './world/doorSystem';
-import { createHealth } from './player/health';
 import { EatingSystem } from './player/eating';
 import {
-  BASE_MOUSE_RADIANS_PER_PIXEL,
   clampMouseSensitivity,
   formatMouseSensitivity,
   loadMouseSensitivity,
@@ -45,7 +43,6 @@ import { BlockRaycaster } from './world/blockRaycaster';
 import { ChunkWorldSystem } from './world/chunkWorldSystem';
 import { WaterSimSystem } from './world/waterSim';
 import { ItemPickupSystem } from './world/itemPickups';
-import { itemDefs } from './inventory/items';
 import { randomSeedText, seedFromString } from './world/seed';
 import { WildlifeSystem } from './world/wildlife';
 import { HostileSystem } from './world/hostileMobs';
@@ -59,7 +56,12 @@ import { loadSandboxMode, saveSandboxMode } from './player/sandboxMode';
 import { setupInputHandlers } from './game/inputHandler';
 import { MinimapSystem } from './ui/minimap';
 import { PauseMenu } from './ui/pauseMenu';
-import { TouchControls, isTouchDevice } from './ui/touchControls';
+import { isTouchDevice } from './ui/touchControls';
+import { setupDeathHandling } from './game/deathHandling';
+import { createConsoleCommands } from './game/consoleCommands';
+import { setupStartScreenHandlers } from './game/startScreenHandlers';
+import { setupTouchControls } from './game/touchSetup';
+import { createFrameAudio } from './game/frameAudio';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
@@ -124,6 +126,7 @@ const hostile: HostileSystem = new HostileSystem(
   () => sfx.mobHit(),
   () => sfx.mobDeath(),
   (wx, y, wz) => chunkWorld.getSkylight(wx, y, wz),
+  (wx, y, wz) => chunkWorld.getBlocklight(wx, y, wz),
 );
 hostile.setPlayerDamageCallback((amount) => health.damageFrom(amount, 'mob'));
 const wildlife: WildlifeSystem = new WildlifeSystem(
@@ -142,6 +145,7 @@ const worldStore = new WorldStore(() => seed);
 let frame = 0;
 let worldStarted = false;
 let worldReady = false;
+let waterBudgetSaveTimer: number | null = null;
 
 const farTerrain = new FarTerrainSystem(scene, waterMaterial);
 const blockRaycaster = new BlockRaycaster(camera, getBlock);
@@ -177,7 +181,6 @@ const hud = createHud(
   formatRenderDistance(getDetailRadius()),
 );
 const {
-  root: hudRoot,
   diagnosticsEl,
   hotbarEl,
   inventoryEl,
@@ -259,6 +262,7 @@ const chunkWorld = new ChunkWorldSystem({
 const waterSim = new WaterSimSystem(
   (wx, y, wz) => chunkWorld.getBlock(wx, y, wz),
   (entries) => chunkWorld.setBlocks(entries),
+  () => scheduleWaterBudgetSave(),
 );
 
 const inventorySystem = new InventorySystem(
@@ -328,39 +332,7 @@ const interactionSystem = new BlockInteractionSystem(
 
 const minimap = new MinimapSystem();
 
-const consoleCommands: ConsoleCommand[] = [
-  ...defaultConsoleCommands((item, count) => {
-    const lower = item.toLowerCase();
-    return inventorySystem.addItem(
-      (itemDefs.find((d) => d.id === lower)?.id ?? itemDefs.find((d) => d.id.includes(lower))?.id)!, count);
-  }),
-  {
-    name: 'waypoint',
-    description: 'waypoint set <name> | list | remove <name> — Manage map waypoints',
-    execute: (args) => {
-      const sub = args[0]?.toLowerCase();
-      if (sub === 'set') {
-        const name = args.slice(1).join(' ').trim();
-        if (!name) return 'Usage: waypoint set <name>';
-        const wp = minimap.addWaypoint(name, player.position.x, player.position.z);
-        return `Waypoint "${wp.name}" set at ${wp.x}, ${wp.z}`;
-      }
-      if (sub === 'list') {
-        const wps = minimap.getWaypoints();
-        if (wps.length === 0) return 'No waypoints set.';
-        return wps.map((w) => `${w.name} (${w.x}, ${w.z})`).join('\n');
-      }
-      if (sub === 'remove' || sub === 'rm') {
-        const name = args.slice(1).join(' ').trim();
-        if (!name) return 'Usage: waypoint remove <name>';
-        return minimap.removeWaypoint(name) ? `Removed "${name}"` : `Waypoint "${name}" not found`;
-      }
-      return 'Usage: waypoint set <name> | list | remove <name>';
-    },
-  },
-];
-
-const consoleSystem = new ConsoleSystem(consoleCommands);
+const consoleSystem = new ConsoleSystem(createConsoleCommands(inventorySystem, minimap, player));
 inventorySystem.init();
 rebuildHeldItem();
 
@@ -445,10 +417,6 @@ function updateTerrainMaterialTime(now: number): void {
   chunkWorld.updateTerrainMaterialTime(now);
 }
 
-function updateSeedPreview(): void {
-  seedPreviewEl.textContent = String(seedFromString(seedInputEl.value));
-}
-
 function startWorld(seedText: string): void {
   audioEngine.resume();
   music.play();
@@ -462,6 +430,7 @@ function startWorld(seedText: string): void {
   furnaceSystem.close();
   chestSystem.close();
   doorSystem.clear();
+  waterSim.clear();
   itemPickups.clear();
   hostile.clear();
   minimap.setSeed(seed);
@@ -499,6 +468,7 @@ async function loadFurnaces(): Promise<void> {
   furnaceSystem.load(await worldStore.loadFurnaces());
   chestSystem.load(await worldStore.loadChests());
   doorSystem.load(await worldStore.loadDoors());
+  waterSim.load(await worldStore.loadWaterBudgets());
 }
 
 async function saveInventory(): Promise<void> {
@@ -508,6 +478,14 @@ async function saveInventory(): Promise<void> {
 async function saveFurnaces(): Promise<void> {
   await worldStore.saveFurnaces(furnaceSystem.snapshot());
   await worldStore.saveDoors(doorSystem.snapshot());
+}
+
+function scheduleWaterBudgetSave(): void {
+  if (waterBudgetSaveTimer !== null) window.clearTimeout(waterBudgetSaveTimer);
+  waterBudgetSaveTimer = window.setTimeout(() => {
+    waterBudgetSaveTimer = null;
+    worldStore.saveWaterBudgets(waterSim.snapshot()).catch(console.error);
+  }, 500);
 }
 
 function updateLoadingState(): void {
@@ -538,54 +516,19 @@ function fadeChunks(now: number): void {
   chunkWorld.fadeChunks(now);
 }
 
-const deathMessages: Record<string, string> = {
-  fall: 'You fell from a high place.',
-  mob: 'You were slain by a hostile creature.',
-  lava: 'You tried to swim in lava.',
-  unknown: 'You died.',
-};
-
-let deathScreenShownAt = -Infinity;
-
-function showDeathScreen(): void {
-  const cause = health.state.deathCause;
-  deathMessageEl.textContent = deathMessages[cause] ?? deathMessages.unknown;
-  deathScreenShownAt = performance.now();
-  respawnBtnEl.disabled = false;
-  deathScreenEl.classList.remove('hidden');
-  if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
-}
-
-function hideDeathScreen(): void {
-  deathScreenShownAt = -Infinity;
-  deathScreenEl.classList.add('hidden');
-}
-
-const health = createHealth(
-  () => terrainHeight(Math.floor(player.position.x), Math.floor(player.position.z), seed) + 2,
-  (spawnY) => {
-    player.position.set(8, spawnY, 8);
-    player.velocity.set(0, 0, 0);
-  },
-  () => sfx.playerHurt(),
-  () => {
-    const slots = inventorySystem.snapshotInventory().slots;
-    for (const slot of slots) {
-      if (slot) itemPickups.spawn(slot.item, slot.count, player.position.clone());
-    }
-    inventorySystem.resetInventory();
-    saveInventory().catch(console.error);
-    sfx.playerDeath();
-    showDeathScreen();
-  },
-);
-health.mount(heartsEl, damageOverlayEl);
-
-respawnBtnEl.addEventListener('click', () => {
-  if (performance.now() - deathScreenShownAt < 250) return;
-  health.triggerRespawn();
-  hideDeathScreen();
-  renderer.domElement.requestPointerLock().catch(() => {});
+const health = setupDeathHandling({
+  player,
+  renderer,
+  inventorySystem,
+  itemPickups,
+  sfx,
+  heartsEl,
+  damageOverlayEl,
+  deathScreenEl,
+  deathMessageEl,
+  respawnBtnEl,
+  getSpawnY: () => terrainHeight(Math.floor(player.position.x), Math.floor(player.position.z), seed) + 2,
+  saveInventory,
 });
 
 const eatingSystem = new EatingSystem(health, inventorySystem, eatingBarEl, eatingBarFillEl, () => sfx.eating(), () => sfx.eatComplete());
@@ -593,11 +536,8 @@ const eatingSystem = new EatingSystem(health, inventorySystem, eatingBarEl, eati
 let last = performance.now();
 let submergeFactor = 0;
 let caveFactor = 0;
-let prevOnGround = false;
-let prevInWater = false;
-let lastFootstepTime = 0;
 let lastLavaDamageTime = 0;
-const lastFootstepPos = new THREE.Vector3();
+const updateFrameAudio = createFrameAudio({ player, sfx, getBlock });
 
 function applyRenderDistanceInternal(): void {
   applyRenderDistance(scene, camera, farTerrain, player, seed, submergeFactor, caveFactor);
@@ -634,26 +574,20 @@ const { handlePrimaryAction, handleSecondaryAction } = setupInputHandlers(
   applyRenderDistanceInternal,
 );
 
-let touchControls: TouchControls | null = null;
-if (isMobile) {
-  touchControls = new TouchControls(keys, player, () => mouseSensitivity, {
-    onMineStart: () => {
-      if (!worldReady || inventorySystem.isOpen || furnaceSystem.isOpen || chestSystem.isOpen) return;
-      handlePrimaryAction();
-    },
-    onMineStop: () => {
-      interactionSystem.stopMining();
-      eatingSystem.cancel();
-    },
-    onPlace: () => {
-      if (!worldReady || inventorySystem.isOpen || furnaceSystem.isOpen || chestSystem.isOpen) return;
-      handleSecondaryAction();
-    },
-    onPlaceStop: () => {
-      eatingSystem.cancel();
-    },
-  });
-}
+const touchControls = setupTouchControls({
+  isMobile,
+  keys,
+  player,
+  getMouseSensitivity: () => mouseSensitivity,
+  getWorldReady: () => worldReady,
+  inventorySystem,
+  furnaceSystem,
+  chestSystem,
+  interactionSystem,
+  eatingSystem,
+  handlePrimaryAction,
+  handleSecondaryAction,
+});
 
 function tick(now: number): void {
   const frameStartedAt = performance.now();
@@ -665,6 +599,7 @@ function tick(now: number): void {
   last = now;
   if (worldStarted) chunkWorld.updateChunkSet(frame);
   chunkWorld.flushRequests();
+  farTerrain.update();
   updateLoadingState();
   if (worldReady && !health.state.isDead) {
     playerController.update(dt);
@@ -688,29 +623,7 @@ function tick(now: number): void {
     furnaceSystem.tick(dt);
     eatingSystem.tick(now);
 
-    // Audio: footsteps, jump/land, water transitions
-    if (player.onGround && !prevOnGround) {
-      const fallSpeed = Math.abs(player.velocity.y);
-      sfx.land(fallSpeed > 6);
-    }
-    if (!player.onGround && prevOnGround && player.velocity.y > 0) {
-      sfx.jump();
-    }
-    if (player.inWater && !prevInWater) sfx.splash();
-    if (player.onGround && !player.inWater) {
-      const hDist = Math.hypot(player.position.x - lastFootstepPos.x, player.position.z - lastFootstepPos.z);
-      if (hDist > 1.6 && now - lastFootstepTime > 300) {
-        const bx = Math.floor(player.position.x);
-        const by = Math.floor(player.position.y) - 1;
-        const bz = Math.floor(player.position.z);
-        sfx.footstep(blockMaterial(getBlock(bx, by, bz)));
-        lastFootstepTime = now;
-        lastFootstepPos.copy(player.position);
-      }
-    }
-    prevOnGround = player.onGround;
-    prevInWater = player.inWater;
-
+    updateFrameAudio(now);
     ambient.tick(dt, submergeFactor, caveFactor, furnaceSystem.isOpen && furnaceSystem.isBurning);
     music.tick(dt);
   }
@@ -745,65 +658,33 @@ function tick(now: number): void {
   requestAnimationFrame(tick);
 }
 
-async function refreshContinueButton(): Promise<void> {
-  const hasSave = await worldStore.hasSavedWorld();
-  continueWorldEl.style.display = hasSave ? '' : 'none';
-}
-
-startFormEl.addEventListener('submit', (event) => {
-  event.preventDefault();
-  startWorld(seedInputEl.value);
+setupStartScreenHandlers({
+  elements: {
+    seedInputEl,
+    startFormEl,
+    randomSeedEl,
+    seedPreviewEl,
+    continueWorldEl,
+    clearWorldEl,
+    clearWorldStatusEl,
+  },
+  worldStore,
+  chunkWorld,
+  itemPickups,
+  interactionSystem,
+  inventorySystem,
+  furnaceSystem,
+  chestSystem,
+  doorSystem,
+  waterSim,
+  hostile,
+  getWorldStarted: () => worldStarted,
+  setWorldReady: (ready) => {
+    worldReady = ready;
+  },
+  setSeed: (nextSeed) => {
+    seed = nextSeed;
+  },
+  startWorld,
 });
-
-continueWorldEl.addEventListener('click', () => {
-  startWorld(seedInputEl.value);
-});
-
-seedInputEl.addEventListener('input', () => {
-  updateSeedPreview();
-  seed = seedFromString(seedInputEl.value.trim() || '0');
-  refreshContinueButton().catch(console.error);
-});
-
-clearWorldEl.addEventListener('click', () => {
-  clearSavedWorld().catch((error) => {
-    console.error(error);
-    clearWorldStatusEl.textContent = 'Clear failed. Check console.';
-    clearWorldEl.disabled = false;
-  });
-});
-
-randomSeedEl.addEventListener('click', () => {
-  seedInputEl.value = randomSeedText();
-  updateSeedPreview();
-  seed = seedFromString(seedInputEl.value.trim() || '0');
-  refreshContinueButton().catch(console.error);
-});
-
-updateSeedPreview();
-refreshContinueButton().catch(console.error);
 requestAnimationFrame(tick);
-
-async function clearSavedWorld(): Promise<void> {
-  clearWorldEl.disabled = true;
-  clearWorldStatusEl.textContent = 'Clearing saves...';
-  const normalizedSeedText = seedInputEl.value.trim() || '0';
-  seed = seedFromString(normalizedSeedText);
-  seedPreviewEl.textContent = String(seed);
-  await worldStore.clearCurrentWorld();
-  chunkWorld.clearLoadedChunks();
-  itemPickups.clear();
-  interactionSystem.stopMining();
-  inventorySystem.resetInventory();
-  furnaceSystem.load(null);
-  chestSystem.load(null);
-  doorSystem.clear();
-  hostile.clear();
-  worldReady = false;
-  if (worldStarted) {
-    startWorld(normalizedSeedText);
-  }
-  clearWorldStatusEl.textContent = 'Saved chunks and inventory cleared.';
-  clearWorldEl.disabled = false;
-  continueWorldEl.style.display = 'none';
-}

@@ -12,6 +12,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 - `src/main.ts`
   Main app loop, Three.js scene composition, player/inventory/input orchestration, block interaction wiring, held item visuals.
+- `vite.config.ts`
+  Production build chunking. Three.js is split into bounded vendor chunks to keep app/vendor outputs below Vite's large-chunk warning threshold.
 - `src/rendering/terrainMaterials.ts`
   Sky mesh, generated terrain atlas, and terrain shader material factory.
 - `src/rendering/atmosphere.ts`
@@ -19,9 +21,9 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - `src/rendering/diagnostics.ts`
   F3 diagnostics collection, GPU timer handling, summary formatting, and overlay painting.
 - `src/rendering/farTerrain.ts`
+  Worker-backed far terrain heightfield ring ownership, stale-result suppression, mesh replacement, and budgeted old-geometry disposal.
 - `src/rendering/dayNightCycle.ts`
   Day/night cycle: 24k-tick timer, sun position math, per-time-of-day color keyframe interpolation for sky/terrain/water shader uniforms, scene fog, background, and Three.js light colors and intensities.
-  Merged far terrain heightfield ring generation and mesh ownership.
 - `src/rendering/heldItemView.ts`
   First-person held block/tool meshes and hand swing animation.
 - `src/inventory/items.ts`
@@ -35,7 +37,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - `src/world/wildlife.ts`
   Wildlife spawning, mesh construction, lifetime cleanup, entity ray hits, loaded-world collision, and per-frame movement simulation.
 - `src/world/chunkWorldSystem.ts`
-  Loaded chunk ownership, worker-pool requests, remeshing, chunk persistence saves, block access/mutation, spawn readiness, fade-in, and world diagnostics summary.
+  Loaded chunk ownership, worker-pool requests, camera-biased chunk prioritization, remeshing, chunk persistence saves, block access/mutation, spawn readiness, fade-in, and world diagnostics summary including all visible chunk mesh buffer bytes.
 - `src/world/chunkMeshFactory.ts`
   Main-thread conversion of worker mesh payloads into Three.js chunk meshes.
 - `src/world/blockRaycaster.ts`
@@ -55,7 +57,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - `src/terrain.ts`
   Deterministic terrain generation, biomes, trees, surface details, ores.
 - `src/mesh.ts`
-  Greedy voxel meshing. Emits repeated atlas UVs and atlas rect attributes for the terrain shader.
+  Greedy voxel meshing. Emits repeated atlas UVs, atlas rect attributes, per-vertex light values, and greedy-compatible ambient occlusion baked into vertex colors.
 - `src/atlas.ts`
   Atlas tile IDs and tile rect mapping.
 - `src/blocks.ts`
@@ -67,6 +69,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 - First-person movement and collision.
 - Persistent mouse sensitivity control for pointer-lock camera movement.
+- Persistent render-distance control includes a 2-chunk Low profile for weaker devices.
 - Worker-pool generated chunks.
 - Greedy meshing.
 - Repeating texture atlas shader.
@@ -95,16 +98,17 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Console command system (`` ` `` key) with `give <item> [count]`, `items`, `help`, `clear`, tab completion.
 - Wildlife with simple animal hit interactions and collision against loaded terrain blocks.
 - Far terrain heightfield ring merged into a single mesh to keep draw calls low.
-- F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, chunk adoption/deferred disposal timings, far-terrain rebuild timings, memory estimates, and GPU timing when supported.
+- F3 diagnostic overlay with FPS, frame timing, render stats, worker pressure, chunk adoption/deferred disposal timings, far-terrain rebuild/adoption/disposal timings, memory estimates, and GPU timing when supported.
 - First-person held item view with proper scale (~75% larger), closer camera placement, empty-hand model, and distinct models for tools, foods, loose materials, and many non-cube blocks.
 - Damage flash overlay (red screen vignette on hit).
 - Continuous mining while holding mouse1 — chains into next block when current one breaks.
 - Oak doors — two-tall openable blocks with right-click toggle, door state persistence, and planks-based recipe (6 planks → 3 doors).
-- Oak and cobblestone stairs — stepped blocks with 4-directional placement based on player yaw, non-greedy mesh rendering, and stepped collision.
-- Cave spiders — hostile mobs spawning in deep caves, pursuing the player, dealing damage on contact, dropping raw meat.
+- Oak and cobblestone stairs — stepped blocks with 4-directional placement based on player yaw, non-greedy mesh rendering, stepped collision, and player auto-step from the low side.
+- Hostile mobs — cave spiders spawn in deep caves; zombies and skeletons spawn on dark night surfaces. They pursue the player, deal contact damage, and drop raw meat.
 - Leaf decay — breaking a log causes ~28% of nearby leaves to drop sticks/apples and disappear.
 - Shoreline improvements — variable-width beaches (sand/grass mix at water line), inland lakes in terrain depressions, biome border blending.
 - Separate transparent render paths — glass, leaves, and decorations render in dedicated transparent meshes with proper alpha blending and depth ordering.
+- Water shader uses multi-frequency vertex waves, wave-derived normals for specular highlights, crest tinting/foam, and day/night-aware lighting/fog.
 
 ## Day/Night Cycle Architecture
 
@@ -125,12 +129,13 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Furnace contents/progress are persisted separately from chunk block data, keyed by world seed and furnace block position.
 - Main thread should not generate terrain meshes directly.
 - Chunk generation and remeshing jobs are distributed across a small worker pool.
-- Worker mesh results are adopted on the main thread with a small frame-time budget; old chunk geometry/material disposal is deferred across frames to reduce chunk pop-in stutter.
-- Far terrain is generated on the main thread today, but movement-triggered rebuilds are debounced and idempotent. It should stay merged into a small number of meshes; avoid reintroducing one mesh per far patch.
+- Worker mesh results are adopted on the main thread with a small frame-time budget and camera-biased priority; old chunk geometry/material disposal is deferred across frames to reduce chunk pop-in stutter.
+- Far terrain is generated in `src/farTerrainWorker.ts`; `FarTerrainSystem` discards stale worker results and disposes replaced geometry with a per-frame budget. It should stay merged into a small number of meshes; avoid reintroducing one mesh per far patch.
 - Terrain shader expects:
   - `uv`: repeated local face UVs.
   - `atlasRect`: vec4 of atlas tile rect.
   - `color`: lighting and variation.
+- Greedy terrain face merging includes tile, light, and four corner AO values in the mask key. Do not merge faces with different AO values or corner darkening will smear across block edges.
 - Transparent plant blocks are decorations and should not be treated as solid raycast targets.
 - Transparent rendering uses four meshes per chunk: opaque solids (`chunk.mesh`, renderOrder 0), water (`chunk.waterMesh`, renderOrder 1, depthWrite false), solid transparent — glass + leaves (`chunk.transparentMesh`, renderOrder 1, depthWrite true), and decorations — plants, open doors (`chunk.decoMesh`, renderOrder 1, depthWrite false). Glass and leaves are excluded from greedy meshing and emit individual block faces into `transparent*` arrays. Decorations emit X-shaped quads into `deco*` arrays. Both use the terrain atlas shader with `transparent: true`.
 - Wildlife movement uses loaded chunk blocks for ground and obstacle collision; avoid falling back to generated height only for gameplay collision.
@@ -139,11 +144,12 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Oak doors use two block IDs (`OakDoor`=closed solid, `OakDoorOpen`=open non-solid) plus `DoorSystem` (`src/world/doorSystem.ts`) for orientation tracking. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`.
 - Birch logs have orientation variants (`BirchLogX`, `BirchLogZ`) matching the LogX/LogZ pattern. Placing birch logs rotates them based on clicked face. Natural birch trees still generate as plain `BirchLog` (vertical).
 - Slab blocks use four block IDs per material pair: `OakSlab` (bottom half), `OakSlabTop` (top half), `CobblestoneSlab`, `CobblestoneSlabTop`. Slabs render as half-height individual geometry (non-greedy, like water faces) via `emitSlabFace` in `src/mesh.ts`. Collision is half-height AABB in `PlayerController.collides()`. Placement: top face → bottom slab, bottom face → top slab, side face → bottom slab. Crafted from 3 planks → 6 oak slabs, 3 cobblestone → 6 cobblestone slabs.
-- Stair blocks use eight block IDs (4 directions × 2 materials): OakStairsN/S/E/W and CobblestoneStairsN/S/E/W. Stairs render individually (non-greedy) via `emitStairFaces` in `src/mesh.ts`. Collision is stepped: bottom half (full 1×1), upper half (half-block in stair direction). Direction is determined by player's yaw at placement time. Stair blocks are NOT in `solidBlocks` — they have custom collision checks in `PlayerController.collides()`. Crafted from 6 planks → 4 oak stairs, 6 cobblestone → 4 cobblestone stairs.
-- Hostile mobs (cave spiders) are managed by `HostileSystem` (`src/world/hostileMobs.ts`). They spawn in caves when the player is deep underground (>8 blocks below surface), walk toward the player within 18 blocks, deal 2 HP damage on contact (500ms cooldown), have 3 HP, and drop raw meat when killed. Hit detection competes with wildlife/block raycasting (closest target wins).
+- Stair blocks use eight block IDs (4 directions × 2 materials): OakStairsN/S/E/W and CobblestoneStairsN/S/E/W. Stairs render individually (non-greedy) via `emitStairFaces` in `src/mesh.ts`. Collision is stepped: bottom half (full 1×1), upper half (half-block in stair direction). Direction is determined by player's yaw at placement time. Stair blocks are NOT in `solidBlocks` — they have custom collision checks in `PlayerController.collides()`. `PlayerController.tryAutoStep()` handles grounded horizontal movement up stairs/slabs by raising just over half a block and settling onto support. Crafted from 6 planks → 4 oak stairs, 6 cobblestone → 4 cobblestone stairs.
+- Hostile mobs are managed by `HostileSystem` (`src/world/hostileMobs.ts`). Cave spiders spawn in caves when the player is deep underground (>8 blocks below surface); zombies/skeletons spawn on valid terrain surfaces at night. Spawn checks use static skylight for caves, time-of-day darkness for surface mobs, and blocklight to let torches suppress nearby spawns. Mobs walk toward the player within 18 blocks, deal 2 HP damage on contact (500ms cooldown), and drop raw meat when killed. Hit detection competes with wildlife/block raycasting (closest target wins).
 - Surface rocks generate in `addSurfaceDetails` in `src/terrain.ts` as sparse cobblestone outcrops. Rocks use a low-frequency patch mask plus 5x5 cell anchoring, so even rocky areas leave quiet ground between features. Surface grass, flowers, pumpkins, cactus, and dry gravel also use patch masks instead of independent per-block sprinkling. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
 - Place preview rebuilds the BoxGeometry UVs per selected block via `atlasBoxGeometry`, mapping each face to the correct atlas tile using `tileForBlockFace`.
-- Block placement can replace water cells, making submerged/underground water sources pluggable with normal blocks. Terrain generation seeds finite reservoir water in `addOceanReservoirs`/`addLakes`, but does not run a generation-time settling simulation; full-block water creates visual columns/sheets when moved through carved terrain without level metadata. `OCEAN_SURFACE_Y` is a terrain/rendering target derived from `TERRAIN_BASE_ELEVATION`, not a global underground fill rule. Ocean reservoir columns are continuous for surface terrain at or below `OCEAN_SURFACE_Y` so shorelines remain attached to the waterbody. Runtime water flow is source-connected via `WaterFlowSystem` after mining opens a path and uses a per-event `WaterSupply` cap as the hook for future persistent lake/spring/ocean budgets.
+- Block placement can replace water cells, making submerged/underground water sources pluggable with normal blocks. Terrain generation seeds finite reservoir water in `addOceanReservoirs`/`addLakes`, but does not run a generation-time settling simulation; full-block water creates visual columns/sheets when moved through carved terrain without level metadata. `OCEAN_SURFACE_Y` is a terrain/rendering target derived from `TERRAIN_BASE_ELEVATION`, not a global underground fill rule. Ocean reservoir columns are continuous for surface terrain at or below `OCEAN_SURFACE_Y` so shorelines remain attached to the waterbody. Runtime water flow is source-connected through `WaterSimSystem` after mining opens a path and consumes persistent per-source budget for newly created water cells.
+- `WaterSimSystem` persists per-source remaining flow budgets through `WorldStore.loadWaterBudgets/saveWaterBudgets`. New water cells consume from the nearest source budget, while already-saved water blocks remain chunk data. Clear-world deletes water budgets with the other per-seed state.
 - Console commands are defined in `src/ui/console.ts`. The `give` command resolves item IDs via `itemDefs` fuzzy matching.
 - Existing IndexedDB saves can make old chunks appear near spawn after generator changes.
 - Chunk storage version is bumped after major generator density changes so saved terrain does not mask the new quieter generation.
@@ -153,6 +159,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 ## Documentation Maintenance
 
 - Keep `AGENTS.md` and `docs/project-plan.md` up to date when changing architecture, persistence formats, major systems, current features, roadmap priorities, or known risks.
+- Keep `docs/persistence-format.md` up to date when changing IndexedDB stores, key formats, chunk storage version semantics, or localStorage keys.
 - When completing a milestone or adding a substantial feature, update the "Current Features", "Good Next Tasks", and project roadmap as needed.
 - If implementation details change in a way future agents must know, document them here before finishing the task.
 
@@ -163,9 +170,5 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 
 ## Good Next Tasks
 
-- Move far terrain generation fully off-thread or make rebuilds incremental.
-- Add more hostile mob variants (surface zombies, skeletons).
-- Improve stair auto-step (player automatically steps up when walking into stairs from the low side).
-- Improve water rendering with reflections or wave-based vertex displacement on far water.
-- Persist water source budgets and add evaporation/condensation loops that recharge lakes, springs, and rain-fed pools.
+- Add evaporation/condensation loops that recharge lakes, springs, and rain-fed pools.
 - Add restone/mechanism blocks for more complex building.
