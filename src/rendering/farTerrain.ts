@@ -15,6 +15,8 @@ export class FarTerrainSystem {
   private readonly material = new THREE.MeshLambertMaterial({
     vertexColors: true,
     side: THREE.DoubleSide,
+    transparent: true,
+    depthWrite: false,
   });
   private readonly worker: Worker;
   private waterMesh: THREE.Mesh | null = null;
@@ -33,6 +35,14 @@ export class FarTerrainSystem {
     scene: THREE.Scene,
     private readonly waterMaterial: THREE.ShaderMaterial,
   ) {
+    this.material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float alpha;\nvarying float vFarAlpha;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFarAlpha = alpha;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vFarAlpha;')
+        .replace('#include <opaque_fragment>', 'diffuseColor.a *= vFarAlpha;\n#include <opaque_fragment>');
+    };
     scene.add(this.group);
     this.worker = new Worker(new URL('../farTerrainWorker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (event: MessageEvent<FarTerrainOut>) => {
@@ -113,9 +123,12 @@ export class FarTerrainSystem {
       geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
       geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
+      geo.setAttribute('alpha', new THREE.BufferAttribute(data.alphas, 1));
       geo.setIndex(new THREE.BufferAttribute(data.indices, 1));
       geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 64, 0), 100000);
-      this.group.add(new THREE.Mesh(geo, this.material));
+      const mesh = new THREE.Mesh(geo, this.material);
+      mesh.renderOrder = -1;
+      this.group.add(mesh);
     }
 
     if (data.waterPositions.length > 0) {

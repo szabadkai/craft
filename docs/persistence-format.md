@@ -39,7 +39,9 @@ Craft stores browser-local world state in IndexedDB database `craft-world-v1`.
 - `water-budgets:<seed>`
   - Value: `Record<string, number>`.
   - Key is source position string `x,y,z`; value is remaining source budget for newly created runtime water cells.
+  - Budgets slowly recharge while the source block remains valid water.
   - Water blocks themselves still live in chunk data. The budget record only tracks remaining future spread from source reservoirs/springs.
+  - Runtime evaporation tracking is session-local; after reload, already-saved water remains ordinary chunk block data.
 
 ## Local Storage
 

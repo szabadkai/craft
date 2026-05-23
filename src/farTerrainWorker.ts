@@ -16,6 +16,7 @@ export type FarTerrainOut = {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
+  alphas: Float32Array;
   indices: Uint32Array;
   waterPositions: Float32Array;
   waterIndices: Uint32Array;
@@ -34,7 +35,12 @@ function buildFarTerrain(msg: FarTerrainIn): FarTerrainOut {
 
   const positions: number[] = [];
   const colors: number[] = [];
+  const alphas: number[] = [];
   const indices: number[] = [];
+  const playerChunkWorldX = pcx * CHUNK_SIZE;
+  const playerChunkWorldZ = pcz * CHUNK_SIZE;
+  const fadeStart = Math.max(0, (detailRadius - 1.4) * CHUNK_SIZE);
+  const fadeEnd = Math.max(fadeStart + CHUNK_SIZE, (detailRadius + 1.2) * CHUNK_SIZE);
 
   for (let cz = pcz - farRadius; cz <= pcz + farRadius; cz += patchChunkSpan) {
     for (let cx = pcx - farRadius; cx <= pcx + farRadius; cx += patchChunkSpan) {
@@ -50,6 +56,9 @@ function buildFarTerrain(msg: FarTerrainIn): FarTerrainOut {
           const wz = cz * CHUNK_SIZE + z;
           const h = terrainHeight(wx, wz, seed) + 0.02;
           positions.push(wx, h, wz);
+          const dx = wx - playerChunkWorldX;
+          const dz = wz - playerChunkWorldZ;
+          alphas.push(smoothstep(fadeStart, fadeEnd, Math.hypot(dx, dz)));
           const surface = generatedBlockAt(wx, Math.max(0, Math.floor(h)), wz, seed);
           const color = blockColor(surface === Block.Air ? Block.Grass : surface);
           const variation = 0.9 + terrainColorNoise(wx, wz, seed) * 0.18;
@@ -115,6 +124,7 @@ function buildFarTerrain(msg: FarTerrainIn): FarTerrainOut {
     positions: new Float32Array(positions),
     normals,
     colors: new Float32Array(colors),
+    alphas: new Float32Array(alphas),
     indices: new Uint32Array(indices),
     waterPositions: new Float32Array(waterPositions),
     waterIndices: new Uint32Array(waterIndices),
@@ -127,9 +137,15 @@ self.onmessage = (event: MessageEvent<FarTerrainIn>) => {
     result.positions.buffer as ArrayBuffer,
     result.normals.buffer as ArrayBuffer,
     result.colors.buffer as ArrayBuffer,
+    result.alphas.buffer as ArrayBuffer,
     result.indices.buffer as ArrayBuffer,
     result.waterPositions.buffer as ArrayBuffer,
     result.waterIndices.buffer as ArrayBuffer,
   ];
   self.postMessage(result, transfers);
 };
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}

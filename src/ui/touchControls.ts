@@ -113,7 +113,7 @@ export class TouchControls {
       const w = window.innerWidth;
       const h = window.innerHeight;
 
-      if (this.isButtonTouch(touch)) continue;
+      if (this.isUiTouch(touch)) continue;
 
       if (x < w * 0.4 && y > h * 0.2 && this.joystickTouchId === null) {
         e.preventDefault();
@@ -207,15 +207,21 @@ export class TouchControls {
     }
   };
 
-  private isButtonTouch(touch: Touch): boolean {
+  private isUiTouch(touch: Touch): boolean {
     const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    return (
+    if (!el) return false;
+    if (
       el === this.jumpBtn ||
       el === this.mineBtn ||
       el === this.placeBtn ||
-      el?.parentElement === this.jumpBtn ||
-      el?.parentElement === this.mineBtn ||
-      el?.parentElement === this.placeBtn
+      el.parentElement === this.jumpBtn ||
+      el.parentElement === this.mineBtn ||
+      el.parentElement === this.placeBtn
+    ) return true;
+    return Boolean(
+      el.closest(
+        '.hotbar, .inventory-overlay, .furnace-overlay, .chest-overlay, .pause-screen, .pause-btn, .console',
+      ),
     );
   }
 

@@ -232,7 +232,7 @@ export class InventorySystem {
       slot.className = `slot${index === this.hotbarIndex ? ' active' : ''}`;
       slot.type = 'button';
       slot.title = inventorySlot ? this.slotLabel(inventorySlot) : 'Empty';
-      slot.addEventListener('click', () => this.selectHotbarSlot(index));
+      this.bindTouchButton(slot, () => this.selectHotbarSlot(index));
       const swatch = document.createElement('div');
       swatch.className = 'swatch';
       if (inventorySlot && entry) {
@@ -263,7 +263,7 @@ export class InventorySystem {
       }${inventorySlot ? '' : ' empty'}`;
       slot.type = 'button';
       slot.title = inventorySlot ? `${this.slotLabel(inventorySlot)} (${index + 1})` : 'Empty';
-      slot.addEventListener('click', () => this.swapWithSelectedHotbar(index));
+      this.bindTouchButton(slot, () => this.swapWithSelectedHotbar(index));
 
       const swatch = document.createElement('span');
       swatch.className = 'inventory-swatch';
@@ -289,7 +289,7 @@ export class InventorySystem {
       button.type = 'button';
       button.className = category === this.category ? 'active' : '';
       button.textContent = category;
-      button.addEventListener('click', () => {
+      this.bindTouchButton(button, () => {
         this.category = category;
         this.paintOverlay();
       });
@@ -304,7 +304,7 @@ export class InventorySystem {
       slot.type = 'button';
       slot.disabled = count <= 0 || (heldItemFor(def.id) === null && foodValueFor(def.id) <= 0);
       slot.title = def.label;
-      slot.addEventListener('click', () => this.moveItemToSelectedHotbar(def.id, true));
+      this.bindTouchButton(slot, () => this.moveItemToSelectedHotbar(def.id, true));
 
       const swatch = document.createElement('span');
       swatch.className = 'inventory-large-swatch';
@@ -379,7 +379,7 @@ export class InventorySystem {
     button.className = `recipe-card${craftable ? '' : ' unavailable'}`;
     button.disabled = !craftable;
     button.title = craftable ? `Craft ${recipe.name}` : `Missing ingredients for ${recipe.name}`;
-    button.addEventListener('click', () => this.craft(recipe));
+    this.bindTouchButton(button, () => this.craft(recipe));
 
     const output = document.createElement('div');
     output.className = 'recipe-output';
@@ -442,6 +442,16 @@ export class InventorySystem {
     const next = this.inventorySlots.slice();
     [next[a], next[b]] = [next[b], next[a]];
     this.inventorySlots = next;
+  }
+
+  private bindTouchButton(button: HTMLButtonElement, action: () => void): void {
+    button.addEventListener('click', action);
+    button.addEventListener('touchstart', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (button.disabled) return;
+      action();
+    }, { passive: false });
   }
 
   private slotLabel(slot: Exclude<InventorySlot, null>): string {

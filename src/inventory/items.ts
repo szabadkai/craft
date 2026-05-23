@@ -57,7 +57,9 @@ export type Item =
   | 'mushroom_cap_brown'
   | 'obsidian'
   | 'emerald'
-  | 'redstone';
+  | 'redstone'
+  | 'bone'
+  | 'string';
 
 export type Recipe = {
   name: string;
@@ -144,12 +146,15 @@ export const defaultInventoryCounts: Record<Item, number> = {
   obsidian: 0,
   emerald: 0,
   redstone: 0,
+  bone: 0,
+  string: 0,
 };
 
 export const recipes: Recipe[] = [
   { name: 'Planks', inputs: { wood: 1 }, outputs: { planks: 4 } },
   { name: 'Birch Planks', inputs: { birch_wood: 1 }, outputs: { planks: 4 } },
   { name: 'Sticks', inputs: { planks: 2 }, outputs: { sticks: 4 } },
+  { name: 'Bone Sticks', inputs: { bone: 1 }, outputs: { sticks: 2 } },
   { name: 'Wood Pick', inputs: { planks: 3, sticks: 2 }, outputs: { wood_pickaxe: 1 } },
   { name: 'Stone Pick', inputs: { cobblestone: 3, sticks: 2 }, outputs: { stone_pickaxe: 1 } },
   { name: 'Iron Pick', inputs: { iron_ingot: 3, sticks: 2 }, outputs: { iron_pickaxe: 1 } },
@@ -218,6 +223,8 @@ export const itemDefs: ItemDef[] = [
   { id: 'diamond', label: 'Diamond', category: 'Materials' },
   { id: 'emerald', label: 'Emerald', category: 'Materials' },
   { id: 'redstone', label: 'Redstone', category: 'Materials' },
+  { id: 'bone', label: 'Bone', category: 'Materials' },
+  { id: 'string', label: 'String', category: 'Materials' },
   { id: 'iron_ingot', label: 'Iron Ingot', category: 'Materials' },
   { id: 'copper_ingot', label: 'Copper Ingot', category: 'Materials' },
   { id: 'gold_ingot', label: 'Gold Ingot', category: 'Materials' },
@@ -501,6 +508,10 @@ export function itemSwatch(item: Item): string {
       return gemIcon('#35c75a', '#cbffd3');
     case 'redstone':
       return dustIcon('#c72929');
+    case 'bone':
+      return boneIcon();
+    case 'string':
+      return stringIcon();
     case 'iron_ingot':
       return ingotIcon('#cfd4d8', '#8b9398');
     case 'copper_ingot':
@@ -644,6 +655,14 @@ function appleIcon(): string {
 
 function meatIcon(base: string, light: string): string {
   return `radial-gradient(circle at 70% 50%, #e0d0b5 0 12%, transparent 13%), radial-gradient(ellipse at 45% 52%, ${base} 0 35%, transparent 36%), radial-gradient(circle at 36% 36%, ${light} 0 8%, transparent 9%)`;
+}
+
+function boneIcon(): string {
+  return 'linear-gradient(135deg, transparent 0 30%, #f4ead2 31% 58%, transparent 59%), radial-gradient(circle at 28% 31%, #fff8e6 0 11%, transparent 12%), radial-gradient(circle at 60% 63%, #d6c69f 0 12%, transparent 13%)';
+}
+
+function stringIcon(): string {
+  return 'repeating-linear-gradient(135deg, transparent 0 7px, #d8d8d8 8px 10px, transparent 11px 15px), linear-gradient(45deg, transparent 0 36%, #f2f2f2 37% 44%, transparent 45%)';
 }
 
 function fallbackItemIcon(item: Item): string {

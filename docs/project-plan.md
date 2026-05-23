@@ -18,6 +18,7 @@ The prototype currently supports:
 - Production build splits Three.js into bounded vendor chunks so the main app bundle stays below Vite's large-chunk warning threshold.
 - F3 chunk mesh memory accounting includes opaque, water, transparent, and decoration mesh buffers.
 - Greedy terrain faces include per-corner ambient occlusion baked into vertex colors; AO values are part of the merge key so incompatible faces do not merge.
+- Far terrain uses a per-vertex alpha transition at the detail/far boundary to soften LOD overlap.
 - Greedy voxel meshing.
 - Repeating texture atlas shader for merged faces.
 - Warm original-style sky, fog, water shading, terrain atlas colors, and pixel hotbar styling.
@@ -46,8 +47,10 @@ The prototype currently supports:
 - F3 diagnostic overlay with frame, render, world, worker, chunk adoption/disposal, far-terrain rebuild/adoption/disposal, memory, and supported GPU timing counters.
 - Day/night cycle with dynamic sun position, sky colors, terrain/water lighting, fog, and background transitions (~20 min real-time cycle).
 - Hostile mobs include cave spiders underground plus zombies/skeletons on dark night surfaces; placed blocklight suppresses nearby spawns.
+- Hostile combat has differentiated roles and drops: zombies are tougher melee mobs with rare iron drops, skeletons fire ranged bone projectiles and drop bones/coal, and cave spiders drop string/raw meat.
 - Water rendering uses animated vertex waves, wave-derived specular normals, crest tinting, and foam.
 - Runtime water flow now persists per-source remaining budgets, so mined-open reservoirs have bounded saved supply instead of an untracked infinite spread.
+- Water source budgets slowly recharge while valid source blocks remain, and disconnected runtime-spread water evaporates after a delay.
 
 ## Guiding Constraints
 
@@ -204,7 +207,7 @@ Tasks:
   - Glass and leaves excluded from greedy meshing; individual faces with proper tile mapping.
   - Decorations moved out of the opaque mesh into their own depthWrite=false mesh.
   - See `ChunkMeshPayload` for `transparent*` and `deco*` arrays, `src/mesh.ts` `emitTransparentFace` / `emitDecorations`, and `src/world/chunkWorldSystem.ts` mesh creation.
-- Improve far terrain LOD blending.
+- [x] Improve far terrain LOD blending.
 - [x] Move far terrain rebuilds off the immediate chunk-boundary path with debounced, idempotent rebuild scheduling.
 - [x] Keep far terrain generation worker-side and make main-thread replacement cheaper with stale-result suppression plus deferred geometry disposal.
 - [x] Add chunk mesh memory accounting.
@@ -246,13 +249,15 @@ Exit criteria:
 23. ✅ Split Three.js vendor output into bounded production chunks.
 24. ✅ Count all visible chunk mesh buffers in F3 memory diagnostics.
 25. ✅ Restore greedy-mesh-compatible ambient occlusion.
+26. ✅ Add far terrain per-vertex alpha LOD blending.
+27. ✅ Add water source budget recharge and disconnected runtime-water evaporation.
+28. ✅ Expand hostile mob combat roles, feedback, drops, and bone-to-stick progression.
 
 ## Current Priority
 
 Remaining high-value work is now broader gameplay and polish:
 
-- Improve far terrain LOD blending at the near/far transition.
-- Add water recharge/evaporation loops on top of persisted source budgets.
+- Tune water recharge/evaporation feel after playtesting.
 - Add mechanism/redstone-style blocks once building depth becomes the priority.
 - Continue shrinking top-level app orchestration out of `src/main.ts` when touching nearby systems.
 

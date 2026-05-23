@@ -39,7 +39,7 @@ type InputSystems = {
   interactionSystem: { startMining: (hit: BlockHit) => void; stopMining: () => void; place: (hit: BlockHit) => void; };
   blockRaycaster: { raycast: () => BlockHit | null; };
   wildlife: { raycast: (camera: THREE.PerspectiveCamera) => { animal: Wildlife; distance: number } | null; hit: (animal: Wildlife, now: number) => void; };
-  hostile: { raycast: (camera: THREE.PerspectiveCamera) => { mob: Hostile; distance: number } | null; hit: (mob: Hostile, now: number) => void; };
+  hostile: { raycast: (camera: THREE.PerspectiveCamera) => { mob: Hostile; distance: number } | null; hit: (mob: Hostile, now: number, attackerPos?: THREE.Vector3) => void; };
   doorSystem: { toggle: (x: number, y: number, z: number, getBlock: (wx: number, y: number, wz: number) => Block, setBlocks: (entries: BlockSetEntry[]) => void) => void; };
   chunkWorld: { setBlocks: (entries: BlockSetEntry[]) => void; };
   eatingSystem: { tryStart: () => void; cancel: () => void; };
@@ -112,7 +112,7 @@ export function setupInputHandlers(
       }
       if (hostileDist === closestDist && hostileHit) {
         interactionSystem.stopMining();
-        hostile.hit(hostileHit.mob, performance.now());
+        hostile.hit(hostileHit.mob, performance.now(), player.position);
         triggerHandSwing('mine');
         return;
       }

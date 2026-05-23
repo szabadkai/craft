@@ -62,6 +62,7 @@ import { createConsoleCommands } from './game/consoleCommands';
 import { setupStartScreenHandlers } from './game/startScreenHandlers';
 import { setupTouchControls } from './game/touchSetup';
 import { createFrameAudio } from './game/frameAudio';
+import { dropHostileLoot } from './game/hostileDrops';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
@@ -118,10 +119,7 @@ const hostile: HostileSystem = new HostileSystem(
   scene,
   () => seed,
   getBlock,
-  (position, kind) => {
-    const count = kind === 'zombie' ? 1 + Math.floor(Math.random() * 2) : 1;
-    itemPickups.spawn('raw_meat', count, position);
-  },
+  (position, kind) => dropHostileLoot(itemPickups, position, kind),
   () => dayNight.timeOfDay,
   () => sfx.mobHit(),
   () => sfx.mobDeath(),

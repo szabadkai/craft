@@ -16,7 +16,15 @@ export type Hostile = {
   verticalVelocity: number;
   hurtUntil: number;
   lastAttackAt: number;
+  lastRangedAt: number;
   phase: number;
+};
+
+type HostileProjectile = {
+  root: THREE.Mesh;
+  velocity: THREE.Vector3;
+  damage: number;
+  createdAt: number;
 };
 
 export type HostileHit = {
@@ -26,6 +34,7 @@ export type HostileHit = {
 
 export class HostileSystem {
   private readonly mobs: Hostile[] = [];
+  private readonly projectiles: HostileProjectile[] = [];
   private readonly rayOrigin = new THREE.Vector3();
   private readonly rayDirection = new THREE.Vector3();
   private readonly ray = new THREE.Ray();
@@ -135,10 +144,18 @@ export class HostileSystem {
     return closest ? { mob: closest, distance: closestDistance } : null;
   }
 
-  hit(mob: Hostile, now: number): void {
+  hit(mob: Hostile, now: number, attackerPos?: THREE.Vector3): void {
     mob.health -= 1;
     mob.hurtUntil = now + 280;
     mob.verticalVelocity = 2.2;
+    if (attackerPos) {
+      const dx = mob.root.position.x - attackerPos.x;
+      const dz = mob.root.position.z - attackerPos.z;
+      const len = Math.hypot(dx, dz) || 1;
+      mob.root.position.x += (dx / len) * 0.32;
+      mob.root.position.z += (dz / len) * 0.32;
+    }
+    mob.root.scale.setScalar(1.08);
     this.onMobHit?.();
     if (mob.health <= 0) {
       const dropPos = mob.root.position.clone();
@@ -162,9 +179,11 @@ export class HostileSystem {
       // Only move toward player if within range
       const aggroRange = 18;
       if (dist3 < aggroRange && dist > 0.1) {
-        const speed = mob.speed * (dist3 < 4 ? 1.3 : 1.0);
-        const mx = (dx / dist) * speed * dt;
-        const mz = (dz / dist) * speed * dt;
+        const preferredRange = mob.kind === 'skeleton' ? 7.0 : 0;
+        const direction = mob.kind === 'skeleton' && dist < preferredRange ? -1 : 1;
+        const speed = mob.speed * (dist3 < 4 && mob.kind !== 'skeleton' ? 1.3 : 1.0);
+        const mx = (dx / dist) * speed * dt * direction;
+        const mz = (dz / dist) * speed * dt * direction;
         this.physics.moveHorizontalAxis(mob, 'x', mx);
         this.physics.moveHorizontalAxis(mob, 'z', mz);
         mob.root.rotation.y = Math.atan2(dx, dz);
@@ -183,8 +202,12 @@ export class HostileSystem {
       // Damage player on contact
       if (now - mob.lastAttackAt > 500 && dist3 < 1.0) {
         mob.lastAttackAt = now;
-        // Damage is dealt externally via callback — we just signal contact
-        this.onPlayerContact(mob);
+        this.onPlayerContact(mob, mob.kind === 'zombie' ? 3 : 2);
+      }
+
+      if (mob.kind === 'skeleton' && dist3 < 13 && dist3 > 2.2 && now - mob.lastRangedAt > 1450) {
+        mob.lastRangedAt = now;
+        this.spawnProjectile(mob, playerPos, now);
       }
 
       // Death by falling out of world
@@ -194,6 +217,7 @@ export class HostileSystem {
       }
 
       setHurtFlash(mob.root, now < mob.hurtUntil);
+      if (now >= mob.hurtUntil) mob.root.scale.setScalar(1);
 
       // Animations
       if (dist3 < aggroRange && dist > 0.15) {
@@ -205,11 +229,12 @@ export class HostileSystem {
         });
       }
     }
+    this.updateProjectiles(dt, now, playerPos);
   }
 
-  private onPlayerContact = (_mob: Hostile): void => {
+  private onPlayerContact = (_mob: Hostile, damage: number): void => {
     // Handled via external callback registered in main.ts
-    this._playerDamageCallback?.(2);
+    this._playerDamageCallback?.(damage);
   };
 
   private _playerDamageCallback: ((amount: number) => void) | null = null;
@@ -267,6 +292,7 @@ export class HostileSystem {
         verticalVelocity: 0,
         hurtUntil: 0,
         lastAttackAt: 0,
+        lastRangedAt: 0,
         phase: Math.random() * Math.PI * 2,
       };
     }
@@ -306,6 +332,7 @@ export class HostileSystem {
         verticalVelocity: 0,
         hurtUntil: 0,
         lastAttackAt: 0,
+        lastRangedAt: 0,
         phase: Math.random() * Math.PI * 2,
       };
     }
@@ -350,8 +377,55 @@ export class HostileSystem {
       verticalVelocity: 0,
       hurtUntil: 0,
       lastAttackAt: 0,
+      lastRangedAt: 0,
       phase: Math.random() * Math.PI * 2,
     };
+  }
+
+  private spawnProjectile(mob: Hostile, playerPos: THREE.Vector3, now: number): void {
+    const origin = mob.root.position.clone().add(new THREE.Vector3(0, 1.25, 0));
+    const target = playerPos.clone().add(new THREE.Vector3(0, 1.15, 0));
+    const velocity = target.sub(origin).normalize().multiplyScalar(7.5);
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.08, 0.42),
+      new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }),
+    );
+    mesh.position.copy(origin);
+    mesh.rotation.y = Math.atan2(velocity.x, velocity.z);
+    mesh.rotation.x = -Math.atan2(velocity.y, Math.hypot(velocity.x, velocity.z));
+    this.projectiles.push({ root: mesh, velocity, damage: 2, createdAt: now });
+    this.scene.add(mesh);
+  }
+
+  private updateProjectiles(dt: number, now: number, playerPos: THREE.Vector3): void {
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const projectile = this.projectiles[i];
+      projectile.root.position.addScaledVector(projectile.velocity, dt);
+      const p = projectile.root.position;
+      if (this.getBlock(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)) !== Block.Air) {
+        this.removeProjectile(i);
+        continue;
+      }
+      const hitPos = playerPos.clone().add(new THREE.Vector3(0, 0.9, 0));
+      if (p.distanceTo(hitPos) < 0.75) {
+        this._playerDamageCallback?.(projectile.damage);
+        this.removeProjectile(i);
+        continue;
+      }
+      if (now - projectile.createdAt > 3500 || p.y < -16) {
+        this.removeProjectile(i);
+      }
+    }
+  }
+
+  private removeProjectile(index: number): void {
+    const projectile = this.projectiles[index];
+    this.projectiles.splice(index, 1);
+    this.scene.remove(projectile.root);
+    projectile.root.geometry.dispose();
+    const material = projectile.root.material;
+    if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+    else material.dispose();
   }
 
   private removeMob(mob: Hostile): void {
@@ -363,5 +437,6 @@ export class HostileSystem {
 
   clear(): void {
     for (const mob of [...this.mobs]) this.removeMob(mob);
+    while (this.projectiles.length > 0) this.removeProjectile(this.projectiles.length - 1);
   }
 }

@@ -5,6 +5,9 @@ const BUDGET_PER_TICK = 64;
 const MAX_ACTIVE = 512;
 const MAX_HORIZONTAL_SPREAD = 6;
 const DEFAULT_SOURCE_BUDGET = 220;
+const SOURCE_RECHARGE_INTERVAL = 4000;
+const SOURCE_RECHARGE_AMOUNT = 3;
+const EVAPORATION_DELAY = 12000;
 
 const NEIGHBORS_6: [number, number, number][] = [
   [1, 0, 0], [-1, 0, 0],
@@ -32,7 +35,9 @@ export type WaterBudgetSnapshot = Record<string, number>;
 export class WaterSimSystem {
   private active = new Map<string, { x: number; y: number; z: number; sourceKey: string | null }>();
   private sourceBudgets = new Map<string, number>();
+  private runtimeWater = new Map<string, { x: number; y: number; z: number; sourceKey: string | null; createdAt: number }>();
   private lastTick = 0;
+  private lastRechargeAt = 0;
 
   constructor(
     private readonly getBlock: (wx: number, y: number, wz: number) => Block,
@@ -57,12 +62,15 @@ export class WaterSimSystem {
   clear(): void {
     this.active.clear();
     this.sourceBudgets.clear();
+    this.runtimeWater.clear();
     this.lastTick = 0;
+    this.lastRechargeAt = 0;
   }
 
   load(snapshot: WaterBudgetSnapshot | null): void {
     this.active.clear();
     this.sourceBudgets.clear();
+    this.runtimeWater.clear();
     if (snapshot) {
       for (const [source, remaining] of Object.entries(snapshot)) {
         if (Number.isFinite(remaining) && remaining >= 0) {
@@ -83,6 +91,8 @@ export class WaterSimSystem {
   tick(now: number): void {
     if (now - this.lastTick < TICK_INTERVAL) return;
     this.lastTick = now;
+    this.rechargeSources(now);
+    this.evictEvaporatedWater(now);
 
     if (this.active.size === 0) return;
 
@@ -111,9 +121,10 @@ export class WaterSimSystem {
           const canFlowDown = !isSource || this.consumeSourceBudget(sourceKey, plannedWater, pos.x, pos.y - 1, pos.z);
           if (canFlowDown) {
             entries.push({ wx: pos.x, y: pos.y - 1, wz: pos.z, block: Block.Water });
-            plannedWater.add(key(pos.x, pos.y - 1, pos.z));
+            this.planRuntimeWater(plannedWater, pos.x, pos.y - 1, pos.z, sourceKey, now);
             if (!isSource) {
               entries.push({ wx: pos.x, y: pos.y, wz: pos.z, block: Block.Air });
+              this.runtimeWater.delete(key(pos.x, pos.y, pos.z));
             }
             toAdd.push({ x: pos.x, y: pos.y - 1, z: pos.z });
             moved = true;
@@ -128,7 +139,7 @@ export class WaterSimSystem {
             if (belowNeighbor === Block.Air) {
               if (this.consumeSourceBudget(sourceKey, plannedWater, nx, pos.y, nz)) {
                 entries.push({ wx: nx, y: pos.y, wz: nz, block: Block.Water });
-                plannedWater.add(key(nx, pos.y, nz));
+                this.planRuntimeWater(plannedWater, nx, pos.y, nz, sourceKey, now);
                 toAdd.push({ x: nx, y: pos.y, z: nz });
                 moved = true;
               }
@@ -136,7 +147,7 @@ export class WaterSimSystem {
               const dist = this.distanceToSource(pos.x, pos.y, pos.z, nx, nz);
               if (dist <= MAX_HORIZONTAL_SPREAD && this.consumeSourceBudget(sourceKey, plannedWater, nx, pos.y, nz)) {
                 entries.push({ wx: nx, y: pos.y, wz: nz, block: Block.Water });
-                plannedWater.add(key(nx, pos.y, nz));
+                this.planRuntimeWater(plannedWater, nx, pos.y, nz, sourceKey, now);
                 toAdd.push({ x: nx, y: pos.y, z: nz });
                 moved = true;
               }
@@ -161,7 +172,7 @@ export class WaterSimSystem {
         const sourceKey = this.findSourceKey(pos.x, pos.y, pos.z);
         if ((hasWaterAbove || hasWaterSide) && this.consumeSourceBudget(sourceKey, plannedWater, pos.x, pos.y, pos.z)) {
           entries.push({ wx: pos.x, y: pos.y, wz: pos.z, block: Block.Water });
-          plannedWater.add(key(pos.x, pos.y, pos.z));
+          this.planRuntimeWater(plannedWater, pos.x, pos.y, pos.z, sourceKey, now);
           toAdd.push({ x: pos.x, y: pos.y, z: pos.z });
         } else {
           toRemove.push(k);
@@ -189,6 +200,12 @@ export class WaterSimSystem {
       }
     }
     return false;
+  }
+
+  private planRuntimeWater(plannedWater: Set<string>, x: number, y: number, z: number, sourceKey: string | null, now: number): void {
+    const waterKey = key(x, y, z);
+    plannedWater.add(waterKey);
+    this.runtimeWater.set(waterKey, { x, y, z, sourceKey, createdAt: now });
   }
 
   private distanceToSource(srcX: number, _srcY: number, srcZ: number, nx: number, nz: number): number {
@@ -221,5 +238,65 @@ export class WaterSimSystem {
     this.sourceBudgets.set(sourceKey, remaining - 1);
     this.onBudgetChanged();
     return true;
+  }
+
+  private rechargeSources(now: number): void {
+    if (now - this.lastRechargeAt < SOURCE_RECHARGE_INTERVAL) return;
+    this.lastRechargeAt = now;
+    let changed = false;
+    for (const [sourceKey, remaining] of this.sourceBudgets) {
+      if (remaining >= DEFAULT_SOURCE_BUDGET) continue;
+      const source = parseKey(sourceKey);
+      if (!source || this.getBlock(source.x, source.y, source.z) !== Block.Water || !this.isSource(source.x, source.y, source.z)) {
+        this.sourceBudgets.delete(sourceKey);
+        changed = true;
+        continue;
+      }
+      this.sourceBudgets.set(sourceKey, Math.min(DEFAULT_SOURCE_BUDGET, remaining + SOURCE_RECHARGE_AMOUNT));
+      changed = true;
+    }
+    if (changed) this.onBudgetChanged();
+  }
+
+  private evictEvaporatedWater(now: number): void {
+    const entries: { wx: number; y: number; wz: number; block: Block }[] = [];
+    for (const [waterKey, water] of this.runtimeWater) {
+      if (now - water.createdAt < EVAPORATION_DELAY) continue;
+      if (this.getBlock(water.x, water.y, water.z) !== Block.Water) {
+        this.runtimeWater.delete(waterKey);
+        continue;
+      }
+      if (water.sourceKey && this.isConnectedToSource(water.x, water.y, water.z, water.sourceKey)) {
+        continue;
+      }
+      entries.push({ wx: water.x, y: water.y, wz: water.z, block: Block.Air });
+      this.runtimeWater.delete(waterKey);
+      this.activateNeighbors(water.x, water.y, water.z);
+      if (entries.length >= 16) break;
+    }
+    if (entries.length > 0) this.setBlocks(entries);
+  }
+
+  private isConnectedToSource(x: number, y: number, z: number, sourceKey: string): boolean {
+    const source = parseKey(sourceKey);
+    if (!source || this.getBlock(source.x, source.y, source.z) !== Block.Water) return false;
+    const open = [{ x, y, z }];
+    const seen = new Set<string>([key(x, y, z)]);
+    let checked = 0;
+    while (open.length > 0 && checked < 80) {
+      const p = open.shift()!;
+      checked++;
+      if (p.x === source.x && p.y === source.y && p.z === source.z) return true;
+      for (const [dx, dy, dz] of NEIGHBORS_6) {
+        const nx = p.x + dx;
+        const ny = p.y + dy;
+        const nz = p.z + dz;
+        const k = key(nx, ny, nz);
+        if (seen.has(k) || this.getBlock(nx, ny, nz) !== Block.Water) continue;
+        seen.add(k);
+        open.push({ x: nx, y: ny, z: nz });
+      }
+    }
+    return false;
   }
 }
