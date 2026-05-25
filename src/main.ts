@@ -585,6 +585,7 @@ const touchControls = setupTouchControls({
   eatingSystem,
   handlePrimaryAction,
   handleSecondaryAction,
+  audioResume: () => audioEngine.resume(),
 });
 
 function tick(now: number): void {

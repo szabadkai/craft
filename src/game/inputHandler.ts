@@ -214,6 +214,10 @@ export function setupInputHandlers(
 
   document.addEventListener('keyup', (event) => state.keys.delete(event.code));
 
+  renderer.domElement.addEventListener('touchstart', () => {
+    audioEngine.resume();
+  }, { passive: true });
+
   renderer.domElement.addEventListener('click', () => {
     audioEngine.resume();
     if (state.isMobile) return;

@@ -9,6 +9,7 @@ export type TouchCallbacks = {
   onMineStop: () => void;
   onPlace: () => void;
   onPlaceStop: () => void;
+  onAudioResume: () => void;
 };
 
 const JOYSTICK_RADIUS = 60;
@@ -105,6 +106,7 @@ export class TouchControls {
   }
 
   private onTouchStart = (e: TouchEvent): void => {
+    this.callbacks.onAudioResume();
     if (!this.visible) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];

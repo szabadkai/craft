@@ -19,6 +19,7 @@ type TouchSetupOptions = {
   eatingSystem: EatingSystem;
   handlePrimaryAction: () => void;
   handleSecondaryAction: () => void;
+  audioResume: () => void;
 };
 
 export function setupTouchControls(options: TouchSetupOptions): TouchControls | null {
@@ -48,6 +49,9 @@ export function setupTouchControls(options: TouchSetupOptions): TouchControls | 
     },
     onPlaceStop: () => {
       options.eatingSystem.cancel();
+    },
+    onAudioResume: () => {
+      options.audioResume();
     },
   });
 }
