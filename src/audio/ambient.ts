@@ -55,7 +55,7 @@ export function createAmbientSystem(ctx: AudioContext, destination: GainNode): A
   droneLp.type = 'lowpass';
   droneLp.frequency.value = 80;
   dronOsc.connect(droneLp).connect(droneGain).connect(destination);
-  dronOsc.start();
+  let droneStarted = false;
 
   const crackleBuffer = createCrackleBuffer(ctx);
   let crackleSource: AudioBufferSourceNode | null = null;
@@ -93,6 +93,10 @@ export function createAmbientSystem(ctx: AudioContext, destination: GainNode): A
 
   return {
     tick(dt: number, underwaterFactor: number, caveFactor: number, furnaceBurning: boolean): void {
+      if (!droneStarted) {
+        droneStarted = true;
+        dronOsc.start();
+      }
       const speed = Math.min(1, dt * 3);
 
       currentUnderwater += (underwaterFactor - currentUnderwater) * speed;

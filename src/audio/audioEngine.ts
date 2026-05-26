@@ -40,8 +40,31 @@ export function createAudioEngine(): AudioEngine {
   ambientGain.gain.value = sfxVol;
   masterGain.gain.value = muted ? 0 : masterVol;
 
+  let unlocked = false;
+
+  function playSilentBuffer(): void {
+    const silent = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = silent;
+    src.connect(ctx.destination);
+    src.start();
+  }
+
   function resume(): void {
-    if (ctx.state === 'suspended') ctx.resume();
+    if (unlocked) return;
+    if (ctx.state === 'suspended') {
+      // iOS Safari: ctx.resume() is async; play the silent unlock buffer
+      // once the context transitions to running.
+      ctx.resume().then(() => {
+        if (!unlocked) {
+          unlocked = true;
+          playSilentBuffer();
+        }
+      }).catch(() => {});
+    } else if (ctx.state === 'running') {
+      unlocked = true;
+      playSilentBuffer();
+    }
   }
 
   function setMasterVolume(v: number): void {
