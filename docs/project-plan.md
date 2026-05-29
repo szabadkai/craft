@@ -49,6 +49,7 @@ The prototype currently supports:
 - F3 diagnostic overlay with frame, render, world, worker, chunk adoption/disposal, far-terrain rebuild/adoption/disposal, memory, and supported GPU timing counters.
 - Day/night cycle with dynamic sun position, sky colors, terrain/water lighting, fog, and background transitions (~20 min real-time cycle).
 - Hostile mobs include cave spiders underground plus zombies/skeletons on dark night surfaces; placed blocklight suppresses nearby spawns.
+- Hostile spawn candidates validate full mob body volume, support blocks, and headroom against loaded-world block data before mobs are added to the scene.
 - Hostile combat has differentiated roles and drops: zombies are tougher melee mobs with rare iron drops, skeletons fire ranged bone projectiles and drop bones/coal, and cave spiders drop string/raw meat.
 - Water rendering uses animated vertex waves, wave-derived specular normals, crest tinting, and foam.
 - Runtime water flow now persists per-source remaining budgets, so mined-open reservoirs have bounded saved supply instead of an untracked infinite spread.
@@ -263,6 +264,7 @@ Remaining high-value work is now broader gameplay and polish:
 - Tune water recharge/evaporation feel after playtesting.
 - Add mechanism/redstone-style blocks once building depth becomes the priority.
 - Continue shrinking top-level app orchestration out of `src/main.ts` when touching nearby systems.
+- Use `docs/qa-checklists.md` for persistence-sensitive and hostile-spawn manual QA passes.
 
 ## Known Risks
 

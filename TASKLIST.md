@@ -82,10 +82,10 @@ Goal: remove issues that can break trust in the core survival loop.
 ### Hostile Spawn Reliability
 
 - [ ] Reproduce hostile cave spawns briefly appearing inside solid blocks.
-- [ ] Add stricter spawn volume checks for cave spiders, zombies, and skeletons.
-- [ ] Verify spawn ground and headroom using loaded chunk data only.
-- [ ] Add a small post-spawn validation or relocation pass if needed.
-- [ ] Ensure blocklight and skylight suppression still work after changes.
+- [x] Add stricter spawn volume checks for cave spiders, zombies, and skeletons.
+- [x] Verify spawn ground and headroom using loaded chunk data only.
+- [x] Add a small post-spawn validation or relocation pass if needed.
+- [x] Ensure blocklight and skylight suppression still work after changes.
 
 Acceptance criteria:
 
@@ -112,7 +112,7 @@ Acceptance criteria:
 - [ ] Verify clear-world deletes chunks, inventory, hotbar migration state, doors, furnaces, chests, and water budgets.
 - [ ] Verify changing seeds does not leak state from another seed.
 - [ ] Verify old saves still migrate inventory/hotbar correctly.
-- [ ] Add a manual QA checklist for persistence-sensitive changes.
+- [x] Add a manual QA checklist for persistence-sensitive changes.
 
 Acceptance criteria:
 

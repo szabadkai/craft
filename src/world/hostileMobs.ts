@@ -32,6 +32,11 @@ export type HostileHit = {
   distance: number;
 };
 
+type HostileBodySize = {
+  width: number;
+  height: number;
+};
+
 export class HostileSystem {
   private readonly mobs: Hostile[] = [];
   private readonly projectiles: HostileProjectile[] = [];
@@ -89,21 +94,28 @@ export class HostileSystem {
       let wy = py + dy;
       const wz = pz + dz;
 
+      const kind: HostileKind = isSurface
+        ? (Math.random() < 0.5 ? 'zombie' : 'skeleton')
+        : 'cave_spider';
+
       if (isSurface) {
-        wy = terrainHeight(wx, wz, seed);
-        // Must be on solid ground above water
-        if (wy <= OCEAN_SURFACE_Y || wy < 12 || wy >= WORLD_HEIGHT - 2) continue;
-        const groundBlock = this.getBlock(wx, wy - 1, wz);
-        if (groundBlock !== Block.Grass && groundBlock !== Block.Sand && groundBlock !== Block.Snow) continue;
+        const surfaceY = terrainHeight(wx, wz, seed);
+        wy = this.findValidSpawnY(kind, wx, wz, surfaceY + 2, Math.max(12, OCEAN_SURFACE_Y + 1), WORLD_HEIGHT - 2, true) ?? -1;
+        if (wy < 0) continue;
       } else {
         if (wy < 4 || wy >= WORLD_HEIGHT - 2) continue;
         if (wy >= terrainHeight(wx, wz, seed) - 3) continue;
+        wy = this.findValidSpawnY(
+          kind,
+          wx,
+          wz,
+          wy + 2,
+          Math.max(4, wy - 4),
+          Math.min(WORLD_HEIGHT - 2, wy + 2),
+          false,
+        ) ?? -1;
+        if (wy < 0) continue;
       }
-
-      // Spawn in air with solid below, two blocks clear above
-      if (this.getBlock(wx, wy, wz) !== Block.Air) continue;
-      if (!isSolid(this.getBlock(wx, wy - 1, wz))) continue;
-      if (this.getBlock(wx, wy + 1, wz) !== Block.Air) continue;
 
       const skyLight = this.getSkylight?.(wx, wy, wz) ?? (isSurface ? 0 : 15);
       const blockLight = this.getBlocklight?.(wx, wy, wz) ?? 0;
@@ -113,10 +125,11 @@ export class HostileSystem {
         continue;
       }
 
-      const kind: HostileKind = isSurface
-        ? (Math.random() < 0.5 ? 'zombie' : 'skeleton')
-        : 'cave_spider';
       const mob = this.createMob(kind, wx + 0.5, wy, wz + 0.5);
+      if (!this.isValidSpawnPosition(kind, mob.root.position)) {
+        disposeMobMeshes(mob.root);
+        continue;
+      }
       this.mobs.push(mob);
       this.scene.add(mob.root);
       this.spawnTimer.next = now + this.spawnTimer.cooldownMs;
@@ -269,6 +282,67 @@ export class HostileSystem {
       new THREE.Vector3(p.x - half, p.y, p.z - half),
       new THREE.Vector3(p.x + half, p.y + mob.height, p.z + half),
     );
+  }
+
+  private findValidSpawnY(
+    kind: HostileKind,
+    wx: number,
+    wz: number,
+    startY: number,
+    minY: number,
+    maxY: number,
+    surfaceOnly: boolean,
+  ): number | null {
+    for (let y = Math.min(maxY, startY); y >= minY; y--) {
+      const ground = this.getBlock(wx, y - 1, wz);
+      if (surfaceOnly && ground !== Block.Grass && ground !== Block.Sand && ground !== Block.Snow) {
+        continue;
+      }
+      const position = new THREE.Vector3(wx + 0.5, y, wz + 0.5);
+      if (this.isValidSpawnPosition(kind, position)) return y;
+    }
+    return null;
+  }
+
+  private isValidSpawnPosition(kind: HostileKind, position: THREE.Vector3): boolean {
+    const size = hostileBodySize(kind);
+    if (position.y < 1 || position.y + size.height >= WORLD_HEIGHT) return false;
+    if (!this.hasSolidSupport(size, position)) return false;
+    if (!this.isSpawnVolumeClear(size, position)) return false;
+    return true;
+  }
+
+  private hasSolidSupport(size: HostileBodySize, position: THREE.Vector3): boolean {
+    const half = size.width / 2;
+    const minX = Math.floor(position.x - half);
+    const maxX = Math.floor(position.x + half);
+    const minZ = Math.floor(position.z - half);
+    const maxZ = Math.floor(position.z + half);
+    const y = Math.floor(position.y - 0.05);
+    for (let z = minZ; z <= maxZ; z++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (!isSolid(this.getBlock(x, y, z))) return false;
+      }
+    }
+    return true;
+  }
+
+  private isSpawnVolumeClear(size: HostileBodySize, position: THREE.Vector3): boolean {
+    const half = size.width / 2;
+    const minX = Math.floor(position.x - half);
+    const maxX = Math.floor(position.x + half);
+    const minY = Math.floor(position.y + 0.04);
+    const maxY = Math.floor(position.y + size.height);
+    const minZ = Math.floor(position.z - half);
+    const maxZ = Math.floor(position.z + half);
+    for (let y = minY; y <= maxY; y++) {
+      for (let z = minZ; z <= maxZ; z++) {
+        for (let x = minX; x <= maxX; x++) {
+          if (this.getBlock(x, y, z) !== Block.Air) return false;
+        }
+      }
+    }
+    return true;
   }
 
   private createMob(kind: HostileKind, x: number, y: number, z: number): Hostile {
@@ -444,5 +518,16 @@ export class HostileSystem {
   clear(): void {
     for (const mob of [...this.mobs]) this.removeMob(mob);
     while (this.projectiles.length > 0) this.removeProjectile(this.projectiles.length - 1);
+  }
+}
+
+function hostileBodySize(kind: HostileKind): HostileBodySize {
+  switch (kind) {
+    case 'cave_spider':
+      return { width: 0.52, height: 0.68 };
+    case 'zombie':
+      return { width: 0.6, height: 1.84 };
+    case 'skeleton':
+      return { width: 0.54, height: 1.84 };
   }
 }

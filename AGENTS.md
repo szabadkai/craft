@@ -54,6 +54,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
   Persistent touch control scale/opacity settings and formatting helpers.
 - `src/game/pauseMenuSetup.ts`
   Pause menu construction and settings synchronization for mouse, render distance, audio, sandbox mode, and touch controls.
+- `docs/qa-checklists.md`
+  Manual QA checklists for persistence-sensitive changes and hostile spawn changes.
 - `src/world/seed.ts`
   Seed hashing and random seed text generation.
 - `src/chunkWorker.ts`
@@ -153,6 +155,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Slab blocks use four block IDs per material pair: `OakSlab` (bottom half), `OakSlabTop` (top half), `CobblestoneSlab`, `CobblestoneSlabTop`. Slabs render as half-height individual geometry (non-greedy, like water faces) via `emitSlabFace` in `src/mesh.ts`. Collision is half-height AABB in `PlayerController.collides()`. Placement: top face → bottom slab, bottom face → top slab, side face → bottom slab. Crafted from 3 planks → 6 oak slabs, 3 cobblestone → 6 cobblestone slabs.
 - Stair blocks use eight block IDs (4 directions × 2 materials): OakStairsN/S/E/W and CobblestoneStairsN/S/E/W. Stairs render individually (non-greedy) via `emitStairFaces` in `src/mesh.ts`. Collision is stepped: bottom half (full 1×1), upper half (half-block in stair direction). Direction is determined by player's yaw at placement time. Stair blocks are NOT in `solidBlocks` — they have custom collision checks in `PlayerController.collides()`. `PlayerController.tryAutoStep()` handles grounded horizontal movement up stairs/slabs by raising just over half a block and settling onto support. Crafted from 6 planks → 4 oak stairs, 6 cobblestone → 4 cobblestone stairs.
 - Hostile mobs are managed by `HostileSystem` (`src/world/hostileMobs.ts`). Cave spiders spawn in caves when the player is deep underground (>8 blocks below surface); zombies/skeletons spawn on valid terrain surfaces at night. Spawn checks use static skylight for caves, time-of-day darkness for surface mobs, and blocklight to let torches suppress nearby spawns. Mobs walk toward the player within 18 blocks; zombies deal heavier melee contact, skeletons maintain range and shoot projectiles, and cave spiders are fast cave melee. Hit detection competes with wildlife/block raycasting (closest target wins). Drop tables live in `src/game/hostileDrops.ts`.
+- Hostile spawn candidates validate the full mob body volume against loaded-world blocks, require solid support under the body footprint, preserve light suppression checks, and revalidate the final position before adding the mob to the scene.
 - Surface rocks generate in `addSurfaceDetails` in `src/terrain.ts` as sparse cobblestone outcrops. Rocks use a low-frequency patch mask plus 5x5 cell anchoring, so even rocky areas leave quiet ground between features. Surface grass, flowers, pumpkins, cactus, and dry gravel also use patch masks instead of independent per-block sprinkling. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
 - Place preview rebuilds the BoxGeometry UVs per selected block via `atlasBoxGeometry`, mapping each face to the correct atlas tile using `tileForBlockFace`.
 - Touch input lives in `src/ui/touchControls.ts` with setup in `src/game/touchSetup.ts`. Mobile world actions are screen-position raycasts: short world taps call secondary use/place, press-and-hold calls primary mining/hit, and drag becomes look input. Touch mining starts with `trackRay: false` so off-center tap targets do not cancel when `BlockInteractionSystem.updateMining()` checks the center ray for desktop mining.
@@ -171,12 +174,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - When completing a milestone or adding a substantial feature, update the "Current Features", "Good Next Tasks", and project roadmap as needed.
 - If implementation details change in a way future agents must know, document them here before finishing the task.
 
-## Known Bugs / UX Issues
-
-- Hostile mob cave spawns may sometimes appear inside solid blocks briefly before resolving.
-
-
 ## Good Next Tasks
 
 - Tune water recharge/evaporation feel after playtesting.
-- Add restone/mechanism blocks for more complex building.
+- Add redstone/mechanism blocks for more complex building.
