@@ -1328,15 +1328,19 @@ canvas {
   user-select: none;
 }
 
-.touch-btn:active {
+.touch-btn:active,
+.touch-btn.pressed {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.07);
 }
 
 .touch-btn.locked {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.58);
+  background: rgba(159, 219, 140, 0.24);
+  border-color: rgba(159, 219, 140, 0.72);
   color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 5px rgba(159, 219, 140, 0.08);
 }
 
 .touch-btn-jump {

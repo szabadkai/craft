@@ -94,14 +94,17 @@ export class TouchControls {
       e.preventDefault();
       e.stopPropagation();
       this.keys.add('Space');
+      this.jumpBtn.classList.add('pressed');
     });
     this.jumpBtn.addEventListener('touchend', (e) => {
       e.preventDefault();
       this.keys.delete('Space');
+      this.jumpBtn.classList.remove('pressed');
     });
     this.jumpBtn.addEventListener('touchcancel', (e) => {
       e.preventDefault();
       this.keys.delete('Space');
+      this.jumpBtn.classList.remove('pressed');
     });
 
     this.runBtn.addEventListener('touchstart', (e) => {
@@ -309,6 +312,7 @@ export class TouchControls {
     this.keys.delete('ShiftLeft');
     this.keys.delete('ControlLeft');
     this.keys.delete('Space');
+    this.jumpBtn.classList.remove('pressed');
     this.runLocked = false;
     this.crouchLocked = false;
     this.syncLockButtons();

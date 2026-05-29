@@ -73,7 +73,7 @@ Acceptance criteria:
 
 - [ ] Decide whether mobile touch mining should chain to adjacent tapped-ray blocks or remain single-block per hold.
 - [ ] Decide whether split-control crosshair mode should be an optional mobile setting later.
-- [ ] Add visual active states for touch jump/run/crouch if playtesting shows the current feedback is too subtle.
+- [x] Add visual active states for touch jump/run/crouch if playtesting shows the current feedback is too subtle.
 
 ## Milestone 8: Bug Fixes And Core Playability
 
