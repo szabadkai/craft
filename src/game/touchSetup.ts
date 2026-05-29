@@ -17,37 +17,37 @@ type TouchSetupOptions = {
   chestSystem: ChestSystem;
   interactionSystem: BlockInteractionSystem;
   eatingSystem: EatingSystem;
-  handlePrimaryAction: () => void;
-  handleSecondaryAction: () => void;
+  handlePrimaryAction: (point?: { clientX: number; clientY: number }) => void;
+  handleSecondaryAction: (point?: { clientX: number; clientY: number }) => void;
   audioResume: () => void;
 };
 
 export function setupTouchControls(options: TouchSetupOptions): TouchControls | null {
   if (!options.isMobile) return null;
   return new TouchControls(options.keys, options.player, options.getMouseSensitivity, {
-    onMineStart: () => {
+    onPrimaryStart: (point) => {
       if (
         !options.getWorldReady() ||
         options.inventorySystem.isOpen ||
         options.furnaceSystem.isOpen ||
         options.chestSystem.isOpen
       ) return;
-      options.handlePrimaryAction();
+      options.handlePrimaryAction(point);
     },
-    onMineStop: () => {
+    onPrimaryStop: () => {
       options.interactionSystem.stopMining();
       options.eatingSystem.cancel();
     },
-    onPlace: () => {
+    onSecondaryTap: (point) => {
       if (
         !options.getWorldReady() ||
         options.inventorySystem.isOpen ||
         options.furnaceSystem.isOpen ||
         options.chestSystem.isOpen
       ) return;
-      options.handleSecondaryAction();
+      options.handleSecondaryAction(point);
     },
-    onPlaceStop: () => {
+    onSecondaryStop: () => {
       options.eatingSystem.cancel();
     },
     onAudioResume: () => {

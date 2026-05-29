@@ -136,6 +136,12 @@ export class WildlifeSystem {
   raycast(camera: THREE.PerspectiveCamera, maxDistance = 5.5): WildlifeHit | null {
     camera.getWorldPosition(this.rayOrigin);
     camera.getWorldDirection(this.rayDirection);
+    return this.raycastFrom(this.rayOrigin, this.rayDirection, maxDistance);
+  }
+
+  raycastFrom(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance = 5.5): WildlifeHit | null {
+    this.rayOrigin.copy(origin);
+    this.rayDirection.copy(direction);
     this.ray.set(this.rayOrigin, this.rayDirection);
     let closest: Wildlife | null = null;
     let closestDistance = maxDistance;
@@ -381,4 +387,3 @@ function makeWildlifeMesh(kind: WildlifeKind): THREE.Group {
   group.userData.wings = wings;
   return group;
 }
-

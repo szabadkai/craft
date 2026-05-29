@@ -10,6 +10,8 @@ export type BlockHit = {
 
 export class BlockRaycaster {
   private readonly direction = new THREE.Vector3();
+  private readonly pointer = new THREE.Vector2();
+  private readonly pointerWorld = new THREE.Vector3();
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
@@ -18,19 +20,33 @@ export class BlockRaycaster {
 
   raycast(maxDistance = 6): BlockHit | null {
     this.camera.getWorldDirection(this.direction);
-    const origin = this.camera.position;
+    return this.raycastFrom(this.camera.position, this.direction, maxDistance);
+  }
+
+  raycastAt(clientX: number, clientY: number, domElement: HTMLElement, maxDistance = 6): BlockHit | null {
+    const rect = domElement.getBoundingClientRect();
+    this.pointer.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -(((clientY - rect.top) / rect.height) * 2 - 1),
+    );
+    this.pointerWorld.set(this.pointer.x, this.pointer.y, 0.5).unproject(this.camera);
+    this.direction.copy(this.pointerWorld).sub(this.camera.position).normalize();
+    return this.raycastFrom(this.camera.position, this.direction, maxDistance);
+  }
+
+  raycastFrom(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance = 6): BlockHit | null {
     let x = Math.floor(origin.x);
     let y = Math.floor(origin.y);
     let z = Math.floor(origin.z);
-    const stepX = Math.sign(this.direction.x);
-    const stepY = Math.sign(this.direction.y);
-    const stepZ = Math.sign(this.direction.z);
-    const tDeltaX = stepX === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / this.direction.x);
-    const tDeltaY = stepY === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / this.direction.y);
-    const tDeltaZ = stepZ === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / this.direction.z);
-    let tMaxX = rayIntBound(origin.x, this.direction.x);
-    let tMaxY = rayIntBound(origin.y, this.direction.y);
-    let tMaxZ = rayIntBound(origin.z, this.direction.z);
+    const stepX = Math.sign(direction.x);
+    const stepY = Math.sign(direction.y);
+    const stepZ = Math.sign(direction.z);
+    const tDeltaX = stepX === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / direction.x);
+    const tDeltaY = stepY === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / direction.y);
+    const tDeltaZ = stepZ === 0 ? Number.POSITIVE_INFINITY : Math.abs(1 / direction.z);
+    let tMaxX = rayIntBound(origin.x, direction.x);
+    let tMaxY = rayIntBound(origin.y, direction.y);
+    let tMaxZ = rayIntBound(origin.z, direction.z);
     let distance = 0;
     let normalX = 0;
     let normalY = 0;

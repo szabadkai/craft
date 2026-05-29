@@ -36,10 +36,18 @@ type InputSystems = {
   };
   furnaceSystem: { isOpen: boolean; close: () => void; openAt: (p: { x: number; y: number; z: number }) => void; };
   chestSystem: { isOpen: boolean; close: () => void; openAt: (p: { x: number; y: number; z: number }) => void; };
-  interactionSystem: { startMining: (hit: BlockHit) => void; stopMining: () => void; place: (hit: BlockHit) => void; };
-  blockRaycaster: { raycast: () => BlockHit | null; };
-  wildlife: { raycast: (camera: THREE.PerspectiveCamera) => { animal: Wildlife; distance: number } | null; hit: (animal: Wildlife, now: number) => void; };
-  hostile: { raycast: (camera: THREE.PerspectiveCamera) => { mob: Hostile; distance: number } | null; hit: (mob: Hostile, now: number, attackerPos?: THREE.Vector3) => void; };
+  interactionSystem: { startMining: (hit: BlockHit, options?: { trackRay?: boolean }) => void; stopMining: () => void; place: (hit: BlockHit) => void; };
+  blockRaycaster: { raycast: () => BlockHit | null; raycastAt: (clientX: number, clientY: number, domElement: HTMLElement) => BlockHit | null; };
+  wildlife: {
+    raycast: (camera: THREE.PerspectiveCamera) => { animal: Wildlife; distance: number } | null;
+    raycastFrom: (origin: THREE.Vector3, direction: THREE.Vector3) => { animal: Wildlife; distance: number } | null;
+    hit: (animal: Wildlife, now: number) => void;
+  };
+  hostile: {
+    raycast: (camera: THREE.PerspectiveCamera) => { mob: Hostile; distance: number } | null;
+    raycastFrom: (origin: THREE.Vector3, direction: THREE.Vector3) => { mob: Hostile; distance: number } | null;
+    hit: (mob: Hostile, now: number, attackerPos?: THREE.Vector3) => void;
+  };
   doorSystem: { toggle: (x: number, y: number, z: number, getBlock: (wx: number, y: number, wz: number) => Block, setBlocks: (entries: BlockSetEntry[]) => void) => void; };
   chunkWorld: { setBlocks: (entries: BlockSetEntry[]) => void; };
   eatingSystem: { tryStart: () => void; cancel: () => void; };
@@ -83,8 +91,8 @@ type InputElements = {
 };
 
 export type ActionHandlers = {
-  handlePrimaryAction: () => void;
-  handleSecondaryAction: () => void;
+  handlePrimaryAction: (point?: { clientX: number; clientY: number }) => void;
+  handleSecondaryAction: (point?: { clientX: number; clientY: number }) => void;
 };
 
 export function setupInputHandlers(
@@ -94,11 +102,27 @@ export function setupInputHandlers(
   applyRenderDistance: () => void,
 ): ActionHandlers {
   const { renderer, player, camera, inventorySystem, furnaceSystem, chestSystem, interactionSystem, blockRaycaster, wildlife, hostile, doorSystem, chunkWorld, eatingSystem, consoleSystem, diagnostics, pauseMenu, audioEngine, sfx, health, getBlock, triggerHandSwing, dropItem } = systems;
+  const actionRayOrigin = new THREE.Vector3();
+  const actionRayDirection = new THREE.Vector3();
+  const actionRayPoint = new THREE.Vector3();
 
-  function handlePrimaryAction(): void {
-    const hit = blockRaycaster.raycast();
-    const animalHit = wildlife.raycast(camera);
-    const hostileHit = hostile.raycast(camera);
+  function screenRay(point: { clientX: number; clientY: number }): { origin: THREE.Vector3; direction: THREE.Vector3 } {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndcX = ((point.clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -(((point.clientY - rect.top) / rect.height) * 2 - 1);
+    actionRayOrigin.copy(camera.position);
+    actionRayPoint.set(ndcX, ndcY, 0.5).unproject(camera);
+    actionRayDirection.copy(actionRayPoint).sub(actionRayOrigin).normalize();
+    return { origin: actionRayOrigin, direction: actionRayDirection };
+  }
+
+  function handlePrimaryAction(point?: { clientX: number; clientY: number }): void {
+    const ray = point ? screenRay(point) : null;
+    const hit = point
+      ? blockRaycaster.raycastAt(point.clientX, point.clientY, renderer.domElement)
+      : blockRaycaster.raycast();
+    const animalHit = ray ? wildlife.raycastFrom(ray.origin, ray.direction) : wildlife.raycast(camera);
+    const hostileHit = ray ? hostile.raycastFrom(ray.origin, ray.direction) : hostile.raycast(camera);
     const animalDist = animalHit?.distance ?? Infinity;
     const hostileDist = hostileHit?.distance ?? Infinity;
     const blockDist = hit?.distance ?? Infinity;
@@ -116,17 +140,19 @@ export function setupInputHandlers(
         triggerHandSwing('mine');
         return;
       }
-      if (hit) interactionSystem.startMining(hit);
+      if (hit) interactionSystem.startMining(hit, { trackRay: !point });
     }
   }
 
-  function handleSecondaryAction(): void {
+  function handleSecondaryAction(point?: { clientX: number; clientY: number }): void {
     const slot = inventorySystem.slotAt(inventorySystem.selectedHotbarIndex);
     if (slot && foodValueFor(slot.item) > 0) {
       eatingSystem.tryStart();
       return;
     }
-    const hit = blockRaycaster.raycast();
+    const hit = point
+      ? blockRaycaster.raycastAt(point.clientX, point.clientY, renderer.domElement)
+      : blockRaycaster.raycast();
     if (!hit) return;
     const b = getBlock(hit.block.x, hit.block.y, hit.block.z);
     if (b === Block.OakDoor || b === Block.OakDoorOpen) {

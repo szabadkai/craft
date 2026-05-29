@@ -50,6 +50,10 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
   IndexedDB access for modified chunks, inventory, and hotbar state.
 - `src/ui/hud.ts`
   HUD/start-screen DOM creation and typed element lookup.
+- `src/ui/touchSettings.ts`
+  Persistent touch control scale/opacity settings and formatting helpers.
+- `src/game/pauseMenuSetup.ts`
+  Pause menu construction and settings synchronization for mouse, render distance, audio, sandbox mode, and touch controls.
 - `src/world/seed.ts`
   Seed hashing and random seed text generation.
 - `src/chunkWorker.ts`
@@ -68,6 +72,8 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 ## Current Features
 
 - First-person movement and collision.
+- Mobile touch controls use a fixed movement stick plus jump, run-lock, and crouch buttons; world tap places/uses and world press-and-hold mines/hits, with no mine/place buttons on the HUD.
+- Mobile touch control size and opacity are persistent pause-menu settings.
 - Persistent mouse sensitivity control for pointer-lock camera movement.
 - Persistent render-distance control includes a 2-chunk Low profile for weaker devices.
 - Worker-pool generated chunks.
@@ -149,6 +155,7 @@ This is a browser Minecraft-like voxel prototype built with Vite, TypeScript, an
 - Hostile mobs are managed by `HostileSystem` (`src/world/hostileMobs.ts`). Cave spiders spawn in caves when the player is deep underground (>8 blocks below surface); zombies/skeletons spawn on valid terrain surfaces at night. Spawn checks use static skylight for caves, time-of-day darkness for surface mobs, and blocklight to let torches suppress nearby spawns. Mobs walk toward the player within 18 blocks; zombies deal heavier melee contact, skeletons maintain range and shoot projectiles, and cave spiders are fast cave melee. Hit detection competes with wildlife/block raycasting (closest target wins). Drop tables live in `src/game/hostileDrops.ts`.
 - Surface rocks generate in `addSurfaceDetails` in `src/terrain.ts` as sparse cobblestone outcrops. Rocks use a low-frequency patch mask plus 5x5 cell anchoring, so even rocky areas leave quiet ground between features. Surface grass, flowers, pumpkins, cactus, and dry gravel also use patch masks instead of independent per-block sprinkling. Open doors render as thin visible panels (0.08 thick quads) via `emitOpenDoorQuad` in `src/mesh.ts`. `DoorSystem.place()` places both halves, `toggle()` swaps between closed/open block IDs, `remove()` clears both halves. Persistence via `WorldStore.loadDoors/saveDoors` keyed by seed. Doors are placed two-tall; breaking either half removes both and drops one item.
 - Place preview rebuilds the BoxGeometry UVs per selected block via `atlasBoxGeometry`, mapping each face to the correct atlas tile using `tileForBlockFace`.
+- Touch input lives in `src/ui/touchControls.ts` with setup in `src/game/touchSetup.ts`. Mobile world actions are screen-position raycasts: short world taps call secondary use/place, press-and-hold calls primary mining/hit, and drag becomes look input. Touch mining starts with `trackRay: false` so off-center tap targets do not cancel when `BlockInteractionSystem.updateMining()` checks the center ray for desktop mining.
 - Block placement can replace water cells, making submerged/underground water sources pluggable with normal blocks. Terrain generation seeds finite reservoir water in `addOceanReservoirs`/`addLakes`, but does not run a generation-time settling simulation; full-block water creates visual columns/sheets when moved through carved terrain without level metadata. `OCEAN_SURFACE_Y` is a terrain/rendering target derived from `TERRAIN_BASE_ELEVATION`, not a global underground fill rule. Ocean reservoir columns are continuous for surface terrain at or below `OCEAN_SURFACE_Y` so shorelines remain attached to the waterbody. Runtime water flow is source-connected through `WaterSimSystem` after mining opens a path and consumes persistent per-source budget for newly created water cells.
 - `WaterSimSystem` persists per-source remaining flow budgets through `WorldStore.loadWaterBudgets/saveWaterBudgets`. New water cells consume from the nearest source budget, valid sources slowly recharge depleted budgets, and disconnected runtime-spread water evaporates after a delay. Already-saved water blocks remain chunk data. Clear-world deletes water budgets with the other per-seed state.
 - Console commands are defined in `src/ui/console.ts`. The `give` command resolves item IDs via `itemDefs` fuzzy matching.

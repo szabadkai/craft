@@ -11,6 +11,8 @@ The project should stay browser-first: efficient chunk meshes, worker-side gener
 The prototype currently supports:
 
 - First-person movement, jumping, block collision, and grounded half-block auto-step for stairs/slabs.
+- Mobile touch controls use a fixed movement stick plus jump, run-lock, and crouch buttons; world tap places/uses and world press-and-hold mines/hits.
+- Mobile touch control size and opacity can be adjusted from the pause menu and persist across reloads.
 - Persistent mouse sensitivity control for pointer-lock camera movement.
 - Persistent render-distance control with a 2-chunk Low profile for weaker devices.
 - Worker-pool generated chunks.
@@ -252,6 +254,7 @@ Exit criteria:
 26. ✅ Add far terrain per-vertex alpha LOD blending.
 27. ✅ Add water source budget recharge and disconnected runtime-water evaporation.
 28. ✅ Expand hostile mob combat roles, feedback, drops, and bone-to-stick progression.
+29. ✅ Rework mobile touch controls to remove mine/place HUD buttons and use tap/hold world gestures.
 
 ## Current Priority
 

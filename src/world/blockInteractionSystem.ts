@@ -29,6 +29,7 @@ export class BlockInteractionSystem {
   private readonly crackMaterial: THREE.MeshBasicMaterial;
   private readonly mining = {
     active: false,
+    trackRay: true,
     block: new THREE.Vector3(),
     startedAt: 0,
     lastSwingAt: 0,
@@ -226,9 +227,10 @@ export class BlockInteractionSystem {
     if (item) this.inventory.consumeSelectedItem(1);
   }
 
-  startMining(hit: BlockHit): void {
+  startMining(hit: BlockHit, options: { trackRay?: boolean } = {}): void {
     if (this.inventory.isOpen) return;
     this.mining.active = true;
+    this.mining.trackRay = options.trackRay ?? true;
     this.mining.block.copy(hit.block);
     this.mining.startedAt = performance.now();
     this.mining.lastSwingAt = this.mining.startedAt;
@@ -253,10 +255,9 @@ export class BlockInteractionSystem {
 
   updateMining(now: number): void {
     if (!this.mining.active) return;
-    const hit = this.raycaster.raycast();
+    const hit = this.mining.trackRay ? this.raycaster.raycast() : null;
     if (
-      !hit ||
-      !hit.block.equals(this.mining.block) ||
+      (this.mining.trackRay && (!hit || !hit.block.equals(this.mining.block))) ||
       this.getBlock(this.mining.block.x, this.mining.block.y, this.mining.block.z) === Block.Air
     ) {
       this.stopMining();
@@ -313,7 +314,7 @@ export class BlockInteractionSystem {
         this.decayLeaves(this.mining.block.x, this.mining.block.y, this.mining.block.z);
       }
       // Chain into next block if still holding
-      const nextHit = this.raycaster.raycast();
+      const nextHit = this.mining.trackRay ? this.raycaster.raycast() : null;
       if (nextHit && this.getBlock(nextHit.block.x, nextHit.block.y, nextHit.block.z) !== Block.Air) {
         this.startMining(nextHit);
       } else {

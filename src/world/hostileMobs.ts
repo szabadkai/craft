@@ -128,6 +128,12 @@ export class HostileSystem {
   raycast(camera: THREE.PerspectiveCamera, maxDistance = 5.5): HostileHit | null {
     camera.getWorldPosition(this.rayOrigin);
     camera.getWorldDirection(this.rayDirection);
+    return this.raycastFrom(this.rayOrigin, this.rayDirection, maxDistance);
+  }
+
+  raycastFrom(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance = 5.5): HostileHit | null {
+    this.rayOrigin.copy(origin);
+    this.rayDirection.copy(direction);
     this.ray.set(this.rayOrigin, this.rayDirection);
     let closest: Hostile | null = null;
     let closestDistance = maxDistance;

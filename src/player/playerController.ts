@@ -4,6 +4,10 @@ import { Block } from '../types';
 
 const AUTO_STEP_HEIGHT = 0.56;
 const AUTO_STEP_SETTLE_STEP = 0.03;
+const STANDING_HEIGHT = 1.8;
+const STANDING_EYE = 1.62;
+const CROUCH_HEIGHT = 1.5;
+const CROUCH_EYE = 1.28;
 
 function isSlabBlock(block: Block): boolean {
   return (
@@ -80,6 +84,15 @@ export class PlayerController {
     }
 
     const prevDepth = this.state.waterDepth;
+    const wantsCrouch = this.keys.has('ControlLeft') || this.keys.has('ControlRight');
+    if (wantsCrouch) {
+      this.state.height = CROUCH_HEIGHT;
+      this.state.eye = CROUCH_EYE;
+    } else if (this.state.height !== STANDING_HEIGHT && !this.collidesAt(this.state.position, STANDING_HEIGHT)) {
+      this.state.height = STANDING_HEIGHT;
+      this.state.eye = STANDING_EYE;
+    }
+
     this.state.waterDepth = this.computeWaterDepth();
     this.state.inWater = this.state.waterDepth > 0;
     const depth = this.state.waterDepth;
@@ -92,8 +105,9 @@ export class PlayerController {
     // Horizontal movement — depth-scaled speed
     const forward = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'));
     const strafe = Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA'));
-    const landSpeed = this.keys.has('ShiftLeft') ? 8.5 : 5.2;
-    const swimSpeed = this.keys.has('ShiftLeft') ? 3.6 : 2.8;
+    const sprinting = this.keys.has('ShiftLeft') && !wantsCrouch;
+    const landSpeed = wantsCrouch ? 2.2 : sprinting ? 8.5 : 5.2;
+    const swimSpeed = sprinting ? 3.6 : 2.8;
     const speed = landSpeed + (swimSpeed - landSpeed) * depth;
     const sin = Math.sin(this.state.yaw);
     const cos = Math.cos(this.state.yaw);
@@ -110,7 +124,7 @@ export class PlayerController {
 
       if (this.keys.has('Space')) {
         this.state.velocity.y = Math.min(this.state.velocity.y + 14 * dt, 5.5);
-      } else if (this.keys.has('ShiftLeft')) {
+      } else if (wantsCrouch) {
         this.state.velocity.y = Math.max(this.state.velocity.y - 10 * dt, -5.0);
       } else if (depth < 0.6) {
         // Surface float: gently hold player at water line
@@ -148,11 +162,15 @@ export class PlayerController {
   }
 
   collides(position: THREE.Vector3): boolean {
+    return this.collidesAt(position, this.state.height);
+  }
+
+  private collidesAt(position: THREE.Vector3, height: number): boolean {
     const half = this.state.width / 2;
     const pxMin = position.x - half;
     const pxMax = position.x + half;
     const pyMin = position.y;
-    const pyMax = position.y + this.state.height;
+    const pyMax = position.y + height;
     const pzMin = position.z - half;
     const pzMax = position.z + half;
     const minX = Math.floor(pxMin);

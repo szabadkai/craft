@@ -8,19 +8,15 @@ import { PlayerController } from './player/playerController';
 import { DoorSystem } from './world/doorSystem';
 import { EatingSystem } from './player/eating';
 import {
-  clampMouseSensitivity,
   formatMouseSensitivity,
   loadMouseSensitivity,
-  saveMouseSensitivity,
 } from './player/mouseSensitivity';
 import {
-  clampDetailRadius,
   formatRenderDistance,
   getDetailRadius,
   getFarRadius,
   getFogFar,
   getFogNear,
-  setDetailRadius,
 } from './player/renderDistance';
 import { WorldStore } from './persistence/worldStore';
 import { terrainHeight, OCEAN_SURFACE_Y } from './terrain';
@@ -52,17 +48,18 @@ import { createAudioEngine } from './audio/audioEngine';
 import { createSfxSystem, blockMaterial } from './audio/sfx';
 import { createMusicSystem } from './audio/music';
 import { createAmbientSystem } from './audio/ambient';
-import { loadSandboxMode, saveSandboxMode } from './player/sandboxMode';
+import { loadSandboxMode } from './player/sandboxMode';
 import { setupInputHandlers } from './game/inputHandler';
 import { MinimapSystem } from './ui/minimap';
-import { PauseMenu } from './ui/pauseMenu';
 import { isTouchDevice } from './ui/touchControls';
+import { loadTouchControlSettings, saveTouchControlSettings } from './ui/touchSettings';
 import { setupDeathHandling } from './game/deathHandling';
 import { createConsoleCommands } from './game/consoleCommands';
 import { setupStartScreenHandlers } from './game/startScreenHandlers';
 import { setupTouchControls } from './game/touchSetup';
 import { createFrameAudio } from './game/frameAudio';
 import { dropHostileLoot } from './game/hostileDrops';
+import { setupPauseMenu } from './game/pauseMenuSetup';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
@@ -164,6 +161,7 @@ const player = {
 const keys = new Set<string>();
 const mouse = { locked: false };
 let mouseSensitivity = loadMouseSensitivity();
+let touchControlSettings = loadTouchControlSettings();
 let gamePaused = false;
 const playerController = new PlayerController(
   player,
@@ -334,58 +332,34 @@ const consoleSystem = new ConsoleSystem(createConsoleCommands(inventorySystem, m
 inventorySystem.init();
 rebuildHeldItem();
 
-const pauseMenu = new PauseMenu(
-  {
-    onResume: () => {
-      if (!isMobile && worldReady) {
-        renderer.domElement.requestPointerLock().catch(() => {});
-      }
-    },
-    onSensitivityChange: (value) => {
-      mouseSensitivity = clampMouseSensitivity(value);
-      const label = formatMouseSensitivity(mouseSensitivity);
-      pauseMenu.sensitivityValueEl.textContent = label;
-      sensitivityInputEl.value = String(mouseSensitivity);
-      sensitivityValueEl.textContent = label;
-      saveMouseSensitivity(mouseSensitivity);
-    },
-    onRenderDistanceChange: (value) => {
-      const clamped = clampDetailRadius(value);
-      const label = formatRenderDistance(clamped);
-      pauseMenu.renderDistanceValueEl.textContent = label;
-      renderDistanceInputEl.value = String(clamped);
-      renderDistanceValueEl.textContent = label;
-      setDetailRadius(clamped);
-      applyRenderDistanceInternal();
-    },
-    onSfxVolumeChange: (value) => {
-      audioEngine.setSfxVolume(value / 100);
-      pauseMenu.sfxVolumeValueEl.textContent = `${value}%`;
-      sfxVolumeInputEl.value = String(value);
-      sfxVolumeValueEl.textContent = `${value}%`;
-    },
-    onMusicVolumeChange: (value) => {
-      audioEngine.setMusicVolume(value / 100);
-      pauseMenu.musicVolumeValueEl.textContent = `${value}%`;
-      musicVolumeInputEl.value = String(value);
-      musicVolumeValueEl.textContent = `${value}%`;
-    },
-    onSandboxChange: (checked) => {
-      sandboxMode = checked;
-      saveSandboxMode(sandboxMode);
-      sandboxInputEl.checked = checked;
-    },
+const pauseMenu = setupPauseMenu({
+  renderer,
+  isMobile,
+  getWorldReady: () => worldReady,
+  getMouseSensitivity: () => mouseSensitivity,
+  setMouseSensitivity: (value) => { mouseSensitivity = value; },
+  getSandboxMode: () => sandboxMode,
+  setSandboxMode: (value) => { sandboxMode = value; },
+  getTouchControlSettings: () => touchControlSettings,
+  setTouchControlSettings: (settings) => { touchControlSettings = settings; },
+  onTouchControlSettingsChange: (settings) => {
+    touchControls?.applySettings(settings);
+    saveTouchControlSettings(settings);
   },
-  {
-    sensitivityLabel: formatMouseSensitivity(mouseSensitivity),
-    sensitivityValue: mouseSensitivity,
-    renderDistanceLabel: formatRenderDistance(getDetailRadius()),
-    renderDistanceValue: getDetailRadius(),
-    sfxVolume: Math.round((savedSfxVol ? parseFloat(savedSfxVol) : 1) * 100),
-    musicVolume: Math.round((savedMusicVol ? parseFloat(savedMusicVol) : 0.5) * 100),
-    sandbox: sandboxMode,
-  },
-);
+  sensitivityInputEl,
+  sensitivityValueEl,
+  renderDistanceInputEl,
+  renderDistanceValueEl,
+  sfxVolumeInputEl,
+  sfxVolumeValueEl,
+  musicVolumeInputEl,
+  musicVolumeValueEl,
+  sandboxInputEl,
+  savedSfxVol,
+  savedMusicVol,
+  audioEngine,
+  applyRenderDistance: applyRenderDistanceInternal,
+});
 
 
 function rebuildHeldItem(): void {
@@ -587,6 +561,7 @@ const touchControls = setupTouchControls({
   handleSecondaryAction,
   audioResume: () => audioEngine.resume(),
 });
+touchControls?.applySettings(touchControlSettings);
 
 function tick(now: number): void {
   const frameStartedAt = performance.now();

@@ -1270,6 +1270,8 @@ canvas {
   inset: 0;
   z-index: 8;
   pointer-events: none;
+  --touch-scale: 1;
+  --touch-opacity: 0.9;
 }
 
 .touch-controls.hidden {
@@ -1280,11 +1282,16 @@ canvas {
   position: absolute;
   width: 120px;
   height: 120px;
+  left: calc(42px + env(safe-area-inset-left));
+  bottom: calc(72px + env(safe-area-inset-bottom));
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
   border: 2px solid rgba(255, 255, 255, 0.12);
-  pointer-events: none;
-  display: none;
+  opacity: var(--touch-opacity);
+  pointer-events: auto;
+  touch-action: none;
+  transform: scale(var(--touch-scale));
+  transform-origin: center;
 }
 
 .touch-joystick-knob {
@@ -1311,6 +1318,9 @@ canvas {
   line-height: 1;
   pointer-events: auto;
   touch-action: none;
+  opacity: var(--touch-opacity);
+  transform: scale(var(--touch-scale));
+  transform-origin: center;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1323,17 +1333,23 @@ canvas {
   border-color: rgba(255, 255, 255, 0.4);
 }
 
+.touch-btn.locked {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.95);
+}
+
 .touch-btn-jump {
   right: calc(48px + env(safe-area-inset-right));
   bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
-.touch-btn-mine {
+.touch-btn-run {
   right: calc(48px + env(safe-area-inset-right));
   bottom: calc(168px + env(safe-area-inset-bottom));
 }
 
-.touch-btn-place {
+.touch-btn-crouch {
   right: calc(104px + env(safe-area-inset-right));
   bottom: calc(124px + env(safe-area-inset-bottom));
 }
@@ -1403,6 +1419,8 @@ canvas {
   .touch-joystick {
     width: 140px;
     height: 140px;
+    left: calc(50px + env(safe-area-inset-left));
+    bottom: calc(82px + env(safe-area-inset-bottom));
   }
 
   .touch-btn-jump {
@@ -1410,12 +1428,12 @@ canvas {
     bottom: calc(90px + env(safe-area-inset-bottom));
   }
 
-  .touch-btn-mine {
+  .touch-btn-run {
     right: calc(56px + env(safe-area-inset-right));
     bottom: calc(186px + env(safe-area-inset-bottom));
   }
 
-  .touch-btn-place {
+  .touch-btn-crouch {
     right: calc(120px + env(safe-area-inset-right));
     bottom: calc(138px + env(safe-area-inset-bottom));
   }

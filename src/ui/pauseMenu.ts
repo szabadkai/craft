@@ -1,4 +1,5 @@
 import { isTouchDevice } from './touchControls';
+import { formatTouchControlOpacity, formatTouchControlScale } from './touchSettings';
 
 export type PauseMenuCallbacks = {
   onResume: () => void;
@@ -7,6 +8,8 @@ export type PauseMenuCallbacks = {
   onSfxVolumeChange: (value: number) => void;
   onMusicVolumeChange: (value: number) => void;
   onSandboxChange: (checked: boolean) => void;
+  onTouchScaleChange: (value: number) => void;
+  onTouchOpacityChange: (value: number) => void;
 };
 
 export class PauseMenu {
@@ -21,6 +24,10 @@ export class PauseMenu {
   readonly musicVolumeInputEl: HTMLInputElement;
   readonly musicVolumeValueEl: HTMLElement;
   readonly sandboxInputEl: HTMLInputElement;
+  readonly touchScaleInputEl: HTMLInputElement | null;
+  readonly touchScaleValueEl: HTMLElement | null;
+  readonly touchOpacityInputEl: HTMLInputElement | null;
+  readonly touchOpacityValueEl: HTMLElement | null;
   private _isOpen = false;
 
   get isOpen(): boolean {
@@ -37,6 +44,8 @@ export class PauseMenu {
       sfxVolume: number;
       musicVolume: number;
       sandbox: boolean;
+      touchScale: number;
+      touchOpacity: number;
     },
   ) {
     this.overlayEl = document.createElement('div');
@@ -48,9 +57,11 @@ export class PauseMenu {
           <div class="pause-controls">
             <span>Left stick</span><span>Move</span>
             <span>Right area</span><span>Look</span>
-            <span>Mine button</span><span>Break block</span>
-            <span>Place button</span><span>Place block</span>
+            <span>World hold</span><span>Mine / Attack</span>
+            <span>World tap</span><span>Place / Use</span>
             <span>Jump button</span><span>Jump / Swim up</span>
+            <span>Run button</span><span>Toggle sprint</span>
+            <span>Crouch button</span><span>Toggle crouch / Swim down</span>
             <span>Tap hotbar</span><span>Select slot</span>
           </div>`
       : `
@@ -98,6 +109,18 @@ export class PauseMenu {
           <span>Sandbox mode</span>
           <span class="sandbox-hint">Disables hostile mobs</span>
         </label>
+        ${isTouch ? `
+          <label class="sensitivity-field" for="pause-touch-scale">
+            <span>Touch button size</span>
+            <output id="pause-touch-scale-value">${formatTouchControlScale(defaults.touchScale)}</output>
+            <input id="pause-touch-scale" type="range" min="0.75" max="1.4" step="0.05" value="${defaults.touchScale}" />
+          </label>
+          <label class="sensitivity-field" for="pause-touch-opacity">
+            <span>Touch button opacity</span>
+            <output id="pause-touch-opacity-value">${formatTouchControlOpacity(defaults.touchOpacity)}</output>
+            <input id="pause-touch-opacity" type="range" min="0.35" max="1" step="0.05" value="${defaults.touchOpacity}" />
+          </label>
+        ` : ''}
         <div class="pause-divider"></div>
         <div class="start-head">
           <span class="start-kicker">Controls</span>
@@ -120,6 +143,10 @@ export class PauseMenu {
     this.musicVolumeInputEl = this.overlayEl.querySelector<HTMLInputElement>('#pause-music-volume')!;
     this.musicVolumeValueEl = this.overlayEl.querySelector<HTMLElement>('#pause-music-value')!;
     this.sandboxInputEl = this.overlayEl.querySelector<HTMLInputElement>('#pause-sandbox')!;
+    this.touchScaleInputEl = this.overlayEl.querySelector<HTMLInputElement>('#pause-touch-scale');
+    this.touchScaleValueEl = this.overlayEl.querySelector<HTMLElement>('#pause-touch-scale-value');
+    this.touchOpacityInputEl = this.overlayEl.querySelector<HTMLInputElement>('#pause-touch-opacity');
+    this.touchOpacityValueEl = this.overlayEl.querySelector<HTMLElement>('#pause-touch-opacity-value');
 
     this.overlayEl.querySelector('.pause-resume')!.addEventListener('click', () => this.close());
     this.overlayEl.addEventListener('click', (e) => {
@@ -140,6 +167,12 @@ export class PauseMenu {
     });
     this.sandboxInputEl.addEventListener('change', () => {
       this.callbacks.onSandboxChange(this.sandboxInputEl.checked);
+    });
+    this.touchScaleInputEl?.addEventListener('input', () => {
+      this.callbacks.onTouchScaleChange(Number(this.touchScaleInputEl!.value));
+    });
+    this.touchOpacityInputEl?.addEventListener('input', () => {
+      this.callbacks.onTouchOpacityChange(Number(this.touchOpacityInputEl!.value));
     });
 
     if (isTouch) {
